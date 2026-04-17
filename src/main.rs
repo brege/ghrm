@@ -47,7 +47,9 @@ fn main() -> Result<()> {
     }
     vendor::ensure()?;
 
-    let target = cli.target.ok_or_else(|| anyhow::anyhow!("missing target"))?;
+    let target = cli
+        .target
+        .ok_or_else(|| anyhow::anyhow!("missing target"))?;
     let abs = target.canonicalize()?;
 
     if cli.render_static {

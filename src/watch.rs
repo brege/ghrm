@@ -1,6 +1,6 @@
 use crate::walk::{self, NavTree};
 use notify::{RecursiveMode, Watcher};
-use notify_debouncer_full::{new_debouncer, DebouncedEvent};
+use notify_debouncer_full::{DebouncedEvent, new_debouncer};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -14,9 +14,7 @@ pub fn spawn_dir(
 ) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(150), None, tx)?;
-    debouncer
-        .watcher()
-        .watch(&root, RecursiveMode::Recursive)?;
+    debouncer.watcher().watch(&root, RecursiveMode::Recursive)?;
 
     std::thread::spawn(move || {
         let _debouncer = debouncer;
@@ -49,10 +47,7 @@ pub fn spawn_dir(
     Ok(())
 }
 
-pub fn spawn_file(
-    file: PathBuf,
-    reload_tx: broadcast::Sender<()>,
-) -> anyhow::Result<()> {
+pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<()>) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(120), None, tx)?;
     let parent = file.parent().unwrap_or(Path::new(".")).to_path_buf();
@@ -64,7 +59,10 @@ pub fn spawn_file(
         let _debouncer = debouncer;
         for res in rx {
             let Ok(events) = res else { continue };
-            if events.iter().any(|e| e.event.paths.iter().any(|p| p == &file)) {
+            if events
+                .iter()
+                .any(|e| e.event.paths.iter().any(|p| p == &file))
+            {
                 info!(path = %file.display(), "change");
                 let _ = reload_tx.send(());
             }
@@ -103,7 +101,9 @@ fn is_nav_event(root: &Path, ev: &DebouncedEvent) -> bool {
         return false;
     }
     ev.event.paths.iter().any(|p| {
-        let Ok(rel) = p.strip_prefix(root) else { return false };
+        let Ok(rel) = p.strip_prefix(root) else {
+            return false;
+        };
         let rel_s = rel.to_string_lossy();
         if rel_s.contains("/.git/") || rel_s.starts_with(".git") {
             return false;

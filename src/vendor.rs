@@ -1,5 +1,9 @@
-use anyhow::{bail, Result};
-use std::{env, fs, path::{Component, Path, PathBuf}, process::Command};
+use anyhow::{Result, bail};
+use std::{
+    env, fs,
+    path::{Component, Path, PathBuf},
+    process::Command,
+};
 
 pub fn dir() -> Result<PathBuf> {
     if let Some(path) = env::var_os("XDG_CACHE_HOME") {
@@ -26,19 +30,31 @@ pub fn sync(refresh: bool) -> Result<()> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let vendor_dir = dir()?;
     let manifest = load_manifest(&root)?;
-    for item in manifest["files"].as_array().ok_or_else(|| anyhow::anyhow!("missing files"))? {
-        let rel = item["path"].as_str().ok_or_else(|| anyhow::anyhow!("missing path"))?;
+    for item in manifest["files"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("missing files"))?
+    {
+        let rel = item["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("missing path"))?;
         let path = vendor_dir.join(rel);
         if !refresh && path.is_file() {
             continue;
         }
-        fs::create_dir_all(path.parent().ok_or_else(|| anyhow::anyhow!("missing parent"))?)?;
+        fs::create_dir_all(
+            path.parent()
+                .ok_or_else(|| anyhow::anyhow!("missing parent"))?,
+        )?;
         let status = Command::new("curl")
             .arg("--location")
             .arg("--fail")
             .arg("--silent")
             .arg("--show-error")
-            .arg(item["url"].as_str().ok_or_else(|| anyhow::anyhow!("missing url"))?)
+            .arg(
+                item["url"]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("missing url"))?,
+            )
             .arg("--output")
             .arg(&path)
             .status()?;
@@ -77,8 +93,13 @@ pub fn ensure() -> Result<()> {
 fn missing() -> Result<Option<PathBuf>> {
     let vendor_dir = dir()?;
     let manifest = load_manifest(&PathBuf::from(env!("CARGO_MANIFEST_DIR")))?;
-    for item in manifest["files"].as_array().ok_or_else(|| anyhow::anyhow!("missing files"))? {
-        let rel = item["path"].as_str().ok_or_else(|| anyhow::anyhow!("missing path"))?;
+    for item in manifest["files"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("missing files"))?
+    {
+        let rel = item["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("missing path"))?;
         let path = vendor_dir.join(rel);
         if !path.is_file() {
             return Ok(Some(path));
@@ -88,5 +109,7 @@ fn missing() -> Result<Option<PathBuf>> {
 }
 
 fn load_manifest(root: &Path) -> Result<serde_json::Value> {
-    Ok(serde_json::from_str(&fs::read_to_string(root.join("assets/config.json"))?)?)
+    Ok(serde_json::from_str(&fs::read_to_string(
+        root.join("assets/config.json"),
+    )?)?)
 }

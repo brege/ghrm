@@ -9,10 +9,7 @@ People who lose internet and power often: this tool is for you. It renders Markd
 ## Install
 
 ```bash
-cargo install --path .
-
-# or directly from git
-cargo install --git https://github.com/brege/ghrm-rs ghrm
+cargo install --git https://github.com/brege/ghrm ghrm
 ```
 
 ## Usage

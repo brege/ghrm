@@ -1,0 +1,6 @@
+doc-valid-idents = [
+  "GitHub",
+  "Rust",
+  "ghrm",
+  "..",
+]

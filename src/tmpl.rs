@@ -14,7 +14,10 @@ pub fn base(p: PageShell) -> String {
     out.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
     out.push_str("  <meta charset=\"utf-8\">\n");
     out.push_str("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
-    out.push_str(&format!("  <title>{}</title>\n", html_escape::encode_text(p.title)));
+    out.push_str(&format!(
+        "  <title>{}</title>\n",
+        html_escape::encode_text(p.title)
+    ));
     out.push_str(&format!(
         "  <link rel=\"icon\" href=\"data:image/svg+xml,{}\">\n",
         FAVICON_SVG_URL
@@ -68,7 +71,10 @@ pub fn base(p: PageShell) -> String {
 }
 
 pub fn page(content_html: &str) -> String {
-    format!("<article class=\"markdown-body\">\n{}\n</article>\n", content_html)
+    format!(
+        "<article class=\"markdown-body\">\n{}\n</article>\n",
+        content_html
+    )
 }
 
 pub struct ExplorerCtx<'a> {
@@ -99,13 +105,19 @@ pub fn explorer(ctx: ExplorerCtx) -> String {
     let mut out = String::with_capacity(2048);
     out.push_str("<article class=\"markdown-body\">\n");
     if ctx.show_title {
-        out.push_str(&format!("  <h1>{}</h1>\n", html_escape::encode_text(ctx.title)));
+        out.push_str(&format!(
+            "  <h1>{}</h1>\n",
+            html_escape::encode_text(ctx.title)
+        ));
     }
     if !ctx.entries.is_empty() || ctx.has_parent {
         out.push_str("  <table class=\"ghrm-nav-table\">\n    <tbody>\n");
         if ctx.has_parent {
             out.push_str("      <tr>\n");
-            out.push_str(&format!("        <td class=\"ghrm-nav-icon\">{}</td>\n", ICON_DIR));
+            out.push_str(&format!(
+                "        <td class=\"ghrm-nav-icon\">{}</td>\n",
+                ICON_DIR
+            ));
             out.push_str(&format!(
                 "        <td class=\"ghrm-nav-name\"><a href=\"{}\">..</a></td>\n",
                 html_escape::encode_double_quoted_attribute(ctx.parent_href)

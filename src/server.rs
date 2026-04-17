@@ -4,14 +4,14 @@ use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
 use crate::walk::{self, NavTree};
 use crate::watch;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use axum::{
+    Router,
     body::Body,
-    extract::{ws::WebSocketUpgrade, Path as AxPath, State},
-    http::{header, StatusCode},
+    extract::{Path as AxPath, State, ws::WebSocketUpgrade},
+    http::{StatusCode, header},
     response::{Html, IntoResponse, Response},
     routing::get,
-    Router,
 };
 use futures_util::{SinkExt, StreamExt};
 use std::net::SocketAddr;
@@ -225,8 +225,14 @@ async fn render_explorer(s: &AppState, rel: &str) -> Response {
     let combined = Rendered {
         html: String::new(),
         title,
-        has_mermaid: readme_rendered.as_ref().map(|r| r.has_mermaid).unwrap_or(false),
-        has_math: readme_rendered.as_ref().map(|r| r.has_math).unwrap_or(false),
+        has_mermaid: readme_rendered
+            .as_ref()
+            .map(|r| r.has_mermaid)
+            .unwrap_or(false),
+        has_math: readme_rendered
+            .as_ref()
+            .map(|r| r.has_math)
+            .unwrap_or(false),
         has_map: readme_rendered.as_ref().map(|r| r.has_map).unwrap_or(false),
     };
 
@@ -234,7 +240,11 @@ async fn render_explorer(s: &AppState, rel: &str) -> Response {
 }
 
 fn respond_html(r: &Rendered, body: &str) -> Response {
-    let title = if r.title.is_empty() { "Preview" } else { &r.title };
+    let title = if r.title.is_empty() {
+        "Preview"
+    } else {
+        &r.title
+    };
     let html = tmpl::base(PageShell {
         title,
         body,
@@ -291,7 +301,10 @@ async fn bundle_css() -> Response {
 async fn preview_js() -> Response {
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "application/javascript; charset=utf-8")
+        .header(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )
         .body(Body::from(PREVIEW_JS))
         .unwrap()
 }

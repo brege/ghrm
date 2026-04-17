@@ -1,6 +1,9 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use serde::Deserialize;
-use std::{env, fs, path::{Path, PathBuf}};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Default, Deserialize)]
 pub struct Config {

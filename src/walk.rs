@@ -32,7 +32,10 @@ pub fn build(root: &Path) -> NavTree {
         .git_global(true)
         .filter_entry(|e| {
             let name = e.file_name().to_string_lossy();
-            !matches!(name.as_ref(), ".git" | "node_modules" | ".venv" | "__pycache__")
+            !matches!(
+                name.as_ref(),
+                ".git" | "node_modules" | ".venv" | "__pycache__"
+            )
         })
         .build();
 
@@ -66,7 +69,10 @@ pub fn build(root: &Path) -> NavTree {
         for child in read.flatten() {
             let cp = child.path();
             let name = cp.file_name().unwrap().to_string_lossy().to_string();
-            if matches!(name.as_str(), ".git" | "node_modules" | ".venv" | "__pycache__") {
+            if matches!(
+                name.as_str(),
+                ".git" | "node_modules" | ".venv" | "__pycache__"
+            ) {
                 continue;
             }
             if name.starts_with('.') {
@@ -86,9 +92,7 @@ pub fn build(root: &Path) -> NavTree {
                         is_dir: true,
                     });
                 }
-            } else if ft.is_file()
-                && cp.extension().and_then(|s| s.to_str()) == Some("md")
-            {
+            } else if ft.is_file() && cp.extension().and_then(|s| s.to_str()) == Some("md") {
                 if name.eq_ignore_ascii_case("README.md") {
                     readme = Some(child_rel.to_string_lossy().to_string());
                     continue;
