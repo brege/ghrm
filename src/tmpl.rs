@@ -30,12 +30,6 @@ pub fn base(p: PageShell) -> String {
         "  <script>\n  (function() {\n    var stored = localStorage.getItem('ghrm-theme');\n    var system = window.matchMedia('(prefers-color-scheme: dark)').matches\n      ? 'dark'\n      : 'light';\n    document.documentElement.setAttribute('data-theme', stored || system);\n  })();\n  </script>\n",
     );
     out.push_str("  <link rel=\"stylesheet\" href=\"/_ghrm/css/bundle.css\">\n");
-    out.push_str(
-        "  <link id=\"ghrm-hljs-light\" rel=\"stylesheet\" href=\"/vendor/highlightjs/github.min.css\">\n",
-    );
-    out.push_str(
-        "  <link id=\"ghrm-hljs-dark\" rel=\"stylesheet\" href=\"/vendor/highlightjs/github-dark.min.css\" disabled>\n",
-    );
     out.push_str("</head>\n<body>\n");
     out.push_str(p.body);
     out.push_str("\n  <button id=\"theme-toggle\" type=\"button\" aria-label=\"Toggle theme\">\n");

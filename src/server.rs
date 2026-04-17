@@ -112,7 +112,7 @@ async fn root(State(s): State<AppState>) -> Response {
 
 async fn any_path(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Response {
     if s.mode == Mode::File {
-        return not_found();
+        return serve_file_mode(&s, &path).await;
     }
     let had_trailing = path.ends_with('/');
     let clean = path.trim_matches('/').to_string();
@@ -147,7 +147,10 @@ async fn render_file(path: &Path) -> Response {
         Ok(m) => m,
         Err(_) => return not_found(),
     };
-    let rendered = render::render(&md);
+    let Some(root) = path.parent() else {
+        return not_found();
+    };
+    let rendered = render::render_at(&md, Some(render::RenderPath { root, src: path }));
     let body = tmpl::page(&rendered.html);
     respond_html(&rendered, &body)
 }
@@ -190,7 +193,13 @@ async fn render_explorer(s: &AppState, rel: &str) -> Response {
     if let Some(rel_readme) = &dir.readme {
         let readme_abs = s.target.join(rel_readme);
         if let Ok(md) = tokio::fs::read_to_string(&readme_abs).await {
-            let r = render::render(&md);
+            let r = render::render_at(
+                &md,
+                Some(render::RenderPath {
+                    root: &s.target,
+                    src: &readme_abs,
+                }),
+            );
             readme_name = Path::new(rel_readme)
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
@@ -254,6 +263,29 @@ fn respond_html(r: &Rendered, body: &str) -> Response {
         live_reload: true,
     });
     Html(html).into_response()
+}
+
+async fn serve_file_mode(s: &AppState, path: &str) -> Response {
+    let Some(root) = s.target.parent() else {
+        return not_found();
+    };
+    let clean = path.trim_matches('/');
+    if clean.is_empty() {
+        return render_file(&s.target).await;
+    }
+
+    let joined = root.join(clean);
+    let meta = match tokio::fs::metadata(&joined).await {
+        Ok(m) => m,
+        Err(_) => return not_found(),
+    };
+    if meta.is_dir() {
+        return not_found();
+    }
+    if joined.extension().and_then(|s| s.to_str()) == Some("md") {
+        return render_file(&joined).await;
+    }
+    stream_file(&joined).await
 }
 
 async fn stream_file(path: &Path) -> Response {

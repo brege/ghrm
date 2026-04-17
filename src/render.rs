@@ -3,6 +3,7 @@ use comrak::nodes::Sourcepos;
 use comrak::options::Plugins;
 use comrak::{Options, markdown_to_html_with_plugins};
 use std::fmt;
+use std::path::{Component, Path, PathBuf};
 
 static MERMAID_ADAPTER: GhrmBlockAdapter = GhrmBlockAdapter {
     class: "ghrm-mermaid",
@@ -26,7 +27,7 @@ pub struct Rendered {
     pub has_map: bool,
 }
 
-pub fn render(md: &str) -> Rendered {
+pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     let mut options = Options::default();
     options.extension.alerts = true;
     options.extension.table = true;
@@ -39,7 +40,7 @@ pub fn render(md: &str) -> Rendered {
     options.extension.header_id_prefix = Some(String::new());
     options.extension.tagfilter = false;
     options.render.r#unsafe = true;
-    options.render.github_pre_lang = true;
+    options.render.github_pre_lang = false;
 
     let mut plugins = Plugins::default();
     plugins
@@ -63,6 +64,11 @@ pub fn render(md: &str) -> Rendered {
     let html = rewrite_math_display(&raw);
     let html = rewrite_math_spans(&html);
     let html = rewrite_alerts(&html);
+    let html = rewrite_code_blocks(&html);
+    let html = match path {
+        Some(path) => rewrite_local_urls(&html, path),
+        None => html,
+    };
 
     let flags = Flags {
         mermaid: html.contains("ghrm-mermaid"),
@@ -79,6 +85,12 @@ pub fn render(md: &str) -> Rendered {
         has_math: flags.math,
         has_map: flags.map,
     }
+}
+
+#[derive(Clone, Copy)]
+pub struct RenderPath<'a> {
+    pub root: &'a Path,
+    pub src: &'a Path,
 }
 
 #[derive(Default)]
@@ -210,16 +222,30 @@ fn rewrite_math_spans(html: &str) -> String {
 fn rewrite_math_display(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut rest = html;
-    let needle = r#"<pre lang="math" data-math-style="display"><code>"#;
     loop {
-        let Some(idx) = rest.find(needle) else {
+        let Some(idx) = rest.find("<pre><code") else {
             out.push_str(rest);
             break;
         };
         out.push_str(&rest[..idx]);
-        let after_open = &rest[idx + needle.len()..];
+        let at = &rest[idx..];
+        let Some(code_idx) = at.find("<code") else {
+            out.push_str(at);
+            break;
+        };
+        let Some(code_end) = at[code_idx..].find('>') else {
+            out.push_str(at);
+            break;
+        };
+        let open_tag = &at[code_idx..=code_idx + code_end];
+        if !open_tag.contains(r#"class="language-math""#) {
+            out.push_str(&at[..code_idx + code_end + 1]);
+            rest = &at[code_idx + code_end + 1..];
+            continue;
+        }
+        let after_open = &at[code_idx + code_end + 1..];
         let Some(close_idx) = after_open.find("</code></pre>") else {
-            out.push_str(&rest[idx..]);
+            out.push_str(at);
             break;
         };
         let body = &after_open[..close_idx];
@@ -253,6 +279,144 @@ fn rewrite_alerts(html: &str) -> String {
         out = out.replace(&needle, &replacement);
     }
     out
+}
+
+fn rewrite_code_blocks(html: &str) -> String {
+    let mut out = String::with_capacity(html.len() + 128);
+    let mut rest = html;
+
+    loop {
+        let Some(pre_idx) = rest.find("<pre><code") else {
+            out.push_str(rest);
+            break;
+        };
+        out.push_str(&rest[..pre_idx]);
+        let at = &rest[pre_idx..];
+        let Some(code_idx) = at.find("<code") else {
+            out.push_str(at);
+            break;
+        };
+        let Some(code_end) = at[code_idx..].find('>') else {
+            out.push_str(at);
+            break;
+        };
+        let open_tag = &at[code_idx..=code_idx + code_end];
+        let Some(close_idx) = at.find("</code></pre>") else {
+            out.push_str(at);
+            break;
+        };
+        let body = &at[code_idx + code_end + 1..close_idx];
+
+        let lang = code_lang(open_tag);
+        out.push_str(r#"<div class="highlight"><pre tabindex="0" class="chroma"><code"#);
+        if let Some(lang) = lang {
+            out.push_str(r#" class="language-"#);
+            out.push_str(lang);
+            out.push_str(r#"" data-lang=""#);
+            out.push_str(lang);
+            out.push('"');
+        }
+        out.push('>');
+        out.push_str(body);
+        out.push_str("</code></pre></div>");
+        rest = &at[close_idx + "</code></pre>".len()..];
+    }
+
+    out
+}
+
+fn code_lang(open_tag: &str) -> Option<&str> {
+    let marker = r#"class="language-"#;
+    let start = open_tag.find(marker)? + marker.len();
+    let rest = &open_tag[start..];
+    let end = rest.find('"')?;
+    Some(&rest[..end])
+}
+
+fn rewrite_local_urls(html: &str, path: RenderPath<'_>) -> String {
+    let mut out = html.to_string();
+    for attr in ["href", "src"] {
+        out = rewrite_attr_urls(&out, attr, path);
+    }
+    out
+}
+
+fn rewrite_attr_urls(html: &str, attr: &str, path: RenderPath<'_>) -> String {
+    let marker = format!(r#"{attr}=""#);
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+
+    loop {
+        let Some(idx) = rest.find(&marker) else {
+            out.push_str(rest);
+            break;
+        };
+        let value_start = idx + marker.len();
+        out.push_str(&rest[..value_start]);
+        let after = &rest[value_start..];
+        let Some(end) = after.find('"') else {
+            out.push_str(after);
+            break;
+        };
+        let value = &after[..end];
+        out.push_str(&local_url(path, value));
+        rest = &after[end..];
+    }
+
+    out
+}
+
+fn local_url(path: RenderPath<'_>, dest: &str) -> String {
+    if is_external_url(dest) || dest.starts_with('#') {
+        return dest.to_string();
+    }
+
+    let (target, suffix) = split_suffix(dest);
+    if target.is_empty() || target.starts_with('/') {
+        return dest.to_string();
+    }
+
+    let Some(rel) = resolve_target(path.root, path.src, target) else {
+        return dest.to_string();
+    };
+
+    let mut out = String::from("/");
+    out.push_str(&rel.to_string_lossy().replace('\\', "/"));
+    out.push_str(suffix);
+    out
+}
+
+fn is_external_url(dest: &str) -> bool {
+    if dest.starts_with("//") {
+        return true;
+    }
+    let end = dest.find(['/', '?', '#']).unwrap_or(dest.len());
+    dest[..end].contains(':')
+}
+
+fn split_suffix(dest: &str) -> (&str, &str) {
+    let idx = dest.find(['?', '#']).unwrap_or(dest.len());
+    (&dest[..idx], &dest[idx..])
+}
+
+fn resolve_target(root: &Path, src: &Path, target: &str) -> Option<PathBuf> {
+    let src_dir = src.parent()?;
+    let mut rel = src_dir.strip_prefix(root).ok()?.to_path_buf();
+
+    for comp in Path::new(target).components() {
+        match comp {
+            Component::CurDir => {}
+            Component::Normal(part) => rel.push(part),
+            Component::ParentDir => {
+                if !rel.pop() {
+                    return None;
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+
+    Some(rel)
 }
 
 fn titlecase(s: &str) -> String {
@@ -313,7 +477,7 @@ mod tests {
     #[test]
     fn mermaid_wraps_ghrm_block() {
         let md = "```mermaid\ngraph TD\n  A --> B\n```\n";
-        let r = render(md);
+        let r = render_at(md, None);
         assert!(r.has_mermaid);
         assert!(r.html.contains(r#"<div class="ghrm-block ghrm-mermaid">"#));
         assert!(
@@ -327,7 +491,7 @@ mod tests {
     #[test]
     fn geojson_wraps_ghrm_block() {
         let md = "```geojson\n{\"type\":\"FeatureCollection\"}\n```\n";
-        let r = render(md);
+        let r = render_at(md, None);
         assert!(r.has_map);
         assert!(r.html.contains(r#"<div class="ghrm-block ghrm-geojson">"#));
         assert!(r.html.contains(r#"<div class="ghrm-map-canvas"></div>"#));
@@ -336,7 +500,7 @@ mod tests {
     #[test]
     fn topojson_wraps_ghrm_block() {
         let md = "```topojson\n{}\n```\n";
-        let r = render(md);
+        let r = render_at(md, None);
         assert!(r.has_map);
         assert!(r.html.contains(r#"<div class="ghrm-block ghrm-topojson">"#));
     }
@@ -344,7 +508,7 @@ mod tests {
     #[test]
     fn fenced_math_wraps_ghrm_math_block() {
         let md = "```math\nE = mc^2\n```\n";
-        let r = render(md);
+        let r = render_at(md, None);
         assert!(r.has_math);
         assert!(r.html.contains(r#"<div class="ghrm-math-block">$$"#));
         assert!(r.html.contains("E = mc^2"));
@@ -353,14 +517,14 @@ mod tests {
     #[test]
     fn dollar_block_math_sets_flag() {
         let md = "$$\nE = mc^2\n$$\n";
-        let r = render(md);
+        let r = render_at(md, None);
         assert!(r.has_math);
     }
 
     #[test]
     fn alert_note_has_admonition_classes_and_svg() {
         let md = "> [!NOTE]\n> body\n";
-        let r = render(md);
+        let r = render_at(md, None);
         assert!(
             r.html
                 .contains(r#"markdown-admonition markdown-admonition-note"#)
@@ -373,7 +537,7 @@ mod tests {
     #[test]
     fn regular_blockquote_unchanged() {
         let md = "> hello\n";
-        let r = render(md);
+        let r = render_at(md, None);
         assert!(r.html.contains("<blockquote"));
         assert!(!r.html.contains("markdown-admonition"));
     }
@@ -381,16 +545,38 @@ mod tests {
     #[test]
     fn code_block_plain_no_inline_style() {
         let md = "```python\nprint('hi')\n```\n";
-        let r = render(md);
-        assert!(r.html.contains("<pre"));
-        assert!(r.html.contains("<code>"));
+        let r = render_at(md, None);
+        assert!(r.html.contains(r#"<div class="highlight">"#));
+        assert!(r.html.contains(r#"<pre tabindex="0" class="chroma">"#));
+        assert!(
+            r.html
+                .contains(r#"<code class="language-python" data-lang="python">"#)
+        );
         assert!(!r.html.contains("background-color:"));
+    }
+
+    #[test]
+    fn local_image_url_rewrites_from_source_dir() {
+        let md = "![img](./assets/diagram.png)\n";
+        let root = Path::new("/repo");
+        let src = Path::new("/repo/docs/README.md");
+        let r = render_at(md, Some(RenderPath { root, src }));
+        assert!(r.html.contains(r#"src="/docs/assets/diagram.png""#));
+    }
+
+    #[test]
+    fn local_markdown_url_rewrites_from_source_dir() {
+        let md = "[next](../guide/intro.md)\n";
+        let root = Path::new("/repo");
+        let src = Path::new("/repo/docs/start/README.md");
+        let r = render_at(md, Some(RenderPath { root, src }));
+        assert!(r.html.contains(r#"href="/docs/guide/intro.md""#));
     }
 
     #[test]
     fn inline_math_delimited_for_katex() {
         let md = "text $\\sqrt{x}$ text\n";
-        let r = render(md);
+        let r = render_at(md, None);
         assert!(r.has_math);
         assert!(r.html.contains(r"$\sqrt{x}$"));
         assert!(!r.html.contains("data-math-style"));
@@ -402,7 +588,7 @@ mod tests {
         // restoreGitHubInlineMath pass that also handles `$<code>...</code>$`.
         // Either shape is fine; client does the rendering.
         let md = "text $`\\int x dx`$ text\n";
-        let r = render(md);
+        let r = render_at(md, None);
         assert!(r.has_math);
         assert!(r.html.contains(r"$`\int x dx`$") || r.html.contains(r"$<code>\int x dx</code>$"));
         assert!(!r.html.contains("data-math-style"));
@@ -411,7 +597,7 @@ mod tests {
     #[test]
     fn title_from_h1() {
         let md = "# Hello World\n\nBody.\n";
-        let r = render(md);
+        let r = render_at(md, None);
         assert_eq!(r.title, "Hello World");
     }
 }

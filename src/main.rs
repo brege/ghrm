@@ -54,7 +54,8 @@ fn main() -> Result<()> {
 
     if cli.render_static {
         let md = std::fs::read_to_string(&abs)?;
-        let rendered = render::render(&md);
+        let root = abs.parent().unwrap_or(&abs);
+        let rendered = render::render_at(&md, Some(render::RenderPath { root, src: &abs }));
         let page = tmpl::page(&rendered.html);
         let html = tmpl::base(tmpl::PageShell {
             title: &rendered.title,

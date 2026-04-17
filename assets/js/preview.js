@@ -106,18 +106,6 @@ function isDarkTheme() {
   return document.documentElement.getAttribute('data-theme') === 'dark';
 }
 
-function syncHighlightTheme() {
-  const light = document.getElementById('ghrm-hljs-light');
-  const dark = document.getElementById('ghrm-hljs-dark');
-  if (!light || !dark) {
-    return;
-  }
-
-  const darkTheme = isDarkTheme();
-  light.disabled = darkTheme;
-  dark.disabled = !darkTheme;
-}
-
 function setError(block, message) {
   let node = block.querySelector('.ghrm-error');
   if (!node) {
@@ -570,7 +558,6 @@ function renderMaps() {
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
-  syncHighlightTheme();
   renderCode();
   renderMath();
   await renderMermaid();
@@ -579,7 +566,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 document.addEventListener('ghrm:themechange', async function() {
-  syncHighlightTheme();
   await renderMermaid();
   renderMaps();
   addCopyButtons();

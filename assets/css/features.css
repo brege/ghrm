@@ -296,11 +296,80 @@
   padding: 4px 0;
 }
 
+.markdown-body .hljs {
+  color: var(--fgColor-default, #1f2328);
+  background: transparent;
+}
+
 .markdown-body code.hljs,
 .markdown-body pre code.hljs {
   display: inline;
   padding: 0;
   background: transparent;
+  font-family: inherit;
+}
+
+.markdown-body pre code.hljs {
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--fgColor-default, #1f2328);
+}
+
+.markdown-body .hljs-comment,
+.markdown-body .hljs-quote {
+  color: var(--color-prettylights-syntax-comment);
+}
+
+.markdown-body .hljs-keyword,
+.markdown-body .hljs-doctag,
+.markdown-body .hljs-meta .hljs-keyword,
+.markdown-body .hljs-template-tag,
+.markdown-body .hljs-template-variable,
+.markdown-body .hljs-type {
+  color: var(--color-prettylights-syntax-keyword);
+}
+
+.markdown-body .hljs-title,
+.markdown-body .hljs-title.class_,
+.markdown-body .hljs-title.class_.inherited__,
+.markdown-body .hljs-title.function_,
+.markdown-body .hljs-built_in {
+  color: var(--color-prettylights-syntax-entity);
+}
+
+.markdown-body .hljs-string,
+.markdown-body .hljs-meta .hljs-string,
+.markdown-body .hljs-regexp {
+  color: var(--color-prettylights-syntax-string);
+}
+
+.markdown-body .hljs-attr,
+.markdown-body .hljs-attribute,
+.markdown-body .hljs-literal,
+.markdown-body .hljs-meta,
+.markdown-body .hljs-number,
+.markdown-body .hljs-operator,
+.markdown-body .hljs-selector-attr,
+.markdown-body .hljs-selector-class,
+.markdown-body .hljs-selector-id {
+  color: var(--color-prettylights-syntax-constant);
+}
+
+.markdown-body .hljs-variable,
+.markdown-body .hljs-symbol {
+  color: var(--color-prettylights-syntax-variable);
+}
+
+.markdown-body .hljs-name,
+.markdown-body .hljs-selector-pseudo,
+.markdown-body .hljs-selector-tag {
+  color: var(--color-prettylights-syntax-entity-tag);
+}
+
+.markdown-body .hljs-params,
+.markdown-body .hljs-subst,
+.markdown-body .hljs-punctuation {
+  color: var(--fgColor-default, #1f2328);
 }
 
 .leaflet-container {
