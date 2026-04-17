@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <link rel="icon" href="data:image/svg+xml,{{ favicon }}">
+  <link rel="shortcut icon" href="data:image/svg+xml,{{ favicon }}">
+  <script>
+  (function() {
+    var stored = localStorage.getItem('ghrm-theme');
+    var system = window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
+    document.documentElement.setAttribute('data-theme', stored || system);
+  })();
+  </script>
+  <link rel="stylesheet" href="/_ghrm/css/bundle.css">
+</head>
+<body>
+{{ body }}
+  <button id="theme-toggle" type="button" aria-label="Toggle theme">
+    <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+{% if has_math %}  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
+{% endif %}{% if has_map %}  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+{% endif %}{% if has_mermaid %}  <script defer src="/vendor/mermaid.js"></script>
+  <script defer src="/vendor/svg-pan-zoom.min.js"></script>
+{% endif %}{% if has_math %}  <script defer src="/vendor/katex/katex.min.js"></script>
+  <script defer src="/vendor/katex/auto-render.min.js"></script>
+{% endif %}{% if has_map %}  <script defer src="/vendor/leaflet/leaflet.js"></script>
+  <script defer src="/vendor/topojson-client.min.js"></script>
+{% endif %}  <script type="module" src="/js/preview.js"></script>
+  <script>
+  (function() {
+    document.addEventListener('DOMContentLoaded', function() {
+      var btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      btn.addEventListener('click', function() {
+        var current = document.documentElement.getAttribute('data-theme');
+        var next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('ghrm-theme', next);
+        document.dispatchEvent(
+          new CustomEvent('ghrm:themechange', { detail: { theme: next } })
+        );
+      });
+    });
+  })();
+  </script>
+{% if live_reload %}  <script>
+  (function() {
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var url = proto + '//' + location.host + '/_ghrm/ws';
+    function connect() {
+      var ws = new WebSocket(url);
+      ws.onmessage = function(ev) { if (ev.data === 'reload') location.reload(); };
+      ws.onclose = function() { setTimeout(connect, 1000); };
+    }
+    connect();
+  })();
+  </script>
+{% endif %}</body>
+</html>

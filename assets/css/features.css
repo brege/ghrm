@@ -1,0 +1,335 @@
+.ghrm-block {
+  position: relative;
+  margin: 16px 0;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.ghrm-copy-host {
+  position: relative;
+}
+
+.ghrm-copy-target {
+  padding-right: 52px;
+}
+
+.ghrm-copy-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bgColor-default, #ffffff) 88%, transparent);
+  color: var(--fgColor-muted, #636c76);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+
+.ghrm-copy-button::before {
+  content: "";
+  display: none;
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 8px);
+  transform: translateY(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--overlay-bgColor, #343942);
+  color: var(--fgColor-onEmphasis, #ffffff);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ghrm-copy-button:hover {
+  color: var(--fgColor-default, #1f2328);
+  background: var(--bgColor-default, #ffffff);
+}
+
+.ghrm-copy-button:focus-visible {
+  outline: 2px solid var(--focus-outlineColor, #0969da);
+  outline-offset: 2px;
+}
+
+.ghrm-copy-icon {
+  fill: currentColor;
+}
+
+.ghrm-copy-icon-check {
+  display: none;
+}
+
+.ghrm-copy-button.is-copied {
+  color: var(--fgColor-success, #1a7f37);
+}
+
+.ghrm-copy-button.is-copied::before {
+  content: attr(data-copy-feedback);
+  display: block;
+}
+
+.ghrm-copy-button.is-copied .ghrm-copy-icon-copy {
+  display: none;
+}
+
+.ghrm-copy-button.is-copied .ghrm-copy-icon-check {
+  display: block;
+}
+
+.ghrm-mermaid-diagram,
+.ghrm-map-canvas {
+  background: var(--bgColor-default, #ffffff);
+}
+
+.ghrm-mermaid-diagram {
+  position: relative;
+  padding: 0;
+  text-align: center;
+}
+
+.ghrm-mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.ghrm-mermaid-diagram.ghrm-mermaid-interactive {
+  height: 358px;
+  overflow: hidden;
+}
+
+.ghrm-mermaid-diagram.ghrm-mermaid-interactive svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ghrm-mermaid-diagram.ghrm-mermaid-interactive {
+  padding: 52px 16px 56px;
+  box-sizing: border-box;
+}
+
+.ghrm-render-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  padding: 8px 8px 0 0;
+}
+
+.ghrm-action-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-muted, #636c76);
+  cursor: pointer;
+}
+
+.ghrm-action-button::before {
+  content: "";
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--overlay-bgColor, #343942);
+  color: var(--fgColor-onEmphasis, #ffffff);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ghrm-action-button:hover {
+  color: var(--fgColor-default, #1f2328);
+}
+
+.ghrm-action-button:focus-visible {
+  outline: 2px solid var(--focus-outlineColor, #0969da);
+  outline-offset: 2px;
+}
+
+.ghrm-action-button.is-copied {
+  color: var(--fgColor-success, #1a7f37);
+}
+
+.ghrm-action-button.is-copied::before {
+  content: attr(data-copy-feedback);
+  display: block;
+}
+
+.ghrm-action-button.is-copied .ghrm-copy-icon-copy {
+  display: none;
+}
+
+.ghrm-action-button.is-copied .ghrm-copy-icon-check {
+  display: block;
+}
+
+.ghrm-action-icon {
+  fill: currentColor;
+}
+
+.ghrm-mermaid-nav {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(3, 32px);
+  grid-template-rows: repeat(3, 32px);
+  gap: 4px;
+}
+
+.ghrm-mermaid-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--borderColor-default, #d0d7de) 80%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bgColor-default, #ffffff) 92%, transparent);
+  color: var(--fgColor-default, #1f2328);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+
+.ghrm-mermaid-button:hover {
+  background: var(--bgColor-default, #ffffff);
+}
+
+.ghrm-mermaid-button:focus-visible {
+  outline: 2px solid var(--focus-outlineColor, #0969da);
+  outline-offset: 2px;
+}
+
+.ghrm-mermaid-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.ghrm-mermaid-zoom-in {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.ghrm-mermaid-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.ghrm-mermaid-reset {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.ghrm-mermaid-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.ghrm-mermaid-down {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.ghrm-mermaid-zoom-out {
+  grid-column: 3;
+  grid-row: 3;
+}
+
+.ghrm-mermaid:fullscreen {
+  background: var(--bgColor-default, #ffffff);
+}
+
+.ghrm-mermaid:fullscreen .ghrm-mermaid-diagram {
+  height: 80vh;
+}
+
+.ghrm-map-canvas {
+  height: 420px;
+}
+
+.ghrm-mermaid-info {
+  margin: 0;
+  padding: 16px;
+  color: var(--fgColor-default, #1f2328);
+  font: inherit;
+  text-align: left;
+}
+
+.ghrm-error {
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--borderColor-default, #d0d7de);
+  color: var(--fgColor-danger, #d1242f);
+  background: var(--bgColor-attention-muted, #fff8c5);
+}
+
+.markdown-body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+
+.ghrm-math-block {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+
+.markdown-body code.hljs,
+.markdown-body pre code.hljs {
+  display: inline;
+  padding: 0;
+  background: transparent;
+}
+
+.leaflet-container {
+  font: inherit;
+}
+
+.leaflet-control-attribution {
+  display: none;
+}
+
+.leaflet-control-zoom {
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.leaflet-control-zoom a {
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+  border-bottom: 1px solid var(--borderColor-default, #d0d7de);
+  width: 30px;
+  height: 30px;
+  line-height: 30px;
+  font-size: 16px;
+  text-decoration: none;
+  text-align: center;
+  display: block;
+}
+
+.leaflet-control-zoom a:last-child {
+  border-bottom: none;
+}

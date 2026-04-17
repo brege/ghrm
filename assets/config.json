@@ -1,0 +1,128 @@
+{
+  "files": [
+    {
+      "url": "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.js",
+      "path": "mermaid.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js",
+      "path": "svg-pan-zoom.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css",
+      "path": "katex/katex.min.css"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js",
+      "path": "katex/katex.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js",
+      "path": "katex/auto-render.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_AMS-Regular.woff2",
+      "path": "katex/fonts/KaTeX_AMS-Regular.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Caligraphic-Bold.woff2",
+      "path": "katex/fonts/KaTeX_Caligraphic-Bold.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Caligraphic-Regular.woff2",
+      "path": "katex/fonts/KaTeX_Caligraphic-Regular.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Fraktur-Bold.woff2",
+      "path": "katex/fonts/KaTeX_Fraktur-Bold.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Fraktur-Regular.woff2",
+      "path": "katex/fonts/KaTeX_Fraktur-Regular.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Main-Bold.woff2",
+      "path": "katex/fonts/KaTeX_Main-Bold.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Main-BoldItalic.woff2",
+      "path": "katex/fonts/KaTeX_Main-BoldItalic.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Main-Italic.woff2",
+      "path": "katex/fonts/KaTeX_Main-Italic.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Main-Regular.woff2",
+      "path": "katex/fonts/KaTeX_Main-Regular.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Math-BoldItalic.woff2",
+      "path": "katex/fonts/KaTeX_Math-BoldItalic.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Math-Italic.woff2",
+      "path": "katex/fonts/KaTeX_Math-Italic.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_SansSerif-Bold.woff2",
+      "path": "katex/fonts/KaTeX_SansSerif-Bold.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_SansSerif-Italic.woff2",
+      "path": "katex/fonts/KaTeX_SansSerif-Italic.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_SansSerif-Regular.woff2",
+      "path": "katex/fonts/KaTeX_SansSerif-Regular.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Script-Regular.woff2",
+      "path": "katex/fonts/KaTeX_Script-Regular.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Size1-Regular.woff2",
+      "path": "katex/fonts/KaTeX_Size1-Regular.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Size2-Regular.woff2",
+      "path": "katex/fonts/KaTeX_Size2-Regular.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Size3-Regular.woff2",
+      "path": "katex/fonts/KaTeX_Size3-Regular.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Size4-Regular.woff2",
+      "path": "katex/fonts/KaTeX_Size4-Regular.woff2"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Typewriter-Regular.woff2",
+      "path": "katex/fonts/KaTeX_Typewriter-Regular.woff2"
+    },
+    {
+      "url": "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
+      "path": "leaflet/leaflet.css"
+    },
+    {
+      "url": "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+      "path": "leaflet/leaflet.js"
+    },
+    {
+      "url": "https://unpkg.com/topojson-client@3/dist/topojson-client.min.js",
+      "path": "topojson-client.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js",
+      "path": "highlightjs/highlight.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/github.min.css",
+      "path": "highlightjs/github.min.css"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/github-dark.min.css",
+      "path": "highlightjs/github-dark.min.css"
+    }
+  ]
+}
