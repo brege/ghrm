@@ -557,13 +557,16 @@ function renderMaps() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', async function() {
+async function runAll() {
   renderCode();
   renderMath();
   await renderMermaid();
   renderMaps();
   addCopyButtons();
-});
+}
+
+document.addEventListener('DOMContentLoaded', runAll);
+document.addEventListener('ghrm:contentready', runAll);
 
 document.addEventListener('ghrm:themechange', async function() {
   await renderMermaid();

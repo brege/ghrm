@@ -1,21 +1,23 @@
-use crate::assets::{BUNDLE_CSS, PREVIEW_JS};
 use crate::render::{self, Rendered};
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
 use crate::walk::{self, NavTree};
 use crate::watch;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use anyhow::anyhow;
 use axum::{
     Router,
     body::Body,
-    extract::{Path as AxPath, State, ws::WebSocketUpgrade},
+    extract::{Path as AxPath, Query, State, ws::WebSocketUpgrade},
     http::{StatusCode, header},
     response::{Html, IntoResponse, Response},
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
@@ -69,8 +71,9 @@ pub async fn run(
     let app = Router::new()
         .route("/", get(root))
         .route("/_ghrm/ws", get(ws_handler))
-        .route("/_ghrm/css/bundle.css", get(bundle_css))
-        .route("/js/preview.js", get(preview_js))
+        .route("/_ghrm/tree", get(api_tree))
+        .route("/_ghrm/render", get(api_render))
+        .route("/_ghrm/assets/*path", get(theme_asset))
         .route("/vendor/*path", get(vendor))
         .route("/*path", get(any_path))
         .with_state(state);
@@ -148,6 +151,28 @@ async fn any_path(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Re
     stream_file(&joined).await
 }
 
+async fn serve_file_mode(s: &AppState, path: &str) -> Response {
+    let Some(root) = s.target.parent() else {
+        return not_found();
+    };
+    let clean = path.trim_matches('/');
+    if clean.is_empty() {
+        return render_file(&s.target, None).await;
+    }
+    let joined = root.join(clean);
+    let meta = match tokio::fs::metadata(&joined).await {
+        Ok(m) => m,
+        Err(_) => return not_found(),
+    };
+    if meta.is_dir() {
+        return not_found();
+    }
+    if joined.extension().and_then(|s| s.to_str()) == Some("md") {
+        return render_file(&joined, None).await;
+    }
+    stream_file(&joined).await
+}
+
 async fn render_file(path: &Path, root: Option<&Path>) -> Response {
     let md = match tokio::fs::read_to_string(path).await {
         Ok(m) => m,
@@ -157,7 +182,13 @@ async fn render_file(path: &Path, root: Option<&Path>) -> Response {
         return not_found();
     };
     let rendered = render::render_at(&md, Some(render::RenderPath { root, src: path }));
-    let body = tmpl::page(&rendered.html);
+    let body = match tmpl::page(&rendered.html) {
+        Ok(b) => b,
+        Err(e) => {
+            warn!("template error: {}", e);
+            return not_found();
+        }
+    };
     respond_html(&rendered, &body)
 }
 
@@ -228,14 +259,20 @@ async fn render_explorer(s: &AppState, rel: &str) -> Response {
         html: &r.html,
     });
 
-    let body = tmpl::explorer(ExplorerCtx {
+    let body = match tmpl::explorer(ExplorerCtx {
         show_title: true,
         title: &title,
         has_parent,
         parent_href: &parent_href,
         entries: &entries,
         readme: readme_tmpl,
-    });
+    }) {
+        Ok(b) => b,
+        Err(e) => {
+            warn!("template error: {}", e);
+            return not_found();
+        }
+    };
 
     let combined = Rendered {
         html: String::new(),
@@ -260,35 +297,124 @@ fn respond_html(r: &Rendered, body: &str) -> Response {
     } else {
         &r.title
     };
-    let html = tmpl::base(PageShell {
-        title,
-        body,
-        live_reload: true,
-    });
+    let html = match tmpl::base(PageShell { title, body }) {
+        Ok(h) => h,
+        Err(e) => {
+            warn!("template error: {}", e);
+            return not_found();
+        }
+    };
     Html(html).into_response()
 }
 
-async fn serve_file_mode(s: &AppState, path: &str) -> Response {
-    let Some(root) = s.target.parent() else {
-        return not_found();
-    };
-    let clean = path.trim_matches('/');
-    if clean.is_empty() {
-        return render_file(&s.target, None).await;
-    }
+// --- JSON APIs for optional SPA navigation ---
 
-    let joined = root.join(clean);
-    let meta = match tokio::fs::metadata(&joined).await {
+#[derive(Serialize)]
+struct TreeResponse {
+    mode: &'static str,
+    root: String,
+    dirs: BTreeMap<String, crate::walk::NavDir>,
+}
+
+async fn api_tree(State(s): State<AppState>) -> Response {
+    let nav = s.nav.read().unwrap();
+    let root = s
+        .target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let resp = TreeResponse {
+        mode: if s.mode == Mode::Dir { "dir" } else { "file" },
+        root,
+        dirs: nav.dirs.clone(),
+    };
+    match serde_json::to_string(&resp) {
+        Ok(json) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json))
+            .unwrap(),
+        Err(e) => {
+            warn!("api_tree error: {}", e);
+            not_found()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct RenderQuery {
+    path: Option<String>,
+}
+
+async fn api_render(State(s): State<AppState>, Query(q): Query<RenderQuery>) -> Response {
+    let rel = q.path.as_deref().unwrap_or("").trim_matches('/');
+
+    let (file_path, root) = if s.mode == Mode::File {
+        let parent = s.target.parent().unwrap_or(&s.target).to_path_buf();
+        let fp = if rel.is_empty() {
+            s.target.clone()
+        } else {
+            parent.join(rel)
+        };
+        (fp, parent)
+    } else {
+        let fp = if rel.is_empty() {
+            s.target.clone()
+        } else {
+            s.target.join(rel)
+        };
+        (fp, s.target.clone())
+    };
+
+    let md = match tokio::fs::read_to_string(&file_path).await {
         Ok(m) => m,
         Err(_) => return not_found(),
     };
-    if meta.is_dir() {
-        return not_found();
+
+    let rendered = render::render_at(
+        &md,
+        Some(render::RenderPath {
+            root: &root,
+            src: &file_path,
+        }),
+    );
+
+    match serde_json::to_string(&rendered) {
+        Ok(json) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json))
+            .unwrap(),
+        Err(e) => {
+            warn!("api_render error: {}", e);
+            not_found()
+        }
     }
-    if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&joined, None).await;
+}
+
+async fn theme_asset(AxPath(path): AxPath<String>) -> Response {
+    let base = match crate::theme::dir() {
+        Ok(d) => d,
+        Err(e) => {
+            warn!("theme dir error: {}", e);
+            return not_found();
+        }
+    };
+    let rel = path.trim_start_matches('/');
+    for comp in PathBuf::from(rel).components() {
+        if !matches!(comp, Component::Normal(_)) {
+            return not_found();
+        }
     }
-    stream_file(&joined).await
+    stream_file(&base.join(rel)).await
+}
+
+async fn vendor(AxPath(path): AxPath<String>) -> Response {
+    let path = match crate::vendor::path(&path) {
+        Ok(p) => p,
+        Err(_) => return not_found(),
+    };
+    stream_file(&path).await
 }
 
 async fn stream_file(path: &Path) -> Response {
@@ -325,34 +451,6 @@ fn mime_guess(path: &Path) -> &'static str {
     }
 }
 
-async fn bundle_css() -> Response {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "text/css; charset=utf-8")
-        .header(header::CACHE_CONTROL, "no-cache")
-        .body(Body::from(BUNDLE_CSS.clone()))
-        .unwrap()
-}
-
-async fn preview_js() -> Response {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(
-            header::CONTENT_TYPE,
-            "application/javascript; charset=utf-8",
-        )
-        .body(Body::from(PREVIEW_JS))
-        .unwrap()
-}
-
-async fn vendor(AxPath(path): AxPath<String>) -> Response {
-    let path = match crate::vendor::path(&path) {
-        Ok(path) => path,
-        Err(_) => return not_found(),
-    };
-    stream_file(&path).await
-}
-
 async fn ws_handler(State(s): State<AppState>, ws: WebSocketUpgrade) -> Response {
     let mut rx = s.reload.subscribe();
     ws.on_upgrade(|socket| async move {
@@ -378,13 +476,5 @@ fn not_found() -> Response {
         .status(StatusCode::NOT_FOUND)
         .header(header::CACHE_CONTROL, "no-store")
         .body(Body::from("404"))
-        .unwrap()
-}
-
-fn _internal(msg: String) -> Response {
-    warn!("internal error: {}", msg);
-    Response::builder()
-        .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .body(Body::from(msg))
         .unwrap()
 }

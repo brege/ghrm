@@ -19,6 +19,7 @@ static TOPOJSON_ADAPTER: GhrmBlockAdapter = GhrmBlockAdapter {
 };
 static MATH_ADAPTER: GhrmMathAdapter = GhrmMathAdapter;
 
+#[derive(serde::Serialize)]
 pub struct Rendered {
     pub html: String,
     pub title: String,

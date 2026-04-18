@@ -42,7 +42,7 @@ graph TD;
     C-->D;
 ```
 
-> \[!NOTE]
+> [!NOTE]
 > You may observe errors if you run a third-party Mermaid plugin when using Mermaid syntax on GitHub.
 
 ### Checking your version of Mermaid

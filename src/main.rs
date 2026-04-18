@@ -1,7 +1,7 @@
-mod assets;
 mod config;
 mod render;
 mod server;
+mod theme;
 mod tmpl;
 mod vendor;
 mod walk;
@@ -25,9 +25,6 @@ struct Cli {
     #[arg(short = 'b', long)]
     bind: Option<String>,
 
-    #[arg(long = "static", help = "Render to stdout and exit")]
-    render_static: bool,
-
     #[arg(
         long,
         help = "Ignore .gitignore, .git/info/exclude, and global gitignore rules"
@@ -50,27 +47,18 @@ fn main() -> Result<()> {
     let cfg = config::Config::load(cli.config.as_deref())?;
     if cli.clean {
         vendor::clean()?;
+        theme::clean()?;
+        if cli.target.is_none() {
+            return Ok(());
+        }
     }
     vendor::ensure()?;
+    theme::ensure()?;
 
     let target = cli
         .target
         .ok_or_else(|| anyhow::anyhow!("missing target"))?;
     let abs = target.canonicalize()?;
-
-    if cli.render_static {
-        let md = std::fs::read_to_string(&abs)?;
-        let root = abs.parent().unwrap_or(&abs);
-        let rendered = render::render_at(&md, Some(render::RenderPath { root, src: &abs }));
-        let page = tmpl::page(&rendered.html);
-        let html = tmpl::base(tmpl::PageShell {
-            title: &rendered.title,
-            body: &page,
-            live_reload: false,
-        });
-        print!("{}", html);
-        return Ok(());
-    }
 
     let port = cli.port.or(cfg.port).unwrap_or(1313);
     let bind = cli

@@ -1,40 +1,11 @@
-use crate::assets::FAVICON_SVG_URL;
+use anyhow::{Context, Result};
+use std::path::Path;
 
-const BASE_TEMPLATE: &str = include_str!("../templates/base.html");
-const PAGE_TEMPLATE: &str = include_str!("../templates/page.html");
-const EXPLORER_TEMPLATE: &str = include_str!("../templates/explorer.html");
-const ICONS_TEMPLATE: &str = include_str!("../templates/fragments/icons.html");
-const TITLE_BLOCK_TEMPLATE: &str = include_str!("../templates/fragments/title_block.html");
-const NAV_TABLE_TEMPLATE: &str = include_str!("../templates/fragments/nav_table.html");
-const NAV_EMPTY_TEMPLATE: &str = include_str!("../templates/fragments/nav_empty.html");
-const NAV_PARENT_ROW_TEMPLATE: &str = include_str!("../templates/fragments/nav_parent_row.html");
-const NAV_ROW_TEMPLATE: &str = include_str!("../templates/fragments/nav_row.html");
-const README_BOX_TEMPLATE: &str = include_str!("../templates/fragments/readme_box.html");
+const FAVICON_SVG_URL: &str = "%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20512%20512%22%20fill%3D%22%232ea043%22%3E%3Cpath%20d%3D%22M240%20216V32H92a12%2012%200%200%200-12%2012v424a12%2012%200%200%200%2012%2012h328a12%2012%200%200%200%2012-12V224H248a8%208%200%200%201-8-8z%22%2F%3E%3Cpath%20d%3D%22M272%2041.69V188a4%204%200%200%200%204%204h146.31a2%202%200%200%200%201.42-3.41L275.41%2040.27a2%202%200%200%200-3.41%201.42z%22%2F%3E%3C%2Fsvg%3E";
 
 pub struct PageShell<'a> {
     pub title: &'a str,
     pub body: &'a str,
-    pub live_reload: bool,
-}
-
-pub fn base(p: PageShell) -> String {
-    let mut out = BASE_TEMPLATE.to_string();
-    replace(&mut out, "{{ title }}", &html_escape::encode_text(p.title));
-    replace(&mut out, "{{ favicon }}", FAVICON_SVG_URL);
-    replace(&mut out, "{{ icons }}", ICONS_TEMPLATE);
-    replace(&mut out, "{{ body }}", p.body);
-    replace(
-        &mut out,
-        "{{ live_reload }}",
-        if p.live_reload { "1" } else { "0" },
-    );
-    out
-}
-
-pub fn page(content_html: &str) -> String {
-    let mut out = PAGE_TEMPLATE.to_string();
-    replace(&mut out, "{{ content }}", content_html);
-    out
 }
 
 pub struct ExplorerCtx<'a> {
@@ -57,10 +28,40 @@ pub struct ExplorerReadme<'a> {
     pub html: &'a str,
 }
 
-pub fn explorer(ctx: ExplorerCtx) -> String {
+pub fn base(p: PageShell) -> Result<String> {
+    let dir = crate::theme::dir()?.join("templates");
+    let mut out = read_tmpl(&dir.join("base.html"))?;
+    replace(&mut out, "{{ title }}", &html_escape::encode_text(p.title));
+    replace(&mut out, "{{ favicon }}", FAVICON_SVG_URL);
+    replace(
+        &mut out,
+        "{{ icons }}",
+        &read_tmpl(&dir.join("fragments/icons.html"))?,
+    );
+    replace(&mut out, "{{ body }}", p.body);
+    Ok(out)
+}
+
+pub fn page(content_html: &str) -> Result<String> {
+    let path = crate::theme::dir()?.join("templates/page.html");
+    let mut out = read_tmpl(&path)?;
+    replace(&mut out, "{{ content }}", content_html);
+    Ok(out)
+}
+
+pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
+    let dir = crate::theme::dir()?.join("templates");
+    let nav_row_tmpl = read_tmpl(&dir.join("fragments/nav_row.html"))?;
+    let nav_parent_row = read_tmpl(&dir.join("fragments/nav_parent_row.html"))?;
+    let nav_table_tmpl = read_tmpl(&dir.join("fragments/nav_table.html"))?;
+    let nav_empty = read_tmpl(&dir.join("fragments/nav_empty.html"))?;
+    let readme_box_tmpl = read_tmpl(&dir.join("fragments/readme_box.html"))?;
+    let title_block_tmpl = read_tmpl(&dir.join("fragments/title_block.html"))?;
+    let explorer_tmpl = read_tmpl(&dir.join("explorer.html"))?;
+
     let mut rows = String::new();
     if ctx.has_parent {
-        let mut row = NAV_PARENT_ROW_TEMPLATE.to_string();
+        let mut row = nav_parent_row;
         replace(
             &mut row,
             "{{ href }}",
@@ -69,7 +70,7 @@ pub fn explorer(ctx: ExplorerCtx) -> String {
         rows.push_str(&row);
     }
     for e in ctx.entries {
-        let mut row = NAV_ROW_TEMPLATE.to_string();
+        let mut row = nav_row_tmpl.clone();
         replace(
             &mut row,
             "{{ icon }}",
@@ -89,15 +90,15 @@ pub fn explorer(ctx: ExplorerCtx) -> String {
     }
 
     let table_or_empty = if !ctx.entries.is_empty() || ctx.has_parent {
-        let mut table = NAV_TABLE_TEMPLATE.to_string();
+        let mut table = nav_table_tmpl;
         replace(&mut table, "{{ rows }}", &rows);
         table
     } else {
-        NAV_EMPTY_TEMPLATE.to_string()
+        nav_empty
     };
 
     let readme_block = if let Some(r) = ctx.readme {
-        let mut readme = README_BOX_TEMPLATE.to_string();
+        let mut readme = readme_box_tmpl;
         replace(&mut readme, "{{ name }}", &html_escape::encode_text(r.name));
         replace(&mut readme, "{{ html }}", r.html);
         readme
@@ -106,22 +107,22 @@ pub fn explorer(ctx: ExplorerCtx) -> String {
     };
 
     let title_block = if ctx.show_title {
-        let mut title = TITLE_BLOCK_TEMPLATE.to_string();
-        replace(
-            &mut title,
-            "{{ title }}",
-            &html_escape::encode_text(ctx.title),
-        );
-        title
+        let mut t = title_block_tmpl;
+        replace(&mut t, "{{ title }}", &html_escape::encode_text(ctx.title));
+        t
     } else {
         String::new()
     };
 
-    let mut out = EXPLORER_TEMPLATE.to_string();
+    let mut out = explorer_tmpl;
     replace(&mut out, "{{ title_block }}", &title_block);
     replace(&mut out, "{{ table_or_empty }}", &table_or_empty);
     replace(&mut out, "{{ readme_block }}", &readme_block);
-    out
+    Ok(out)
+}
+
+fn read_tmpl(path: &Path) -> Result<String> {
+    std::fs::read_to_string(path).with_context(|| format!("template missing: {}", path.display()))
 }
 
 fn replace(out: &mut String, needle: &str, value: &str) {

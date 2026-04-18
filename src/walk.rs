@@ -16,7 +16,7 @@ pub struct NavDir {
     pub readme: Option<String>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct NavTree {
     pub dirs: BTreeMap<String, NavDir>,
 }
