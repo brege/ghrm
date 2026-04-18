@@ -16,22 +16,38 @@
   })();
   </script>
   <link rel="stylesheet" href="/_ghrm/css/bundle.css">
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 </head>
-<body>
-{{ body }}
-  <button id="theme-toggle" type="button" aria-label="Toggle theme">
-    <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-    <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-  </button>
-{% if has_math %}  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
-{% endif %}{% if has_map %}  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
-{% endif %}{% if has_mermaid %}  <script defer src="/vendor/mermaid.js"></script>
+<body data-live-reload="{{ live_reload }}">
+{{ icons }}  <header class="ghrm-topbar">
+    <div class="ghrm-topbar-inner">
+      <div class="ghrm-topbar-spacer" aria-hidden="true"></div>
+      <div class="ghrm-topbar-controls">
+        <div class="ghrm-scope-switch" aria-label="Explorer scope">
+          <button type="button" class="ghrm-scope-option is-active" aria-pressed="true">*.md</button>
+          <button type="button" class="ghrm-scope-option" aria-pressed="false">*</button>
+          <button type="button" class="ghrm-scope-option" aria-pressed="false">**</button>
+        </div>
+        <button id="theme-toggle" type="button" aria-label="Toggle theme">
+          <svg class="icon-sun" aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-sun"></use>
+          </svg>
+          <svg class="icon-moon" aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-moon"></use>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+{{ body }}  <script defer src="/vendor/mermaid.js"></script>
   <script defer src="/vendor/svg-pan-zoom.min.js"></script>
-{% endif %}{% if has_math %}  <script defer src="/vendor/katex/katex.min.js"></script>
+  <script defer src="/vendor/katex/katex.min.js"></script>
   <script defer src="/vendor/katex/auto-render.min.js"></script>
-{% endif %}{% if has_map %}  <script defer src="/vendor/leaflet/leaflet.js"></script>
+  <script defer src="/vendor/leaflet/leaflet.js"></script>
   <script defer src="/vendor/topojson-client.min.js"></script>
-{% endif %}  <script type="module" src="/js/preview.js"></script>
+  <script defer src="/vendor/highlightjs/highlight.min.js"></script>
+  <script type="module" src="/js/preview.js"></script>
   <script>
   (function() {
     document.addEventListener('DOMContentLoaded', function() {
@@ -46,20 +62,21 @@
           new CustomEvent('ghrm:themechange', { detail: { theme: next } })
         );
       });
+
+      if (document.body.dataset.liveReload !== '1') {
+        return;
+      }
+
+      var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var url = proto + '//' + location.host + '/_ghrm/ws';
+      function connect() {
+        var ws = new WebSocket(url);
+        ws.onmessage = function(ev) { if (ev.data === 'reload') location.reload(); };
+        ws.onclose = function() { setTimeout(connect, 1000); };
+      }
+      connect();
     });
   })();
   </script>
-{% if live_reload %}  <script>
-  (function() {
-    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    var url = proto + '//' + location.host + '/_ghrm/ws';
-    function connect() {
-      var ws = new WebSocket(url);
-      ws.onmessage = function(ev) { if (ev.data === 'reload') location.reload(); };
-      ws.onclose = function() { setTimeout(connect, 1000); };
-    }
-    connect();
-  })();
-  </script>
-{% endif %}</body>
+</body>
 </html>

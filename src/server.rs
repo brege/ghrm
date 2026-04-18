@@ -263,9 +263,6 @@ fn respond_html(r: &Rendered, body: &str) -> Response {
     let html = tmpl::base(PageShell {
         title,
         body,
-        has_math: r.has_math,
-        has_map: r.has_map,
-        has_mermaid: r.has_mermaid,
         live_reload: true,
     });
     Html(html).into_response()

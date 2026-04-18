@@ -66,9 +66,6 @@ fn main() -> Result<()> {
         let html = tmpl::base(tmpl::PageShell {
             title: &rendered.title,
             body: &page,
-            has_math: rendered.has_math,
-            has_map: rendered.has_map,
-            has_mermaid: rendered.has_mermaid,
             live_reload: false,
         });
         print!("{}", html);
