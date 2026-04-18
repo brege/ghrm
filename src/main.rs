@@ -28,6 +28,12 @@ struct Cli {
     #[arg(long = "static", help = "Render to stdout and exit")]
     render_static: bool,
 
+    #[arg(
+        long,
+        help = "Ignore .gitignore, .git/info/exclude, and global gitignore rules"
+    )]
+    no_ignore: bool,
+
     #[arg(long, help = "Clear cached frontend assets before startup")]
     clean: bool,
 }
@@ -83,5 +89,5 @@ fn main() -> Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    runtime.block_on(server::run(bind, port, open, abs))
+    runtime.block_on(server::run(bind, port, open, abs, !cli.no_ignore))
 }

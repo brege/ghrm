@@ -35,7 +35,13 @@ pub enum Mode {
     Dir,
 }
 
-pub async fn run(bind: String, port: u16, open: bool, target: PathBuf) -> Result<()> {
+pub async fn run(
+    bind: String,
+    port: u16,
+    open: bool,
+    target: PathBuf,
+    use_ignore: bool,
+) -> Result<()> {
     let meta = std::fs::metadata(&target)?;
     let mode = if meta.is_dir() { Mode::Dir } else { Mode::File };
 
@@ -44,9 +50,9 @@ pub async fn run(bind: String, port: u16, open: bool, target: PathBuf) -> Result
 
     match mode {
         Mode::Dir => {
-            let fresh = walk::build(&target);
+            let fresh = walk::build(&target, use_ignore);
             *nav.write().unwrap() = fresh;
-            watch::spawn_dir(target.clone(), nav.clone(), reload_tx.clone())?;
+            watch::spawn_dir(target.clone(), nav.clone(), reload_tx.clone(), use_ignore)?;
         }
         Mode::File => {
             watch::spawn_file(target.clone(), reload_tx.clone())?;
@@ -105,7 +111,7 @@ fn open_browser(addr: &SocketAddr) {
 
 async fn root(State(s): State<AppState>) -> Response {
     match s.mode {
-        Mode::File => render_file(&s.target).await,
+        Mode::File => render_file(&s.target, None).await,
         Mode::Dir => render_explorer(&s, "").await,
     }
 }
@@ -137,17 +143,17 @@ async fn any_path(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Re
         return render_explorer(&s, &clean).await;
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&joined).await;
+        return render_file(&joined, Some(&s.target)).await;
     }
     stream_file(&joined).await
 }
 
-async fn render_file(path: &Path) -> Response {
+async fn render_file(path: &Path, root: Option<&Path>) -> Response {
     let md = match tokio::fs::read_to_string(path).await {
         Ok(m) => m,
         Err(_) => return not_found(),
     };
-    let Some(root) = path.parent() else {
+    let Some(root) = root.or_else(|| path.parent()) else {
         return not_found();
     };
     let rendered = render::render_at(&md, Some(render::RenderPath { root, src: path }));
@@ -271,7 +277,7 @@ async fn serve_file_mode(s: &AppState, path: &str) -> Response {
     };
     let clean = path.trim_matches('/');
     if clean.is_empty() {
-        return render_file(&s.target).await;
+        return render_file(&s.target, None).await;
     }
 
     let joined = root.join(clean);
@@ -283,7 +289,7 @@ async fn serve_file_mode(s: &AppState, path: &str) -> Response {
         return not_found();
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&joined).await;
+        return render_file(&joined, None).await;
     }
     stream_file(&joined).await
 }
@@ -297,6 +303,7 @@ async fn stream_file(path: &Path) -> Response {
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, mime)
+        .header(header::CACHE_CONTROL, "no-cache")
         .body(Body::from(bytes))
         .unwrap()
 }
@@ -372,6 +379,7 @@ async fn ws_handler(State(s): State<AppState>, ws: WebSocketUpgrade) -> Response
 fn not_found() -> Response {
     Response::builder()
         .status(StatusCode::NOT_FOUND)
+        .header(header::CACHE_CONTROL, "no-store")
         .body(Body::from("404"))
         .unwrap()
 }

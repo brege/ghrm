@@ -11,6 +11,7 @@ pub fn spawn_dir(
     root: PathBuf,
     nav: Arc<RwLock<NavTree>>,
     reload_tx: broadcast::Sender<()>,
+    use_ignore: bool,
 ) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(150), None, tx)?;
@@ -28,7 +29,7 @@ pub fn spawn_dir(
             }
             let nav_dirty = events.iter().any(|e| is_nav_event(&root, e));
             if nav_dirty {
-                let fresh = walk::build(&root);
+                let fresh = walk::build(&root, use_ignore);
                 if let Ok(mut guard) = nav.write() {
                     *guard = fresh;
                 }

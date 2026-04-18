@@ -565,6 +565,15 @@ mod tests {
     }
 
     #[test]
+    fn nested_dir_image_url_keeps_dir_prefix() {
+        let md = "![img](docs/img/github.png)\n";
+        let root = Path::new("/repo");
+        let src = Path::new("/repo/arch/README.md");
+        let r = render_at(md, Some(RenderPath { root, src }));
+        assert!(r.html.contains(r#"src="/arch/docs/img/github.png""#));
+    }
+
+    #[test]
     fn local_markdown_url_rewrites_from_source_dir() {
         let md = "[next](../guide/intro.md)\n";
         let root = Path::new("/repo");

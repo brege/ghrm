@@ -21,15 +21,15 @@ pub struct NavTree {
     pub dirs: BTreeMap<String, NavDir>,
 }
 
-pub fn build(root: &Path) -> NavTree {
+pub fn build(root: &Path, use_ignore: bool) -> NavTree {
     let mut dirs_seen: HashSet<PathBuf> = HashSet::new();
     dirs_seen.insert(root.to_path_buf());
 
     let walker = WalkBuilder::new(root)
         .hidden(false)
-        .git_ignore(true)
-        .git_exclude(true)
-        .git_global(true)
+        .git_ignore(use_ignore)
+        .git_exclude(use_ignore)
+        .git_global(use_ignore)
         .filter_entry(|e| {
             let name = e.file_name().to_string_lossy();
             !matches!(
@@ -95,7 +95,6 @@ pub fn build(root: &Path) -> NavTree {
             } else if ft.is_file() && cp.extension().and_then(|s| s.to_str()) == Some("md") {
                 if name.eq_ignore_ascii_case("README.md") {
                     readme = Some(child_rel.to_string_lossy().to_string());
-                    continue;
                 }
                 entries.push(NavEntry {
                     name,
