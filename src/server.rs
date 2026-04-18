@@ -171,7 +171,7 @@ async fn any_path(
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
         return render_file(&joined, Some(&s.target)).await;
     }
-    stream_file(&joined).await
+    dispatch_file(&joined).await
 }
 
 async fn serve_file_mode(s: &AppState, path: &str) -> Response {
@@ -193,7 +193,7 @@ async fn serve_file_mode(s: &AppState, path: &str) -> Response {
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
         return render_file(&joined, None).await;
     }
-    stream_file(&joined).await
+    dispatch_file(&joined).await
 }
 
 async fn render_file(path: &Path, root: Option<&Path>) -> Response {
@@ -457,11 +457,60 @@ async fn vendor(AxPath(path): AxPath<String>) -> Response {
     stream_file(&path).await
 }
 
-async fn stream_file(path: &Path) -> Response {
-    let bytes = match tokio::fs::read(path).await {
-        Ok(b) => b,
-        Err(_) => return not_found(),
-    };
+fn is_binary_ext(ext: &str) -> bool {
+    matches!(
+        ext,
+        "png"
+            | "jpg"
+            | "jpeg"
+            | "gif"
+            | "svg"
+            | "webp"
+            | "ico"
+            | "bmp"
+            | "tiff"
+            | "tif"
+            | "pdf"
+            | "woff"
+            | "woff2"
+            | "ttf"
+            | "otf"
+            | "eot"
+            | "zip"
+            | "gz"
+            | "tar"
+            | "bz2"
+            | "xz"
+            | "7z"
+            | "rar"
+            | "zst"
+            | "exe"
+            | "bin"
+            | "so"
+            | "dylib"
+            | "dll"
+            | "o"
+            | "a"
+            | "lib"
+            | "mp3"
+            | "mp4"
+            | "wav"
+            | "ogg"
+            | "flac"
+            | "mkv"
+            | "avi"
+            | "mov"
+            | "webm"
+            | "sqlite"
+            | "db"
+            | "sqlite3"
+            | "class"
+            | "jar"
+            | "pyc"
+    )
+}
+
+fn stream_bytes(path: &Path, bytes: Vec<u8>) -> Response {
     let mime = mime_guess(path);
     Response::builder()
         .status(StatusCode::OK)
@@ -469,6 +518,50 @@ async fn stream_file(path: &Path) -> Response {
         .header(header::CACHE_CONTROL, "no-cache")
         .body(Body::from(bytes))
         .unwrap()
+}
+
+async fn stream_file(path: &Path) -> Response {
+    let bytes = match tokio::fs::read(path).await {
+        Ok(b) => b,
+        Err(_) => return not_found(),
+    };
+    stream_bytes(path, bytes)
+}
+
+async fn dispatch_file(path: &Path) -> Response {
+    if path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|ext| is_binary_ext(&ext.to_lowercase()))
+        .unwrap_or(false)
+    {
+        return stream_file(path).await;
+    }
+
+    let bytes = match tokio::fs::read(path).await {
+        Ok(b) => b,
+        Err(_) => return not_found(),
+    };
+
+    if bytes.contains(&0u8) {
+        return stream_bytes(path, bytes);
+    }
+
+    let text = match String::from_utf8(bytes.clone()) {
+        Ok(s) => s,
+        Err(_) => return stream_bytes(path, bytes),
+    };
+
+    let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
+    let rendered = render::render_text(filename, &text);
+    let body = match tmpl::page(&rendered.html) {
+        Ok(b) => b,
+        Err(e) => {
+            warn!("template error: {}", e);
+            return not_found();
+        }
+    };
+    respond_html(&rendered, &body)
 }
 
 fn mime_guess(path: &Path) -> &'static str {

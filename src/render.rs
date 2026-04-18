@@ -28,6 +28,28 @@ pub struct Rendered {
     pub has_map: bool,
 }
 
+pub fn render_text(filename: &str, text: &str) -> Rendered {
+    let lang = std::path::Path::new(filename)
+        .extension()
+        .and_then(|s| s.to_str());
+    let escaped = html_escape::encode_text(text);
+    let html = match lang {
+        Some(l) => format!(
+            r#"<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-{l}" data-lang="{l}">{escaped}</code></pre></div>"#
+        ),
+        None => format!(
+            r#"<div class="highlight"><pre tabindex="0" class="chroma"><code>{escaped}</code></pre></div>"#
+        ),
+    };
+    Rendered {
+        title: filename.to_string(),
+        html,
+        has_mermaid: false,
+        has_math: false,
+        has_map: false,
+    }
+}
+
 pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     let mut options = Options::default();
     options.extension.alerts = true;
