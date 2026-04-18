@@ -29,21 +29,11 @@ pub struct Rendered {
 }
 
 pub fn render_text(filename: &str, text: &str) -> Rendered {
-    let lang = std::path::Path::new(filename)
-        .extension()
-        .and_then(|s| s.to_str());
+    let lang = Path::new(filename).extension().and_then(|s| s.to_str());
     let escaped = html_escape::encode_text(text);
-    let html = match lang {
-        Some(l) => format!(
-            r#"<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-{l}" data-lang="{l}">{escaped}</code></pre></div>"#
-        ),
-        None => format!(
-            r#"<div class="highlight"><pre tabindex="0" class="chroma"><code>{escaped}</code></pre></div>"#
-        ),
-    };
     Rendered {
         title: filename.to_string(),
-        html,
+        html: code_block_html(lang, &escaped),
         has_mermaid: false,
         has_math: false,
         has_map: false,
@@ -304,6 +294,15 @@ fn rewrite_alerts(html: &str) -> String {
     out
 }
 
+fn code_block_html(lang: Option<&str>, body: &str) -> String {
+    let attrs = lang
+        .map(|l| format!(r#" class="language-{l}" data-lang="{l}""#))
+        .unwrap_or_default();
+    format!(
+        r#"<div class="highlight"><pre tabindex="0" class="chroma"><code{attrs}>{body}</code></pre></div>"#
+    )
+}
+
 fn rewrite_code_blocks(html: &str) -> String {
     let mut out = String::with_capacity(html.len() + 128);
     let mut rest = html;
@@ -329,19 +328,8 @@ fn rewrite_code_blocks(html: &str) -> String {
             break;
         };
         let body = &at[code_idx + code_end + 1..close_idx];
-
         let lang = code_lang(open_tag);
-        out.push_str(r#"<div class="highlight"><pre tabindex="0" class="chroma"><code"#);
-        if let Some(lang) = lang {
-            out.push_str(r#" class="language-"#);
-            out.push_str(lang);
-            out.push_str(r#"" data-lang=""#);
-            out.push_str(lang);
-            out.push('"');
-        }
-        out.push('>');
-        out.push_str(body);
-        out.push_str("</code></pre></div>");
+        out.push_str(&code_block_html(lang, body));
         rest = &at[close_idx + "</code></pre>".len()..];
     }
 

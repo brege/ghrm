@@ -547,9 +547,9 @@ async fn dispatch_file(path: &Path) -> Response {
         return stream_bytes(path, bytes);
     }
 
-    let text = match String::from_utf8(bytes.clone()) {
+    let text = match String::from_utf8(bytes) {
         Ok(s) => s,
-        Err(_) => return stream_bytes(path, bytes),
+        Err(e) => return stream_bytes(path, e.into_bytes()),
     };
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
