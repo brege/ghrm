@@ -1,4 +1,4 @@
-use crate::walk::{self, NavTree};
+use crate::walk::{self, NavSet};
 use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{DebouncedEvent, new_debouncer};
 use std::path::{Path, PathBuf};
@@ -9,7 +9,7 @@ use tracing::info;
 
 pub fn spawn_dir(
     root: PathBuf,
-    nav: Arc<RwLock<NavTree>>,
+    nav: Arc<RwLock<NavSet>>,
     reload_tx: broadcast::Sender<()>,
     use_ignore: bool,
 ) -> anyhow::Result<()> {
@@ -29,7 +29,7 @@ pub fn spawn_dir(
             }
             let nav_dirty = events.iter().any(|e| is_nav_event(&root, e));
             if nav_dirty {
-                let fresh = walk::build(&root, use_ignore);
+                let fresh = walk::build_all(&root, use_ignore);
                 if let Ok(mut guard) = nav.write() {
                     *guard = fresh;
                 }
@@ -112,10 +112,6 @@ fn is_nav_event(root: &Path, ev: &DebouncedEvent) -> bool {
         if rel_s.contains("node_modules") || rel_s.contains(".venv") {
             return false;
         }
-        if p.extension().and_then(|s| s.to_str()) == Some("md") {
-            return true;
-        }
-        // directory events (no extension) are candidates too
-        p.extension().is_none()
+        true
     })
 }

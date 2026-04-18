@@ -1,6 +1,6 @@
 use crate::render::{self, Rendered};
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
-use crate::walk::{self, NavTree};
+use crate::walk::{self, NavSet, Scope};
 use crate::watch;
 
 use anyhow::Result;
@@ -27,7 +27,7 @@ use tracing::{info, warn};
 pub struct AppState {
     pub target: PathBuf,
     pub mode: Mode,
-    pub nav: Arc<RwLock<NavTree>>,
+    pub nav: Arc<RwLock<NavSet>>,
     pub reload: broadcast::Sender<()>,
 }
 
@@ -48,11 +48,11 @@ pub async fn run(
     let mode = if meta.is_dir() { Mode::Dir } else { Mode::File };
 
     let (reload_tx, _) = broadcast::channel::<()>(32);
-    let nav = Arc::new(RwLock::new(NavTree::default()));
+    let nav = Arc::new(RwLock::new(NavSet::default()));
 
     match mode {
         Mode::Dir => {
-            let fresh = walk::build(&target, use_ignore);
+            let fresh = walk::build_all(&target, use_ignore);
             *nav.write().unwrap() = fresh;
             watch::spawn_dir(target.clone(), nav.clone(), reload_tx.clone(), use_ignore)?;
         }
@@ -112,14 +112,39 @@ fn open_browser(addr: &SocketAddr) {
         .spawn();
 }
 
-async fn root(State(s): State<AppState>) -> Response {
-    match s.mode {
-        Mode::File => render_file(&s.target, None).await,
-        Mode::Dir => render_explorer(&s, "").await,
+#[derive(Default, Deserialize)]
+struct ScopeQuery {
+    scope: Option<String>,
+}
+
+fn scope_from_query(q: &ScopeQuery) -> Scope {
+    Scope::parse(q.scope.as_deref())
+}
+
+fn with_scope(href: &str, scope: Scope) -> String {
+    match scope.query() {
+        Some(scope) if href.contains('?') => format!("{href}&scope={scope}"),
+        Some(scope) => format!("{href}?scope={scope}"),
+        None => href.to_string(),
     }
 }
 
-async fn any_path(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Response {
+async fn root(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
+    let scope = scope_from_query(&q);
+    info!(scope = ?scope, mode = ?s.mode, route = "/", "scope root request");
+    match s.mode {
+        Mode::File => render_file(&s.target, None).await,
+        Mode::Dir => render_explorer(&s, "", scope).await,
+    }
+}
+
+async fn any_path(
+    State(s): State<AppState>,
+    AxPath(path): AxPath<String>,
+    Query(q): Query<ScopeQuery>,
+) -> Response {
+    let scope = scope_from_query(&q);
+    info!(scope = ?scope, path = %path, mode = ?s.mode, route = "/*path", "scope path request");
     if s.mode == Mode::File {
         return serve_file_mode(&s, &path).await;
     }
@@ -136,14 +161,14 @@ async fn any_path(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Re
     };
     if meta.is_dir() {
         if !had_trailing {
-            let loc = format!("/{}/", clean);
+            let loc = with_scope(&format!("/{}/", clean), scope);
             return Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
                 .header(header::LOCATION, loc)
                 .body(Body::empty())
                 .unwrap();
         }
-        return render_explorer(&s, &clean).await;
+        return render_explorer(&s, &clean, scope).await;
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
         return render_file(&joined, Some(&s.target)).await;
@@ -192,12 +217,13 @@ async fn render_file(path: &Path, root: Option<&Path>) -> Response {
     respond_html(&rendered, &body)
 }
 
-async fn render_explorer(s: &AppState, rel: &str) -> Response {
+async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
     let dir_opt = {
         let guard = s.nav.read().unwrap();
-        guard.dirs.get(rel).cloned()
+        guard.get(scope).dirs.get(rel).cloned()
     };
     let Some(dir) = dir_opt else {
+        info!(scope = ?scope, rel = %rel, "scope explorer miss");
         return not_found();
     };
 
@@ -214,9 +240,32 @@ async fn render_explorer(s: &AppState, rel: &str) -> Response {
         "/".to_string()
     };
     let has_parent = !rel.is_empty();
+    let parent_href = with_scope(&parent_href, scope);
+    info!(
+        scope = ?scope,
+        rel = %rel,
+        entries = dir.entries.len(),
+        has_parent,
+        has_readme = dir.readme.is_some(),
+        "scope explorer render"
+    );
 
-    let entries: Vec<ExplorerEntry> = dir
+    struct ScopedEntry {
+        name: String,
+        href: String,
+        is_dir: bool,
+    }
+
+    let scoped_entries: Vec<ScopedEntry> = dir
         .entries
+        .iter()
+        .map(|e| ScopedEntry {
+            name: e.name.clone(),
+            href: with_scope(&e.href, scope),
+            is_dir: e.is_dir,
+        })
+        .collect();
+    let entries: Vec<ExplorerEntry> = scoped_entries
         .iter()
         .map(|e| ExplorerEntry {
             name: &e.name,
@@ -316,8 +365,10 @@ struct TreeResponse {
     dirs: BTreeMap<String, crate::walk::NavDir>,
 }
 
-async fn api_tree(State(s): State<AppState>) -> Response {
+async fn api_tree(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
     let nav = s.nav.read().unwrap();
+    let scope = scope_from_query(&q);
+    let tree = nav.get(scope);
     let root = s
         .target
         .file_name()
@@ -326,8 +377,15 @@ async fn api_tree(State(s): State<AppState>) -> Response {
     let resp = TreeResponse {
         mode: if s.mode == Mode::Dir { "dir" } else { "file" },
         root,
-        dirs: nav.dirs.clone(),
+        dirs: tree.dirs.clone(),
     };
+    info!(
+        scope = ?scope,
+        dirs = tree.dirs.len(),
+        mode = ?s.mode,
+        route = "/_ghrm/tree",
+        "scope tree request"
+    );
     match serde_json::to_string(&resp) {
         Ok(json) => Response::builder()
             .status(StatusCode::OK)

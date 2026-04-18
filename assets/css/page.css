@@ -127,16 +127,49 @@ body {
   color: var(--fgColor-muted, #636c76);
   font: 600 13px/1 var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
   letter-spacing: -0.02em;
-  cursor: default;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .ghrm-scope-option:first-child {
   border-left: 0;
 }
 
+.ghrm-scope-option:hover {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+  color: var(--fgColor-default, #1f2328);
+}
+
 .ghrm-scope-option.is-active {
   color: var(--fgColor-default, #1f2328);
   background: var(--bgColor-muted, #f6f8fa);
+}
+
+.ghrm-scope-combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.ghrm-scope-text {
+  position: relative;
+  top: -0.03em;
+}
+
+.ghrm-scope-glyph {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  display: block;
+}
+
+.ghrm-scope-double {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
 }
 
 .markdown-body .ghrm-nav-table {
@@ -253,7 +286,7 @@ body {
 #theme-toggle {
   width: 28px;
   height: 28px;
-  border: 0;
+  border: 1px solid var(--borderColor-default, #d0d7de);
   border-radius: 6px;
   background: transparent;
   color: var(--fgColor-default, #1f2328);
@@ -263,11 +296,12 @@ body {
   justify-content: center;
   padding: 0;
   flex: 0 0 auto;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 #theme-toggle:hover {
-  background: var(--bgColor-muted, #f6f8fa);
+  background: var(--bgColor-neutral-muted, #afb8c133);
+  border-color: var(--borderColor-default, #d0d7de);
 }
 
 #theme-toggle .icon-sun,
