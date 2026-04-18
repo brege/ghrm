@@ -131,7 +131,6 @@ fn with_scope(href: &str, scope: Scope) -> String {
 
 async fn root(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
     let scope = scope_from_query(&q);
-    info!(scope = ?scope, mode = ?s.mode, route = "/", "scope root request");
     match s.mode {
         Mode::File => render_file(&s.target, None).await,
         Mode::Dir => render_explorer(&s, "", scope).await,
@@ -144,7 +143,6 @@ async fn any_path(
     Query(q): Query<ScopeQuery>,
 ) -> Response {
     let scope = scope_from_query(&q);
-    info!(scope = ?scope, path = %path, mode = ?s.mode, route = "/*path", "scope path request");
     if s.mode == Mode::File {
         return serve_file_mode(&s, &path).await;
     }
@@ -223,7 +221,6 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         guard.get(scope).dirs.get(rel).cloned()
     };
     let Some(dir) = dir_opt else {
-        info!(scope = ?scope, rel = %rel, "scope explorer miss");
         return not_found();
     };
 
@@ -241,14 +238,6 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
     };
     let has_parent = !rel.is_empty();
     let parent_href = with_scope(&parent_href, scope);
-    info!(
-        scope = ?scope,
-        rel = %rel,
-        entries = dir.entries.len(),
-        has_parent,
-        has_readme = dir.readme.is_some(),
-        "scope explorer render"
-    );
 
     struct ScopedEntry {
         name: String,
@@ -379,13 +368,6 @@ async fn api_tree(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Res
         root,
         dirs: tree.dirs.clone(),
     };
-    info!(
-        scope = ?scope,
-        dirs = tree.dirs.len(),
-        mode = ?s.mode,
-        route = "/_ghrm/tree",
-        "scope tree request"
-    );
     match serde_json::to_string(&resp) {
         Ok(json) => Response::builder()
             .status(StatusCode::OK)

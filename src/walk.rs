@@ -14,7 +14,7 @@ impl Scope {
     pub fn parse(raw: Option<&str>) -> Self {
         match raw {
             Some("files") | Some("*") => Self::Files,
-            Some("all") | Some("recursive") | Some("**") => Self::All,
+            Some("all") | Some("**") => Self::All,
             _ => Self::Md,
         }
     }
@@ -71,25 +71,26 @@ struct Snapshot {
 }
 
 pub fn build_all(root: &Path, use_ignore: bool) -> NavSet {
-    let visible = scan(root, use_ignore, false);
-    let all = scan(root, use_ignore, true);
+    let snap = scan(root, use_ignore);
     NavSet {
-        md: build_md(&visible),
-        files: build_files(&visible),
-        all: build_files(&all),
+        md: build_md(&snap, false),
+        files: build_files(&snap, false),
+        all: build_files(&snap, true),
     }
 }
 
-fn scan(root: &Path, use_ignore: bool, show_hidden: bool) -> Snapshot {
+fn scan(root: &Path, use_ignore: bool) -> Snapshot {
     let mut dirs_seen: HashSet<PathBuf> = HashSet::new();
     dirs_seen.insert(PathBuf::new());
+    let mut direct_files: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
+    let mut files: Vec<PathBuf> = Vec::new();
 
     let walker = WalkBuilder::new(root)
         .hidden(false)
         .git_ignore(use_ignore)
         .git_exclude(use_ignore)
         .git_global(use_ignore)
-        .filter_entry(move |e| allow_name(&e.file_name().to_string_lossy(), show_hidden))
+        .filter_entry(|e| allow_walk_name(&e.file_name().to_string_lossy()))
         .build();
 
     for entry in walker.flatten() {
@@ -100,68 +101,43 @@ fn scan(root: &Path, use_ignore: bool, show_hidden: bool) -> Snapshot {
         let Some(file_type) = entry.file_type() else {
             continue;
         };
+        let rel = path.strip_prefix(root).unwrap().to_path_buf();
+        let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
+        dirs_seen.insert(parent.clone());
         if file_type.is_dir() {
-            let rel = path.strip_prefix(root).unwrap().to_path_buf();
             dirs_seen.insert(rel);
+        } else if file_type.is_file() {
+            files.push(rel.clone());
+            direct_files.entry(parent).or_default().push(rel);
         }
     }
 
     let mut dirs: Vec<PathBuf> = dirs_seen.into_iter().collect();
     dirs.sort_by_key(|path| path.to_string_lossy().to_lowercase());
-
     let mut direct_dirs: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
-    let mut direct_files: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
-    let mut files: Vec<PathBuf> = Vec::new();
-
     for dir_rel in &dirs {
-        let dir_abs = if dir_rel.as_os_str().is_empty() {
-            root.to_path_buf()
-        } else {
-            root.join(dir_rel)
-        };
-        let read = match std::fs::read_dir(&dir_abs) {
-            Ok(read) => read,
-            Err(_) => continue,
-        };
-
-        let mut child_dirs = Vec::new();
-        let mut child_files = Vec::new();
-
-        for child in read.flatten() {
-            let path = child.path();
-            let name = path.file_name().unwrap().to_string_lossy().to_string();
-            if !allow_name(&name, show_hidden) {
-                continue;
-            }
-            let Ok(file_type) = child.file_type() else {
-                continue;
-            };
-            let child_rel = path.strip_prefix(root).unwrap().to_path_buf();
-            if file_type.is_dir() {
-                if dirs.binary_search(&child_rel).is_ok() {
-                    child_dirs.push(child_rel);
-                }
-            } else if file_type.is_file() {
-                files.push(child_rel.clone());
-                child_files.push(child_rel);
-            }
+        if dir_rel.as_os_str().is_empty() {
+            continue;
         }
+        let parent = dir_rel.parent().unwrap_or(Path::new("")).to_path_buf();
+        direct_dirs.entry(parent).or_default().push(dir_rel.clone());
+    }
 
+    files.sort_by_key(|path| path.to_string_lossy().to_lowercase());
+    for child_dirs in direct_dirs.values_mut() {
         child_dirs.sort_by(|a, b| {
             file_name(a)
                 .to_lowercase()
                 .cmp(&file_name(b).to_lowercase())
         });
+    }
+    for child_files in direct_files.values_mut() {
         child_files.sort_by(|a, b| {
             file_name(a)
                 .to_lowercase()
                 .cmp(&file_name(b).to_lowercase())
         });
-        direct_dirs.insert(dir_rel.clone(), child_dirs);
-        direct_files.insert(dir_rel.clone(), child_files);
     }
-
-    files.sort_by_key(|path| path.to_string_lossy().to_lowercase());
 
     Snapshot {
         dirs,
@@ -171,11 +147,14 @@ fn scan(root: &Path, use_ignore: bool, show_hidden: bool) -> Snapshot {
     }
 }
 
-fn build_md(snap: &Snapshot) -> NavTree {
+fn build_md(snap: &Snapshot, show_hidden: bool) -> NavTree {
     let mut dirs_with_md: HashSet<PathBuf> = HashSet::new();
     dirs_with_md.insert(PathBuf::new());
 
     for file_rel in &snap.files {
+        if !allow_scope_path(file_rel, show_hidden) {
+            continue;
+        }
         if !is_markdown(file_rel) {
             continue;
         }
@@ -191,6 +170,9 @@ fn build_md(snap: &Snapshot) -> NavTree {
 
     let mut dirs = BTreeMap::new();
     for dir_rel in &snap.dirs {
+        if !allow_scope_dir(dir_rel, show_hidden) {
+            continue;
+        }
         if !dirs_with_md.contains(dir_rel) {
             continue;
         }
@@ -201,6 +183,7 @@ fn build_md(snap: &Snapshot) -> NavTree {
             .get(dir_rel)
             .into_iter()
             .flatten()
+            .filter(|child| allow_scope_path(child, show_hidden))
             .filter(|child| dirs_with_md.contains(*child))
         {
             entries.push(NavEntry {
@@ -212,6 +195,9 @@ fn build_md(snap: &Snapshot) -> NavTree {
 
         let mut readme = None;
         for file_rel in snap.direct_files.get(dir_rel).into_iter().flatten() {
+            if !allow_scope_path(file_rel, show_hidden) {
+                continue;
+            }
             if !is_markdown(file_rel) {
                 continue;
             }
@@ -236,12 +222,21 @@ fn build_md(snap: &Snapshot) -> NavTree {
     NavTree { dirs }
 }
 
-fn build_files(snap: &Snapshot) -> NavTree {
+fn build_files(snap: &Snapshot, show_hidden: bool) -> NavTree {
     let mut dirs = BTreeMap::new();
     for dir_rel in &snap.dirs {
+        if !allow_scope_dir(dir_rel, show_hidden) {
+            continue;
+        }
         let mut entries = Vec::new();
 
-        for child_dir in snap.direct_dirs.get(dir_rel).into_iter().flatten() {
+        for child_dir in snap
+            .direct_dirs
+            .get(dir_rel)
+            .into_iter()
+            .flatten()
+            .filter(|child| allow_scope_path(child, show_hidden))
+        {
             entries.push(NavEntry {
                 name: file_name(child_dir),
                 href: dir_href(child_dir),
@@ -251,6 +246,9 @@ fn build_files(snap: &Snapshot) -> NavTree {
 
         let mut readme = None;
         for file_rel in snap.direct_files.get(dir_rel).into_iter().flatten() {
+            if !allow_scope_path(file_rel, show_hidden) {
+                continue;
+            }
             if is_readme(file_rel) {
                 readme = Some(path_key(file_rel));
             }
@@ -268,12 +266,25 @@ fn build_files(snap: &Snapshot) -> NavTree {
     NavTree { dirs }
 }
 
-fn allow_name(name: &str, show_hidden: bool) -> bool {
+fn allow_walk_name(name: &str) -> bool {
     if matches!(name, ".git" | "node_modules" | ".venv" | "__pycache__") {
         return false;
     }
-    if !show_hidden && name.starts_with('.') {
-        return false;
+    true
+}
+
+fn allow_scope_dir(path: &Path, show_hidden: bool) -> bool {
+    path.as_os_str().is_empty() || allow_scope_path(path, show_hidden)
+}
+
+fn allow_scope_path(path: &Path, show_hidden: bool) -> bool {
+    if show_hidden {
+        return true;
+    }
+    for part in path.iter() {
+        if part.to_string_lossy().starts_with('.') {
+            return false;
+        }
     }
     true
 }

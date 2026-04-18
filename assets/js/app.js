@@ -1,10 +1,6 @@
 const DEFAULT_SCOPE = 'md';
 const VALID_SCOPES = new Set(['md', 'files', 'all']);
 
-function logScope(event, detail = {}) {
-  console.log('[ghrm scope]', event, detail);
-}
-
 function currentScope() {
   const params = new URLSearchParams(location.search);
   const scope = params.get('scope');
@@ -28,7 +24,6 @@ function syncScopeSwitch() {
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
   }
-  logScope('sync-switch', { scope, href: location.href });
 }
 
 function setupScopeSwitch() {
@@ -39,14 +34,7 @@ function setupScopeSwitch() {
   for (const button of buttons) {
     button.addEventListener('click', () => {
       const scope = VALID_SCOPES.has(button.dataset.scope) ? button.dataset.scope : DEFAULT_SCOPE;
-      const current = currentScope();
-      logScope('click', {
-        buttonScope: scope,
-        currentScope: current,
-        href: location.href,
-      });
-      if (scope === current) {
-        logScope('click-noop', { scope, reason: 'already-active' });
+      if (scope === currentScope()) {
         return;
       }
       navigate(withScope(location.href, scope));
@@ -90,17 +78,11 @@ function setupSpaNav() {
     if (!pathname.endsWith('/') && !pathname.endsWith('.md')) return;
 
     e.preventDefault();
-    logScope('link-nav', {
-      href: a.href,
-      target: withScope(a.href),
-      scope: currentScope(),
-    });
     navigate(withScope(a.href));
   });
 
   window.addEventListener('popstate', () => {
     const target = `${location.pathname}${location.search}${location.hash}`;
-    logScope('popstate', { target, scope: currentScope() });
     navigate(target, false);
   });
 }
@@ -108,24 +90,13 @@ function setupSpaNav() {
 async function navigate(path, push = true) {
   const url = new URL(path, location.origin);
   const target = `${url.pathname}${url.search}${url.hash}`;
-  logScope('navigate-start', { path, target, push, scope: currentScope() });
   const res = await fetch(target).catch(() => null);
-  if (!res) {
-    logScope('navigate-fail', { target, reason: 'network-error' });
-    return;
-  }
-  if (!res.ok) {
-    logScope('navigate-fail', { target, reason: 'bad-status', status: res.status });
-    return;
-  }
+  if (!res || !res.ok) return;
 
   const html = await res.text();
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const newArticle = doc.querySelector('article.markdown-body');
-  if (!newArticle) {
-    logScope('navigate-fail', { target, reason: 'missing-article' });
-    return;
-  }
+  if (!newArticle) return;
 
   const existing = document.querySelector('article.markdown-body');
   if (existing) {
@@ -137,11 +108,6 @@ async function navigate(path, push = true) {
   document.title = doc.title;
   if (push) history.pushState(null, '', target);
   syncScopeSwitch();
-  logScope('navigate-done', {
-    target,
-    title: doc.title,
-    scope: currentScope(),
-  });
   const hash = url.hash;
   if (hash) {
     document.querySelector(hash)?.scrollIntoView();
@@ -152,7 +118,6 @@ async function navigate(path, push = true) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  logScope('boot', { href: location.href, scope: currentScope() });
   setupScopeSwitch();
   setupThemeToggle();
   setupLiveReload();
