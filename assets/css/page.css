@@ -53,8 +53,9 @@
 body {
   margin: 0;
   padding: 60px 0 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
-    Helvetica, Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica,
+    Arial, sans-serif;
   background: var(--bgColor-default, #ffffff);
   transition: background 0.2s ease;
 }
@@ -125,13 +126,26 @@ body {
   border-radius: 0;
   background: transparent;
   color: var(--fgColor-muted, #636c76);
-  font: 600 13px/1 var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
+  font:
+    600 13px / 1
+    var(
+      --fontStack-monospace,
+      ui-monospace,
+      SFMono-Regular,
+      SF Mono,
+      Menlo,
+      Consolas,
+      Liberation Mono,
+      monospace
+    );
   letter-spacing: -0.02em;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .ghrm-scope-option:first-child {
@@ -296,7 +310,9 @@ body {
   justify-content: center;
   padding: 0;
   flex: 0 0 auto;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
 }
 
 #theme-toggle:hover {
@@ -310,7 +326,15 @@ body {
   height: 20px;
 }
 
-[data-theme="dark"] #theme-toggle .icon-sun { display: inline; }
-[data-theme="dark"] #theme-toggle .icon-moon { display: none; }
-:root[data-theme="light"] #theme-toggle .icon-sun { display: none; }
-:root[data-theme="light"] #theme-toggle .icon-moon { display: inline; }
+[data-theme="dark"] #theme-toggle .icon-sun {
+  display: inline;
+}
+[data-theme="dark"] #theme-toggle .icon-moon {
+  display: none;
+}
+:root[data-theme="light"] #theme-toggle .icon-sun {
+  display: none;
+}
+:root[data-theme="light"] #theme-toggle .icon-moon {
+  display: inline;
+}

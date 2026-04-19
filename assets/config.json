@@ -1,6 +1,10 @@
 {
   "files": [
     {
+      "url": "https://cdn.jsdelivr.net/npm/github-markdown-css@5.6.1/github-markdown.css",
+      "path": "github-markdown.css"
+    },
+    {
       "url": "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.js",
       "path": "mermaid.js"
     },

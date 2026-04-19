@@ -19,7 +19,9 @@ function withScope(urlLike, scope = currentScope()) {
 
 function syncScopeSwitch() {
   const scope = currentScope();
-  for (const button of document.querySelectorAll('.ghrm-scope-option[data-scope]')) {
+  for (const button of document.querySelectorAll(
+    '.ghrm-scope-option[data-scope]',
+  )) {
     const active = button.dataset.scope === scope;
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -33,7 +35,9 @@ function setupScopeSwitch() {
   syncScopeSwitch();
   for (const button of buttons) {
     button.addEventListener('click', () => {
-      const scope = VALID_SCOPES.has(button.dataset.scope) ? button.dataset.scope : DEFAULT_SCOPE;
+      const scope = VALID_SCOPES.has(button.dataset.scope)
+        ? button.dataset.scope
+        : DEFAULT_SCOPE;
       if (scope === currentScope()) {
         return;
       }
@@ -50,7 +54,9 @@ function setupThemeToggle() {
     const next = current === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('ghrm-theme', next);
-    document.dispatchEvent(new CustomEvent('ghrm:themechange', { detail: { theme: next } }));
+    document.dispatchEvent(
+      new CustomEvent('ghrm:themechange', { detail: { theme: next } }),
+    );
   });
 }
 
@@ -59,8 +65,12 @@ function setupLiveReload() {
   const url = `${proto}//${location.host}/_ghrm/ws`;
   function connect() {
     const ws = new WebSocket(url);
-    ws.onmessage = (ev) => { if (ev.data === 'reload') location.reload(); };
-    ws.onclose = () => { setTimeout(connect, 1000); };
+    ws.onmessage = (ev) => {
+      if (ev.data === 'reload') location.reload();
+    };
+    ws.onclose = () => {
+      setTimeout(connect, 1000);
+    };
   }
   connect();
 }
@@ -69,7 +79,8 @@ function setupSpaNav() {
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a');
     if (!a || !a.href) return;
-    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
+      return;
     if (a.target && a.target !== '_self') return;
     if (a.origin !== location.origin) return;
     if (a.pathname === location.pathname && a.hash) return;

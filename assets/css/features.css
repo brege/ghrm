@@ -26,7 +26,11 @@
   padding: 0;
   border: 1px solid var(--borderColor-default, #d0d7de);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--bgColor-default, #ffffff) 88%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--bgColor-default, #ffffff) 88%,
+    transparent
+  );
   color: var(--fgColor-muted, #636c76);
   cursor: pointer;
   backdrop-filter: blur(4px);
@@ -204,9 +208,14 @@
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--borderColor-default, #d0d7de) 80%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--borderColor-default, #d0d7de) 80%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--bgColor-default, #ffffff) 92%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--bgColor-default, #ffffff) 92%,
+    transparent
+  );
   color: var(--fgColor-default, #1f2328);
   cursor: pointer;
   backdrop-filter: blur(4px);
