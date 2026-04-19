@@ -1,4 +1,5 @@
 use crate::render::{self, Rendered};
+use crate::repo::{Forge, RepoSet, SourceState};
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
 use crate::walk::{self, NavSet, Scope};
 use crate::watch;
@@ -28,6 +29,7 @@ pub struct AppState {
     pub target: PathBuf,
     pub mode: Mode,
     pub nav: Arc<RwLock<NavSet>>,
+    pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
 }
 
@@ -49,6 +51,12 @@ pub async fn run(
 
     let (reload_tx, _) = broadcast::channel::<()>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
+    let repo_root = if mode == Mode::Dir {
+        target.as_path()
+    } else {
+        target.parent().unwrap_or(target.as_path())
+    };
+    let repos = RepoSet::discover(repo_root);
 
     match mode {
         Mode::Dir => {
@@ -65,6 +73,7 @@ pub async fn run(
         target: target.clone(),
         mode,
         nav,
+        repos,
         reload: reload_tx,
     };
 
@@ -203,7 +212,7 @@ fn breadcrumb_html(target: &Path, rel: &str, scope: Scope) -> String {
 async fn root(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
     let scope = scope_from_query(&q);
     match s.mode {
-        Mode::File => render_file(&s.target, None, scope).await,
+        Mode::File => render_file(&s, &s.target, None, scope).await,
         Mode::Dir => render_explorer(&s, "", scope).await,
     }
 }
@@ -240,9 +249,9 @@ async fn any_path(
         return render_explorer(&s, &clean, scope).await;
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&joined, Some(&s.target), scope).await;
+        return render_file(&s, &joined, Some(s.target.as_path()), scope).await;
     }
-    dispatch_file(&joined, &s.target, &clean, scope).await
+    dispatch_file(&s, &joined, &s.target, &clean, scope).await
 }
 
 async fn serve_file_mode(s: &AppState, path: &str, scope: Scope) -> Response {
@@ -251,7 +260,7 @@ async fn serve_file_mode(s: &AppState, path: &str, scope: Scope) -> Response {
     };
     let clean = path.trim_matches('/');
     if clean.is_empty() {
-        return render_file(&s.target, None, scope).await;
+        return render_file(s, &s.target, None, scope).await;
     }
     let joined = root.join(clean);
     let meta = match tokio::fs::metadata(&joined).await {
@@ -262,12 +271,12 @@ async fn serve_file_mode(s: &AppState, path: &str, scope: Scope) -> Response {
         return not_found();
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&joined, None, scope).await;
+        return render_file(s, &joined, None, scope).await;
     }
-    dispatch_file(&joined, root, clean, scope).await
+    dispatch_file(s, &joined, root, clean, scope).await
 }
 
-async fn render_file(path: &Path, root: Option<&Path>, scope: Scope) -> Response {
+async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scope) -> Response {
     let md = match tokio::fs::read_to_string(path).await {
         Ok(m) => m,
         Err(_) => return not_found(),
@@ -290,7 +299,7 @@ async fn render_file(path: &Path, root: Option<&Path>, scope: Scope) -> Response
             return not_found();
         }
     };
-    respond_html(&rendered, &body)
+    respond_html(&rendered, &body, s.repos.source_for(path))
 }
 
 async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
@@ -407,16 +416,26 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         has_map: readme_rendered.as_ref().map(|r| r.has_map).unwrap_or(false),
     };
 
-    respond_html(&combined, &body)
+    let current = if rel.is_empty() {
+        s.target.clone()
+    } else {
+        s.target.join(rel)
+    };
+    respond_html(&combined, &body, s.repos.source_for(&current))
 }
 
-fn respond_html(r: &Rendered, body: &str) -> Response {
+fn respond_html(r: &Rendered, body: &str, source: SourceState) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
     } else {
         &r.title
     };
-    let html = match tmpl::base(PageShell { title, body }) {
+    let source = source_html(&source);
+    let html = match tmpl::base(PageShell {
+        title,
+        body,
+        source: &source,
+    }) {
         Ok(h) => h,
         Err(e) => {
             warn!("template error: {}", e);
@@ -424,6 +443,75 @@ fn respond_html(r: &Rendered, body: &str) -> Response {
         }
     };
     Html(html).into_response()
+}
+
+fn source_html(source: &SourceState) -> String {
+    match source {
+        SourceState::Web { url, label, forge } => web_source_html(url, label, *forge),
+        SourceState::Transport { raw } => format!(
+            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-disabled\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#ghrm-icon-git\"></use></svg><span class=\"ghrm-source-text\">{text}</span></span>",
+            raw = html_escape::encode_double_quoted_attribute(raw),
+            text = html_escape::encode_text(raw),
+        ),
+        SourceState::NoRemote => "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-disabled\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#ghrm-icon-git\"></use></svg><span class=\"ghrm-source-text\">no remote</span></span>".to_string(),
+        SourceState::NoRepo => String::new(),
+    }
+}
+
+fn web_source_html(url: &str, label: &str, forge: Forge) -> String {
+    let icon = forge_icon(forge);
+    let href = html_escape::encode_double_quoted_attribute(url);
+    let title_attr = html_escape::encode_double_quoted_attribute(url);
+
+    let label_parts: Vec<&str> = label.split(" / ").collect();
+    let after_scheme = url.find("://").map_or(0, |i| i + 3);
+    let host_end = after_scheme
+        + url[after_scheme..]
+            .find('/')
+            .unwrap_or(url.len() - after_scheme);
+    let base = &url[..host_end];
+    let path_segs: Vec<&str> = url[host_end..].trim_start_matches('/').split('/').collect();
+
+    if label_parts.len() != path_segs.len() || path_segs.iter().any(|s| s.is_empty()) {
+        return format!(
+            "<a id=\"ghrm-source-slot\" class=\"ghrm-source-link\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#{icon}\"></use></svg><span class=\"ghrm-source-text\">{text}</span></a>",
+            text = html_escape::encode_text(label),
+        );
+    }
+
+    let n = label_parts.len();
+    let mut segs = String::new();
+    for (i, display) in label_parts.iter().enumerate() {
+        if i > 0 {
+            segs.push_str("<span class=\"ghrm-source-sep\"> / </span>");
+        }
+        let seg_url = format!("{}/{}", base, path_segs[..=i].join("/"));
+        let seg_href = html_escape::encode_double_quoted_attribute(&seg_url);
+        let seg_text = html_escape::encode_text(display);
+        let class = if i + 1 == n {
+            "ghrm-source-repo"
+        } else {
+            "ghrm-source-owner"
+        };
+        segs.push_str(&format!(
+            "<a href=\"{seg_href}\" class=\"{class}\" target=\"_blank\" rel=\"noopener noreferrer\">{seg_text}</a>",
+        ));
+    }
+
+    format!(
+        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link\"><a href=\"{href}\" class=\"ghrm-source-icon-link\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#{icon}\"></use></svg></a><span class=\"ghrm-source-text\">{segs}</span></span>",
+    )
+}
+
+fn forge_icon(forge: Forge) -> &'static str {
+    match forge {
+        Forge::GitHub => "ghrm-icon-github",
+        Forge::Bitbucket => "ghrm-icon-bitbucket",
+        Forge::GitLab => "ghrm-icon-gitlab",
+        Forge::Codeberg => "ghrm-icon-codeberg",
+        Forge::SourceHut => "ghrm-icon-sourcehut",
+        Forge::Generic => "ghrm-icon-git",
+    }
 }
 
 // --- JSON APIs for optional SPA navigation ---
@@ -609,7 +697,13 @@ async fn stream_file(path: &Path) -> Response {
     stream_bytes(path, bytes)
 }
 
-async fn dispatch_file(path: &Path, root: &Path, rel: &str, scope: Scope) -> Response {
+async fn dispatch_file(
+    s: &AppState,
+    path: &Path,
+    root: &Path,
+    rel: &str,
+    scope: Scope,
+) -> Response {
     if path
         .extension()
         .and_then(|s| s.to_str())
@@ -643,7 +737,7 @@ async fn dispatch_file(path: &Path, root: &Path, rel: &str, scope: Scope) -> Res
             return not_found();
         }
     };
-    respond_html(&rendered, &body)
+    respond_html(&rendered, &body, s.repos.source_for(path))
 }
 
 fn mime_guess(path: &Path) -> &'static str {

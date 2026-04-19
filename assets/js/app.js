@@ -199,6 +199,15 @@ async function navigate(path, push = true) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const newArticle = doc.querySelector('article.markdown-body');
   if (!newArticle) return;
+  const nextSource = doc.getElementById('ghrm-source-slot');
+  const currentSource = document.getElementById('ghrm-source-slot');
+  if (currentSource && nextSource) {
+    currentSource.replaceWith(nextSource);
+  } else if (currentSource) {
+    currentSource.remove();
+  } else if (nextSource) {
+    document.querySelector('.ghrm-topbar-inner')?.prepend(nextSource);
+  }
 
   const existing = document.querySelector('article.markdown-body');
   if (existing) {

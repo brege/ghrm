@@ -6,6 +6,7 @@ const FAVICON_SVG_URL: &str = "%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F200
 pub struct PageShell<'a> {
     pub title: &'a str,
     pub body: &'a str,
+    pub source: &'a str,
 }
 
 pub struct ExplorerCtx<'a> {
@@ -38,6 +39,7 @@ pub fn base(p: PageShell) -> Result<String> {
         "{{ icons }}",
         &read_tmpl(&dir.join("fragments/icons.html"))?,
     );
+    replace(&mut out, "{{ source }}", p.source);
     replace(&mut out, "{{ body }}", p.body);
     Ok(out)
 }
