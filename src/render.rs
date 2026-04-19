@@ -78,6 +78,8 @@ pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     let html = rewrite_math_spans(&html);
     let html = rewrite_alerts(&html);
     let html = rewrite_code_blocks(&html);
+    let title = extract_title(&html).unwrap_or_else(|| "Preview".to_string());
+    let html = rewrite_heading_anchors(&html);
     let html = match path {
         Some(path) => rewrite_local_urls(&html, path),
         None => html,
@@ -88,8 +90,6 @@ pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
         math: has_math_markers(md, &html),
         map: html.contains("ghrm-geojson") || html.contains("ghrm-topojson"),
     };
-
-    let title = extract_title(&html).unwrap_or_else(|| "Preview".to_string());
 
     Rendered {
         html,
@@ -459,6 +459,73 @@ fn octicon_for(kind: &str) -> &'static str {
     }
 }
 
+fn rewrite_heading_anchors(html: &str) -> String {
+    let mut out = String::with_capacity(html.len() + 512);
+    let mut rest = html;
+    loop {
+        let next = (1u8..=6)
+            .filter_map(|n| rest.find(&format!("<h{n}")).map(|i| (i, n)))
+            .min_by_key(|(i, _)| *i);
+        let Some((idx, level)) = next else {
+            out.push_str(rest);
+            break;
+        };
+        out.push_str(&rest[..idx]);
+        let at = &rest[idx..];
+        let Some(open_end) = at.find('>') else {
+            out.push_str(at);
+            break;
+        };
+        let close_tag = format!("</h{level}>");
+        let Some(close_pos) = at.find(&close_tag) else {
+            out.push_str(at);
+            break;
+        };
+        let mut open_tag = at[..=open_end].to_string();
+        let (anchor_id, inner) = split_heading_anchor(&at[open_end + 1..close_pos]);
+        let id = attr_value(&open_tag, "id").or(anchor_id);
+        if let Some(id_value) = id.as_ref() {
+            if !open_tag.contains(" id=\"") {
+                open_tag.insert_str(open_tag.len() - 1, &format!(r#" id="{id_value}""#));
+            }
+        }
+        out.push_str(&open_tag);
+        out.push_str(inner);
+        if let Some(id) = id {
+            out.push_str("<a class=\"ghrm-anchor\" aria-hidden=\"true\" tabindex=\"-1\" href=\"#");
+            out.push_str(&id);
+            out.push_str("\">#</a>");
+        }
+        out.push_str(&close_tag);
+        rest = &at[close_pos + close_tag.len()..];
+    }
+    out
+}
+
+fn attr_value(tag: &str, name: &str) -> Option<String> {
+    let needle = format!(r#" {name}=""#);
+    let start = tag.find(&needle)? + needle.len();
+    let end = tag[start..].find('"')? + start;
+    Some(tag[start..end].to_string())
+}
+
+fn split_heading_anchor(inner: &str) -> (Option<String>, &str) {
+    if !inner.starts_with("<a ") {
+        return (None, inner);
+    }
+    let Some(close) = inner.find("</a>") else {
+        return (None, inner);
+    };
+    let anchor = &inner[..close + 4];
+    if !anchor.contains(r#"class="anchor""#) {
+        return (None, inner);
+    }
+    let id = attr_value(anchor, "id").or_else(|| {
+        attr_value(anchor, "href").and_then(|href| href.strip_prefix('#').map(str::to_string))
+    });
+    (id, &inner[close + 4..])
+}
+
 pub fn extract_title(html: &str) -> Option<String> {
     let open = html.find("<h1")?;
     let gt = html[open..].find('>')? + open + 1;
@@ -619,5 +686,15 @@ mod tests {
         let md = "# Hello World\n\nBody.\n";
         let r = render_at(md, None);
         assert_eq!(r.title, "Hello World");
+    }
+
+    #[test]
+    fn headings_get_hash_anchor_before_close() {
+        let md = "## Taxonomy\n";
+        let r = render_at(md, None);
+        assert!(r.html.contains(r#"<h2 id="taxonomy">"#));
+        assert!(r.html.contains(r#"class="ghrm-anchor""#));
+        assert!(r.html.contains(r##"href="#taxonomy">#"##));
+        assert!(!r.html.contains(r#"class="anchor""#));
     }
 }

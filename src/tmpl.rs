@@ -9,8 +9,7 @@ pub struct PageShell<'a> {
 }
 
 pub struct ExplorerCtx<'a> {
-    pub show_title: bool,
-    pub title: &'a str,
+    pub crumbs: &'a str,
     pub has_parent: bool,
     pub parent_href: &'a str,
     pub entries: &'a [ExplorerEntry<'a>],
@@ -21,6 +20,7 @@ pub struct ExplorerEntry<'a> {
     pub name: &'a str,
     pub href: &'a str,
     pub is_dir: bool,
+    pub modified: Option<u64>,
 }
 
 pub struct ExplorerReadme<'a> {
@@ -42,9 +42,10 @@ pub fn base(p: PageShell) -> Result<String> {
     Ok(out)
 }
 
-pub fn page(content_html: &str) -> Result<String> {
+pub fn page(content_html: &str, crumbs: &str) -> Result<String> {
     let path = crate::theme::dir()?.join("templates/page.html");
     let mut out = read_tmpl(&path)?;
+    replace(&mut out, "{{ crumbs }}", crumbs);
     replace(&mut out, "{{ content }}", content_html);
     Ok(out)
 }
@@ -86,6 +87,11 @@ pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
             &html_escape::encode_double_quoted_attribute(e.href),
         );
         replace(&mut row, "{{ name }}", &html_escape::encode_text(e.name));
+        replace(
+            &mut row,
+            "{{ modified }}",
+            &e.modified.map(|ts| ts.to_string()).unwrap_or_default(),
+        );
         rows.push_str(&row);
     }
 
@@ -106,13 +112,8 @@ pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
         String::new()
     };
 
-    let title_block = if ctx.show_title {
-        let mut t = title_block_tmpl;
-        replace(&mut t, "{{ title }}", &html_escape::encode_text(ctx.title));
-        t
-    } else {
-        String::new()
-    };
+    let mut title_block = title_block_tmpl;
+    replace(&mut title_block, "{{ crumbs }}", ctx.crumbs);
 
     let mut out = explorer_tmpl;
     replace(&mut out, "{{ title_block }}", &title_block);

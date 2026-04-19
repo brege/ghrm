@@ -24,10 +24,7 @@ pub fn ensure() -> Result<()> {
         return Ok(());
     }
     let d = dir()?;
-    let installed = fs::read_to_string(d.join("VERSION")).unwrap_or_default();
-    if installed.trim() != THEME_VERSION.trim() {
-        install(&d)?;
-    }
+    install(&d)?;
     Ok(())
 }
 

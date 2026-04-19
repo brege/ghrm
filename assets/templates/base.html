@@ -25,44 +25,25 @@
 <body>
 {{ icons }}  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">
-      <div class="ghrm-topbar-spacer" aria-hidden="true"></div>
-      <div class="ghrm-topbar-controls">
-        <div class="ghrm-scope-switch" aria-label="Preview scope" role="group">
-          <button class="ghrm-scope-option is-active" type="button" data-scope="md" aria-pressed="true" aria-label="Markdown files">
-            <span class="ghrm-scope-combo" aria-hidden="true">
-              <svg class="ghrm-scope-glyph" aria-hidden="true" focusable="false">
-                <use href="#ghrm-icon-asterisk"></use>
-              </svg>
-              <span class="ghrm-scope-text">.md</span>
-            </span>
-          </button>
-          <button class="ghrm-scope-option" type="button" data-scope="files" aria-pressed="false" aria-label="Files">
-            <svg class="ghrm-scope-glyph" aria-hidden="true" focusable="false">
-              <use href="#ghrm-icon-asterisk"></use>
-            </svg>
-          </button>
-          <button class="ghrm-scope-option" type="button" data-scope="all" aria-pressed="false" aria-label="Files including dotfiles">
-            <span class="ghrm-scope-double" aria-hidden="true">
-              <svg class="ghrm-scope-glyph" focusable="false">
-                <use href="#ghrm-icon-asterisk"></use>
-              </svg>
-              <svg class="ghrm-scope-glyph" focusable="false">
-                <use href="#ghrm-icon-asterisk"></use>
-              </svg>
-            </span>
-          </button>
-        </div>
-        <button id="theme-toggle" type="button" aria-label="Toggle theme">
-          <svg class="icon-sun" aria-hidden="true" focusable="false">
-            <use href="#ghrm-icon-sun"></use>
-          </svg>
-          <svg class="icon-moon" aria-hidden="true" focusable="false">
-            <use href="#ghrm-icon-moon"></use>
-          </svg>
-        </button>
-      </div>
+      <button id="doc-chrome-toggle" type="button" hidden aria-label="Hide document wrapper" title="Hide document wrapper">
+        <svg class="icon-framed" aria-hidden="true" focusable="false">
+          <use href="#ghrm-icon-doc-framed"></use>
+        </svg>
+        <svg class="icon-flat" aria-hidden="true" focusable="false">
+          <use href="#ghrm-icon-doc-flat"></use>
+        </svg>
+      </button>
+      <button id="theme-toggle" type="button" aria-label="Toggle theme">
+        <svg class="icon-sun" aria-hidden="true" focusable="false">
+          <use href="#ghrm-icon-sun"></use>
+        </svg>
+        <svg class="icon-moon" aria-hidden="true" focusable="false">
+          <use href="#ghrm-icon-moon"></use>
+        </svg>
+      </button>
     </div>
   </header>
+  <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
 {{ body }}  <script defer src="/vendor/mermaid.js"></script>
   <script defer src="/vendor/svg-pan-zoom.min.js"></script>
   <script defer src="/vendor/katex/katex.min.js"></script>

@@ -1,1 +1,30 @@
-  <h1>{{ title }}</h1>
+  <div class="ghrm-explorer-header">
+    <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs }}</nav>
+    <div class="ghrm-header-actions">
+      <div class="ghrm-scope-switch" aria-label="Preview scope" role="group">
+        <button class="ghrm-scope-option is-active" type="button" data-scope="md" aria-pressed="true" aria-label="Markdown files" title="Markdown files only">
+          <span class="ghrm-scope-combo" aria-hidden="true">
+            <svg class="ghrm-scope-glyph" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-asterisk"></use>
+            </svg>
+            <span class="ghrm-scope-text">.md</span>
+          </span>
+        </button>
+        <button class="ghrm-scope-option" type="button" data-scope="files" aria-pressed="false" aria-label="Files" title="All files">
+          <svg class="ghrm-scope-glyph" aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-asterisk"></use>
+          </svg>
+        </button>
+        <button class="ghrm-scope-option" type="button" data-scope="all" aria-pressed="false" aria-label="Files including dotfiles" title="All files including hidden">
+          <span class="ghrm-scope-double" aria-hidden="true">
+            <svg class="ghrm-scope-glyph" focusable="false">
+              <use href="#ghrm-icon-asterisk"></use>
+            </svg>
+            <svg class="ghrm-scope-glyph" focusable="false">
+              <use href="#ghrm-icon-asterisk"></use>
+            </svg>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>

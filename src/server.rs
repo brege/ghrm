@@ -129,10 +129,81 @@ fn with_scope(href: &str, scope: Scope) -> String {
     }
 }
 
+fn breadcrumb_html(target: &Path, rel: &str, scope: Scope) -> String {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let display_root = home
+        .as_deref()
+        .and_then(|home| target.strip_prefix(home).ok())
+        .unwrap_or(target);
+
+    let base_parts: Vec<String> = display_root
+        .components()
+        .filter_map(|comp| match comp {
+            Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect();
+    let rel_parts: Vec<String> = Path::new(rel)
+        .components()
+        .filter_map(|comp| match comp {
+            Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect();
+
+    let root_idx = base_parts.len().saturating_sub(1);
+    let total = base_parts.len() + rel_parts.len();
+    let mut out = String::new();
+
+    for idx in 0..total {
+        if idx > 0 {
+            out.push_str(r#"<span class="ghrm-crumb-sep">/</span>"#);
+        }
+
+        let label = if idx < base_parts.len() {
+            &base_parts[idx]
+        } else {
+            &rel_parts[idx - base_parts.len()]
+        };
+        let label = html_escape::encode_text(label);
+        let is_last = idx + 1 == total;
+
+        if idx < root_idx {
+            out.push_str(r#"<span class="ghrm-crumb ghrm-crumb-static">"#);
+            out.push_str(&label);
+            out.push_str("</span>");
+            continue;
+        }
+
+        if is_last {
+            out.push_str(r#"<strong class="ghrm-crumb ghrm-crumb-current">"#);
+            out.push_str(&label);
+            out.push_str("</strong>");
+            continue;
+        }
+
+        let href = if idx == root_idx {
+            "/".to_string()
+        } else {
+            let depth = idx - root_idx;
+            format!("/{}/", rel_parts[..depth].join("/"))
+        };
+        out.push_str(r#"<a class="ghrm-crumb ghrm-crumb-link" href=""#);
+        out.push_str(&html_escape::encode_double_quoted_attribute(&with_scope(
+            &href, scope,
+        )));
+        out.push_str(r#"">"#);
+        out.push_str(&label);
+        out.push_str("</a>");
+    }
+
+    out
+}
+
 async fn root(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
     let scope = scope_from_query(&q);
     match s.mode {
-        Mode::File => render_file(&s.target, None).await,
+        Mode::File => render_file(&s.target, None, scope).await,
         Mode::Dir => render_explorer(&s, "", scope).await,
     }
 }
@@ -144,7 +215,7 @@ async fn any_path(
 ) -> Response {
     let scope = scope_from_query(&q);
     if s.mode == Mode::File {
-        return serve_file_mode(&s, &path).await;
+        return serve_file_mode(&s, &path, scope).await;
     }
     let had_trailing = path.ends_with('/');
     let clean = path.trim_matches('/').to_string();
@@ -169,18 +240,18 @@ async fn any_path(
         return render_explorer(&s, &clean, scope).await;
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&joined, Some(&s.target)).await;
+        return render_file(&joined, Some(&s.target), scope).await;
     }
-    dispatch_file(&joined).await
+    dispatch_file(&joined, &s.target, &clean, scope).await
 }
 
-async fn serve_file_mode(s: &AppState, path: &str) -> Response {
+async fn serve_file_mode(s: &AppState, path: &str, scope: Scope) -> Response {
     let Some(root) = s.target.parent() else {
         return not_found();
     };
     let clean = path.trim_matches('/');
     if clean.is_empty() {
-        return render_file(&s.target, None).await;
+        return render_file(&s.target, None, scope).await;
     }
     let joined = root.join(clean);
     let meta = match tokio::fs::metadata(&joined).await {
@@ -191,12 +262,12 @@ async fn serve_file_mode(s: &AppState, path: &str) -> Response {
         return not_found();
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&joined, None).await;
+        return render_file(&joined, None, scope).await;
     }
-    dispatch_file(&joined).await
+    dispatch_file(&joined, root, clean, scope).await
 }
 
-async fn render_file(path: &Path, root: Option<&Path>) -> Response {
+async fn render_file(path: &Path, root: Option<&Path>, scope: Scope) -> Response {
     let md = match tokio::fs::read_to_string(path).await {
         Ok(m) => m,
         Err(_) => return not_found(),
@@ -205,7 +276,14 @@ async fn render_file(path: &Path, root: Option<&Path>) -> Response {
         return not_found();
     };
     let rendered = render::render_at(&md, Some(render::RenderPath { root, src: path }));
-    let body = match tmpl::page(&rendered.html) {
+    let rel = path
+        .strip_prefix(root)
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
+        .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .unwrap_or_default();
+    let crumbs = breadcrumb_html(root, &rel, scope);
+    let body = match tmpl::page(&rendered.html, &crumbs) {
         Ok(b) => b,
         Err(e) => {
             warn!("template error: {}", e);
@@ -243,6 +321,7 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         name: String,
         href: String,
         is_dir: bool,
+        modified: Option<u64>,
     }
 
     let scoped_entries: Vec<ScopedEntry> = dir
@@ -252,6 +331,7 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
             name: e.name.clone(),
             href: with_scope(&e.href, scope),
             is_dir: e.is_dir,
+            modified: e.modified,
         })
         .collect();
     let entries: Vec<ExplorerEntry> = scoped_entries
@@ -260,6 +340,7 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
             name: &e.name,
             href: &e.href,
             is_dir: e.is_dir,
+            modified: e.modified,
         })
         .collect();
 
@@ -296,10 +377,10 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         name: &readme_name,
         html: &r.html,
     });
+    let crumbs = breadcrumb_html(&s.target, rel, scope);
 
     let body = match tmpl::explorer(ExplorerCtx {
-        show_title: true,
-        title: &title,
+        crumbs: &crumbs,
         has_parent,
         parent_href: &parent_href,
         entries: &entries,
@@ -528,7 +609,7 @@ async fn stream_file(path: &Path) -> Response {
     stream_bytes(path, bytes)
 }
 
-async fn dispatch_file(path: &Path) -> Response {
+async fn dispatch_file(path: &Path, root: &Path, rel: &str, scope: Scope) -> Response {
     if path
         .extension()
         .and_then(|s| s.to_str())
@@ -554,7 +635,8 @@ async fn dispatch_file(path: &Path) -> Response {
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
     let rendered = render::render_text(filename, &text);
-    let body = match tmpl::page(&rendered.html) {
+    let crumbs = breadcrumb_html(root, rel, scope);
+    let body = match tmpl::page(&rendered.html, &crumbs) {
         Ok(b) => b,
         Err(e) => {
             warn!("template error: {}", e);

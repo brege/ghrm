@@ -1,3 +1,17 @@
 <article class="markdown-body">
+  <section class="ghrm-page-shell">
+    <div class="ghrm-explorer-header">
+      <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs }}</nav>
+      <div class="ghrm-header-actions">
+        <button type="button" class="ghrm-toc-btn" data-ghrm-toc-btn="page" hidden title="Table of contents" aria-label="Table of contents">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-list"></use>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="ghrm-page-content">
 {{ content }}
+    </div>
+  </section>
 </article>

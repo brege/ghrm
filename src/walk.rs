@@ -2,6 +2,7 @@ use ignore::WalkBuilder;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scope {
@@ -33,6 +34,7 @@ pub struct NavEntry {
     pub name: String,
     pub href: String,
     pub is_dir: bool,
+    pub modified: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -68,6 +70,7 @@ struct Snapshot {
     direct_dirs: BTreeMap<PathBuf, Vec<PathBuf>>,
     direct_files: BTreeMap<PathBuf, Vec<PathBuf>>,
     files: Vec<PathBuf>,
+    modified: BTreeMap<PathBuf, u64>,
 }
 
 pub fn build_all(root: &Path, use_ignore: bool) -> NavSet {
@@ -84,9 +87,11 @@ fn scan(root: &Path, use_ignore: bool) -> Snapshot {
     dirs_seen.insert(PathBuf::new());
     let mut direct_files: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
     let mut files: Vec<PathBuf> = Vec::new();
+    let mut modified: BTreeMap<PathBuf, u64> = BTreeMap::new();
 
     let walker = WalkBuilder::new(root)
         .hidden(false)
+        .follow_links(true)
         .require_git(false)
         .git_ignore(use_ignore)
         .git_exclude(use_ignore)
@@ -103,6 +108,15 @@ fn scan(root: &Path, use_ignore: bool) -> Snapshot {
             continue;
         };
         let rel = path.strip_prefix(root).unwrap().to_path_buf();
+        let mtime = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs());
+        if let Some(ts) = mtime {
+            modified.insert(rel.clone(), ts);
+        }
         let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
         dirs_seen.insert(parent.clone());
         if file_type.is_dir() {
@@ -145,6 +159,7 @@ fn scan(root: &Path, use_ignore: bool) -> Snapshot {
         direct_dirs,
         direct_files,
         files,
+        modified,
     }
 }
 
@@ -191,6 +206,7 @@ fn build_md(snap: &Snapshot, show_hidden: bool) -> NavTree {
                 name: file_name(child_dir),
                 href: dir_href(child_dir),
                 is_dir: true,
+                modified: snap.modified.get(child_dir).copied(),
             });
         }
 
@@ -209,6 +225,7 @@ fn build_md(snap: &Snapshot, show_hidden: bool) -> NavTree {
                 name: file_name(file_rel),
                 href: file_href(file_rel),
                 is_dir: false,
+                modified: snap.modified.get(file_rel).copied(),
             });
         }
 
@@ -242,6 +259,7 @@ fn build_files(snap: &Snapshot, show_hidden: bool) -> NavTree {
                 name: file_name(child_dir),
                 href: dir_href(child_dir),
                 is_dir: true,
+                modified: snap.modified.get(child_dir).copied(),
             });
         }
 
@@ -257,6 +275,7 @@ fn build_files(snap: &Snapshot, show_hidden: bool) -> NavTree {
                 name: file_name(file_rel),
                 href: file_href(file_rel),
                 is_dir: false,
+                modified: snap.modified.get(file_rel).copied(),
             });
         }
 
