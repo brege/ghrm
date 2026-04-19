@@ -87,6 +87,7 @@ fn scan(root: &Path, use_ignore: bool) -> Snapshot {
 
     let walker = WalkBuilder::new(root)
         .hidden(false)
+        .require_git(false)
         .git_ignore(use_ignore)
         .git_exclude(use_ignore)
         .git_global(use_ignore)
