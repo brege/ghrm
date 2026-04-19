@@ -1,6 +1,68 @@
 let mermaidId = 0;
 let mermaidVersionPromise;
 const copyResetDelay = 2000;
+const SHELL_BUILTINS = new Set([
+  '.',
+  ':',
+  'alias',
+  'bg',
+  'bind',
+  'break',
+  'builtin',
+  'caller',
+  'cd',
+  'command',
+  'compgen',
+  'complete',
+  'compopt',
+  'continue',
+  'declare',
+  'dirs',
+  'disown',
+  'echo',
+  'enable',
+  'eval',
+  'exec',
+  'exit',
+  'export',
+  'false',
+  'fc',
+  'fg',
+  'getopts',
+  'hash',
+  'help',
+  'history',
+  'jobs',
+  'kill',
+  'let',
+  'local',
+  'logout',
+  'mapfile',
+  'popd',
+  'printf',
+  'pushd',
+  'pwd',
+  'read',
+  'readarray',
+  'readonly',
+  'return',
+  'set',
+  'shift',
+  'shopt',
+  'source',
+  'suspend',
+  'test',
+  'times',
+  'trap',
+  'true',
+  'type',
+  'typeset',
+  'ulimit',
+  'umask',
+  'unalias',
+  'unset',
+  'wait',
+]);
 
 function copyIcon() {
   return `
@@ -227,11 +289,37 @@ function renderCode() {
   }
 
   for (const code of document.querySelectorAll('.markdown-body pre code')) {
+    const hasLanguage = [...code.classList].some((name) =>
+      name.startsWith('language-'),
+    );
+    if (!hasLanguage) {
+      continue;
+    }
     if (code.dataset.ghrmHighlighted === '1') {
       continue;
     }
     window.hljs.highlightElement(code);
+    normalizeShellHighlight(code);
     code.dataset.ghrmHighlighted = '1';
+  }
+}
+
+function isShellCode(code) {
+  return [...code.classList].some((name) =>
+    ['language-bash', 'language-sh', 'language-shell'].includes(name),
+  );
+}
+
+function normalizeShellHighlight(code) {
+  if (!isShellCode(code)) {
+    return;
+  }
+
+  for (const node of code.querySelectorAll('.hljs-built_in')) {
+    if (SHELL_BUILTINS.has(node.textContent.trim())) {
+      continue;
+    }
+    node.replaceWith(document.createTextNode(node.textContent));
   }
 }
 
