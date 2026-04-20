@@ -61,19 +61,31 @@ fn main() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("missing target"))?;
     let abs = target.canonicalize()?;
 
-    let port = cli.port.or(cfg.port).unwrap_or(1313);
+    let port = cli.port.or(cfg.port).unwrap_or(1331);
     let bind = cli
         .bind
         .or(cfg.bind)
         .unwrap_or_else(|| "127.0.0.1".to_string());
+    let no_ignore = cli.no_ignore || cfg.no_ignore.unwrap_or(false);
     let open = match std::env::var("GHRM_OPEN").as_deref() {
         Ok("0") => false,
         Ok(_) => true,
         Err(_) => cfg.open.unwrap_or(true),
     };
+    let exclude_names = cfg
+        .walk
+        .exclude_names
+        .unwrap_or_else(config::default_exclude_names);
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    runtime.block_on(server::run(bind, port, open, abs, !cli.no_ignore))
+    runtime.block_on(server::run(
+        bind,
+        port,
+        open,
+        abs,
+        !no_ignore,
+        exclude_names,
+    ))
 }

@@ -38,7 +38,7 @@ pub enum Forge {
 }
 
 impl RepoSet {
-    pub fn discover(root: &Path) -> Self {
+    pub fn discover(root: &Path, exclude_names: &[String]) -> Self {
         let scan_root = if root.is_dir() {
             root.to_path_buf()
         } else {
@@ -50,7 +50,7 @@ impl RepoSet {
         if let Some(ancestor) = nearest_repo_root(root) {
             push_root(&mut roots, &mut seen, ancestor);
         }
-        collect_repo_roots(&scan_root, &mut roots, &mut seen);
+        collect_repo_roots(&scan_root, exclude_names, &mut roots, &mut seen);
 
         let mut entries: Vec<RepoEntry> = roots
             .into_iter()
@@ -100,7 +100,12 @@ fn nearest_repo_root(path: &Path) -> Option<PathBuf> {
     None
 }
 
-fn collect_repo_roots(dir: &Path, roots: &mut Vec<PathBuf>, seen: &mut HashSet<PathBuf>) {
+fn collect_repo_roots(
+    dir: &Path,
+    exclude_names: &[String],
+    roots: &mut Vec<PathBuf>,
+    seen: &mut HashSet<PathBuf>,
+) {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(_) => return,
@@ -121,28 +126,16 @@ fn collect_repo_roots(dir: &Path, roots: &mut Vec<PathBuf>, seen: &mut HashSet<P
             continue;
         }
 
-        if !file_type.is_dir() || file_type.is_symlink() || skip_scan_name(&name) {
+        if !file_type.is_dir() || file_type.is_symlink() || skip_scan_name(&name, exclude_names) {
             continue;
         }
 
-        collect_repo_roots(&entry.path(), roots, seen);
+        collect_repo_roots(&entry.path(), exclude_names, roots, seen);
     }
 }
 
-fn skip_scan_name(name: &str) -> bool {
-    matches!(
-        name,
-        "node_modules"
-            | "vendor"
-            | "__pycache__"
-            | "target"
-            | ".venv"
-            | ".env"
-            | ".pytest_cache"
-            | ".ruff_cache"
-            | ".uv-cache"
-            | ".ipynb_checkpoints"
-    )
+fn skip_scan_name(name: &str, exclude_names: &[String]) -> bool {
+    exclude_names.iter().any(|entry| entry == name)
 }
 
 fn source_for_repo(root: &Path) -> SourceState {

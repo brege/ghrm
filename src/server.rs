@@ -71,6 +71,7 @@ pub async fn run(
     open: bool,
     target: PathBuf,
     use_ignore: bool,
+    exclude_names: Vec<String>,
 ) -> Result<()> {
     let meta = std::fs::metadata(&target)?;
     let mode = if meta.is_dir() { Mode::Dir } else { Mode::File };
@@ -87,16 +88,28 @@ pub async fn run(
         Mode::Dir => {
             let target2 = target.clone();
             let repo_root2 = repo_root_buf.clone();
-            let walk_h = tokio::task::spawn_blocking(move || walk::build_all(&target2, use_ignore));
-            let repo_h = tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2));
+            let walk_excludes = exclude_names.clone();
+            let repo_excludes = exclude_names.clone();
+            let walk_h = tokio::task::spawn_blocking(move || {
+                walk::build_all(&target2, use_ignore, &walk_excludes)
+            });
+            let repo_h =
+                tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes));
             let (fresh, repos) = tokio::join!(walk_h, repo_h);
             *nav.write().unwrap() = fresh?;
-            watch::spawn_dir(target.clone(), nav.clone(), reload_tx.clone(), use_ignore)?;
+            watch::spawn_dir(
+                target.clone(),
+                nav.clone(),
+                reload_tx.clone(),
+                use_ignore,
+                exclude_names.clone(),
+            )?;
             repos?
         }
         Mode::File => {
             watch::spawn_file(target.clone(), reload_tx.clone())?;
-            tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root_buf)).await?
+            tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root_buf, &exclude_names))
+                .await?
         }
     };
 

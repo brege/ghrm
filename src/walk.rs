@@ -74,8 +74,8 @@ struct Snapshot {
     modified: BTreeMap<PathBuf, u64>,
 }
 
-pub fn build_all(root: &Path, use_ignore: bool) -> NavSet {
-    let snap = scan(root, use_ignore);
+pub fn build_all(root: &Path, use_ignore: bool, exclude_names: &[String]) -> NavSet {
+    let snap = scan(root, use_ignore, exclude_names);
     NavSet {
         md: build_md(&snap, false),
         files: build_files(&snap, false),
@@ -83,8 +83,9 @@ pub fn build_all(root: &Path, use_ignore: bool) -> NavSet {
     }
 }
 
-fn scan(root: &Path, use_ignore: bool) -> Snapshot {
+fn scan(root: &Path, use_ignore: bool, exclude_names: &[String]) -> Snapshot {
     let root_buf = root.to_path_buf();
+    let exclude_names = exclude_names.to_vec();
     let dirs_seen: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new({
         let mut s = HashSet::new();
         s.insert(PathBuf::new());
@@ -103,7 +104,7 @@ fn scan(root: &Path, use_ignore: bool) -> Snapshot {
         .git_ignore(use_ignore)
         .git_exclude(use_ignore)
         .git_global(use_ignore)
-        .filter_entry(|e| allow_walk_name(&e.file_name().to_string_lossy()))
+        .filter_entry(move |e| allow_walk_name(&e.file_name().to_string_lossy(), &exclude_names))
         .build_parallel()
         .run(|| {
             let root = root_buf.clone();
@@ -321,20 +322,8 @@ fn build_files(snap: &Snapshot, show_hidden: bool) -> NavTree {
     NavTree { dirs }
 }
 
-fn allow_walk_name(name: &str) -> bool {
-    !matches!(
-        name,
-        ".git"
-            | "node_modules"
-            | "__pycache__"
-            | "target"
-            | ".venv"
-            | ".env"
-            | ".pytest_cache"
-            | ".ruff_cache"
-            | ".uv-cache"
-            | ".ipynb_checkpoints"
-    )
+fn allow_walk_name(name: &str, exclude_names: &[String]) -> bool {
+    name != ".git" && !exclude_names.iter().any(|entry| entry == name)
 }
 
 fn allow_scope_dir(path: &Path, show_hidden: bool) -> bool {

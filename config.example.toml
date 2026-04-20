@@ -1,0 +1,19 @@
+# Copy to ~/.config/ghrm/config.toml or pass with --config.
+
+port = 1331
+bind = "127.0.0.1"
+open = true
+no_ignore = false
+
+[walk]
+exclude_names = [
+  "node_modules",
+  "__pycache__",
+  "target",
+  ".venv",
+  ".env",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".uv-cache",
+  ".ipynb_checkpoints",
+]

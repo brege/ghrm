@@ -10,6 +10,28 @@ pub struct Config {
     pub port: Option<u16>,
     pub bind: Option<String>,
     pub open: Option<bool>,
+    pub no_ignore: Option<bool>,
+    #[serde(default)]
+    pub walk: WalkConfig,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct WalkConfig {
+    pub exclude_names: Option<Vec<String>>,
+}
+
+pub fn default_exclude_names() -> Vec<String> {
+    vec![
+        "node_modules".to_string(),
+        "__pycache__".to_string(),
+        "target".to_string(),
+        ".venv".to_string(),
+        ".env".to_string(),
+        ".pytest_cache".to_string(),
+        ".ruff_cache".to_string(),
+        ".uv-cache".to_string(),
+        ".ipynb_checkpoints".to_string(),
+    ]
 }
 
 impl Config {

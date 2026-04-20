@@ -12,6 +12,7 @@ pub fn spawn_dir(
     nav: Arc<RwLock<NavSet>>,
     reload_tx: broadcast::Sender<()>,
     use_ignore: bool,
+    exclude_names: Vec<String>,
 ) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(150), None, tx)?;
@@ -44,14 +45,16 @@ pub fn spawn_dir(
             if events.is_empty() {
                 continue;
             }
-            let nav_dirty = events.iter().any(|e| is_nav_event(&root, e));
+            let nav_dirty = events
+                .iter()
+                .any(|e| is_nav_event(&root, e, &exclude_names));
             if nav_dirty {
-                let fresh = walk::build_all(&root, use_ignore);
+                let fresh = walk::build_all(&root, use_ignore, &exclude_names);
                 if let Ok(mut guard) = nav.write() {
                     *guard = fresh;
                 }
             }
-            for p in changed_paths(&root, &events) {
+            for p in changed_paths(&root, &events, &exclude_names) {
                 let rel = p.strip_prefix(&root).unwrap_or(&p).display();
                 info!(
                     kind = if nav_dirty { "nav+reload" } else { "reload" },
@@ -93,33 +96,22 @@ pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<()>) -> anyhow::Re
     Ok(())
 }
 
-// Returns true if any component of rel is in the walk skip list,
-// keeping event filtering consistent with walk::allow_walk_name.
-fn skip_watch_path(rel: &Path) -> bool {
+fn skip_watch_path(rel: &Path, exclude_names: &[String]) -> bool {
     rel.components().any(|c| match c {
-        Component::Normal(name) => matches!(
-            name.to_string_lossy().as_ref(),
-            ".git"
-                | "node_modules"
-                | "__pycache__"
-                | "target"
-                | ".venv"
-                | ".env"
-                | ".pytest_cache"
-                | ".ruff_cache"
-                | ".uv-cache"
-                | ".ipynb_checkpoints"
-        ),
+        Component::Normal(name) => {
+            let name = name.to_string_lossy();
+            name.as_ref() == ".git" || exclude_names.iter().any(|entry| entry == name.as_ref())
+        }
         _ => false,
     })
 }
 
-fn changed_paths(root: &Path, events: &[DebouncedEvent]) -> Vec<PathBuf> {
+fn changed_paths(root: &Path, events: &[DebouncedEvent], exclude_names: &[String]) -> Vec<PathBuf> {
     let mut seen: Vec<PathBuf> = Vec::new();
     for ev in events {
         for p in &ev.event.paths {
             let rel = p.strip_prefix(root).unwrap_or(p);
-            if skip_watch_path(rel) {
+            if skip_watch_path(rel, exclude_names) {
                 continue;
             }
             if !seen.contains(p) {
@@ -130,7 +122,7 @@ fn changed_paths(root: &Path, events: &[DebouncedEvent]) -> Vec<PathBuf> {
     seen
 }
 
-fn is_nav_event(root: &Path, ev: &DebouncedEvent) -> bool {
+fn is_nav_event(root: &Path, ev: &DebouncedEvent, exclude_names: &[String]) -> bool {
     use notify::event::{EventKind, ModifyKind};
     let kind_nav = matches!(
         ev.event.kind,
@@ -143,6 +135,6 @@ fn is_nav_event(root: &Path, ev: &DebouncedEvent) -> bool {
         let Ok(rel) = p.strip_prefix(root) else {
             return false;
         };
-        !skip_watch_path(rel)
+        !skip_watch_path(rel, exclude_names)
     })
 }
