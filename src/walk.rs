@@ -1,7 +1,8 @@
-use ignore::WalkBuilder;
+use ignore::{WalkBuilder, WalkState};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,49 +84,84 @@ pub fn build_all(root: &Path, use_ignore: bool) -> NavSet {
 }
 
 fn scan(root: &Path, use_ignore: bool) -> Snapshot {
-    let mut dirs_seen: HashSet<PathBuf> = HashSet::new();
-    dirs_seen.insert(PathBuf::new());
-    let mut direct_files: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
-    let mut files: Vec<PathBuf> = Vec::new();
-    let mut modified: BTreeMap<PathBuf, u64> = BTreeMap::new();
+    let root_buf = root.to_path_buf();
+    let dirs_seen: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new({
+        let mut s = HashSet::new();
+        s.insert(PathBuf::new());
+        s
+    }));
+    let direct_files: Arc<Mutex<BTreeMap<PathBuf, Vec<PathBuf>>>> =
+        Arc::new(Mutex::new(BTreeMap::new()));
+    let files: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
+    let modified: Arc<Mutex<BTreeMap<PathBuf, u64>>> = Arc::new(Mutex::new(BTreeMap::new()));
 
-    let walker = WalkBuilder::new(root)
+    WalkBuilder::new(&root_buf)
         .hidden(false)
         .follow_links(true)
+        .same_file_system(true)
         .require_git(false)
         .git_ignore(use_ignore)
         .git_exclude(use_ignore)
         .git_global(use_ignore)
         .filter_entry(|e| allow_walk_name(&e.file_name().to_string_lossy()))
-        .build();
+        .build_parallel()
+        .run(|| {
+            let root = root_buf.clone();
+            let dirs_seen = dirs_seen.clone();
+            let direct_files = direct_files.clone();
+            let files = files.clone();
+            let modified = modified.clone();
+            Box::new(move |res| {
+                let entry = match res {
+                    Ok(e) => e,
+                    Err(_) => return WalkState::Continue,
+                };
+                let path = entry.path();
+                if path == root {
+                    return WalkState::Continue;
+                }
+                let Some(file_type) = entry.file_type() else {
+                    return WalkState::Continue;
+                };
+                let rel = match path.strip_prefix(&root) {
+                    Ok(r) => r.to_path_buf(),
+                    Err(_) => return WalkState::Continue,
+                };
+                let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
+                let mtime = entry
+                    .metadata()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs());
+                if let Some(ts) = mtime {
+                    modified.lock().unwrap().insert(rel.clone(), ts);
+                }
+                {
+                    let mut guard = dirs_seen.lock().unwrap();
+                    guard.insert(parent.clone());
+                    if file_type.is_dir() {
+                        guard.insert(rel.clone());
+                        return WalkState::Continue;
+                    }
+                }
+                if file_type.is_file() {
+                    files.lock().unwrap().push(rel.clone());
+                    direct_files
+                        .lock()
+                        .unwrap()
+                        .entry(parent)
+                        .or_default()
+                        .push(rel);
+                }
+                WalkState::Continue
+            })
+        });
 
-    for entry in walker.flatten() {
-        let path = entry.path();
-        if path == root {
-            continue;
-        }
-        let Some(file_type) = entry.file_type() else {
-            continue;
-        };
-        let rel = path.strip_prefix(root).unwrap().to_path_buf();
-        let mtime = entry
-            .metadata()
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-            .map(|d| d.as_secs());
-        if let Some(ts) = mtime {
-            modified.insert(rel.clone(), ts);
-        }
-        let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
-        dirs_seen.insert(parent.clone());
-        if file_type.is_dir() {
-            dirs_seen.insert(rel);
-        } else if file_type.is_file() {
-            files.push(rel.clone());
-            direct_files.entry(parent).or_default().push(rel);
-        }
-    }
+    let dirs_seen = Arc::try_unwrap(dirs_seen).unwrap().into_inner().unwrap();
+    let mut direct_files = Arc::try_unwrap(direct_files).unwrap().into_inner().unwrap();
+    let files = Arc::try_unwrap(files).unwrap().into_inner().unwrap();
+    let modified = Arc::try_unwrap(modified).unwrap().into_inner().unwrap();
 
     let mut dirs: Vec<PathBuf> = dirs_seen.into_iter().collect();
     dirs.sort_by_key(|path| path.to_string_lossy().to_lowercase());
@@ -138,7 +174,6 @@ fn scan(root: &Path, use_ignore: bool) -> Snapshot {
         direct_dirs.entry(parent).or_default().push(dir_rel.clone());
     }
 
-    files.sort_by_key(|path| path.to_string_lossy().to_lowercase());
     for child_dirs in direct_dirs.values_mut() {
         child_dirs.sort_by(|a, b| {
             file_name(a)
@@ -287,10 +322,19 @@ fn build_files(snap: &Snapshot, show_hidden: bool) -> NavTree {
 }
 
 fn allow_walk_name(name: &str) -> bool {
-    if matches!(name, ".git" | "node_modules" | ".venv" | "__pycache__") {
-        return false;
-    }
-    true
+    !matches!(
+        name,
+        ".git"
+            | "node_modules"
+            | "__pycache__"
+            | "target"
+            | ".venv"
+            | ".env"
+            | ".pytest_cache"
+            | ".ruff_cache"
+            | ".uv-cache"
+            | ".ipynb_checkpoints"
+    )
 }
 
 fn allow_scope_dir(path: &Path, show_hidden: bool) -> bool {

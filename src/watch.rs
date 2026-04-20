@@ -1,11 +1,11 @@
 use crate::walk::{self, NavSet};
 use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{DebouncedEvent, new_debouncer};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::sync::broadcast;
-use tracing::info;
+use tracing::{error, info};
 
 pub fn spawn_dir(
     root: PathBuf,
@@ -15,9 +15,26 @@ pub fn spawn_dir(
 ) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(150), None, tx)?;
-    debouncer.watcher().watch(&root, RecursiveMode::Recursive)?;
+
+    // Propagate the watch result through a channel. Block briefly to catch
+    // fast failures (bad path, permission denied). For large trees, watch()
+    // takes O(n_dirs) inotify calls; after the timeout we proceed so the
+    // server starts immediately and the watcher finishes in the background.
+    let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel::<anyhow::Result<()>>(1);
 
     std::thread::spawn(move || {
+        let result = debouncer
+            .watcher()
+            .watch(&root, RecursiveMode::Recursive)
+            .map_err(anyhow::Error::from);
+        let failed = result.is_err();
+        if let Err(ref e) = result {
+            error!("watcher failed: {e}");
+        }
+        let _ = ready_tx.send(result);
+        if failed {
+            return;
+        }
         let _debouncer = debouncer;
         for res in rx {
             let events = match res {
@@ -45,6 +62,10 @@ pub fn spawn_dir(
             let _ = reload_tx.send(());
         }
     });
+
+    if let Ok(Err(e)) = ready_rx.recv_timeout(Duration::from_millis(50)) {
+        return Err(e);
+    }
     Ok(())
 }
 
@@ -72,16 +93,33 @@ pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<()>) -> anyhow::Re
     Ok(())
 }
 
+// Returns true if any component of rel is in the walk skip list,
+// keeping event filtering consistent with walk::allow_walk_name.
+fn skip_watch_path(rel: &Path) -> bool {
+    rel.components().any(|c| match c {
+        Component::Normal(name) => matches!(
+            name.to_string_lossy().as_ref(),
+            ".git"
+                | "node_modules"
+                | "__pycache__"
+                | "target"
+                | ".venv"
+                | ".env"
+                | ".pytest_cache"
+                | ".ruff_cache"
+                | ".uv-cache"
+                | ".ipynb_checkpoints"
+        ),
+        _ => false,
+    })
+}
+
 fn changed_paths(root: &Path, events: &[DebouncedEvent]) -> Vec<PathBuf> {
     let mut seen: Vec<PathBuf> = Vec::new();
     for ev in events {
         for p in &ev.event.paths {
             let rel = p.strip_prefix(root).unwrap_or(p);
-            let rel_s = rel.to_string_lossy();
-            if rel_s.contains("/.git/") || rel_s.starts_with(".git") {
-                continue;
-            }
-            if rel_s.contains("node_modules") || rel_s.contains(".venv") {
+            if skip_watch_path(rel) {
                 continue;
             }
             if !seen.contains(p) {
@@ -105,13 +143,6 @@ fn is_nav_event(root: &Path, ev: &DebouncedEvent) -> bool {
         let Ok(rel) = p.strip_prefix(root) else {
             return false;
         };
-        let rel_s = rel.to_string_lossy();
-        if rel_s.contains("/.git/") || rel_s.starts_with(".git") {
-            return false;
-        }
-        if rel_s.contains("node_modules") || rel_s.contains(".venv") {
-            return false;
-        }
-        true
+        !skip_watch_path(rel)
     })
 }

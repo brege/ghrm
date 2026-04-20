@@ -22,13 +22,13 @@ pub struct ExplorerCtx<'a> {
     pub crumbs: &'a str,
     pub has_parent: bool,
     pub parent_href: &'a str,
-    pub entries: &'a [ExplorerEntry<'a>],
+    pub entries: &'a [ExplorerEntry],
     pub readme: Option<ExplorerReadme<'a>>,
 }
 
-pub struct ExplorerEntry<'a> {
-    pub name: &'a str,
-    pub href: &'a str,
+pub struct ExplorerEntry {
+    pub name: String,
+    pub href: String,
     pub is_dir: bool,
     pub modified: Option<u64>,
 }
@@ -107,9 +107,9 @@ pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
         replace(
             &mut row,
             "{{ href }}",
-            &html_escape::encode_double_quoted_attribute(e.href),
+            &html_escape::encode_double_quoted_attribute(&e.href),
         );
-        replace(&mut row, "{{ name }}", &html_escape::encode_text(e.name));
+        replace(&mut row, "{{ name }}", &html_escape::encode_text(&e.name));
         replace(
             &mut row,
             "{{ modified }}",

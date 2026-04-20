@@ -130,7 +130,19 @@ fn collect_repo_roots(dir: &Path, roots: &mut Vec<PathBuf>, seen: &mut HashSet<P
 }
 
 fn skip_scan_name(name: &str) -> bool {
-    matches!(name, "node_modules" | ".venv" | "__pycache__")
+    matches!(
+        name,
+        "node_modules"
+            | "vendor"
+            | "__pycache__"
+            | "target"
+            | ".venv"
+            | ".env"
+            | ".pytest_cache"
+            | ".ruff_cache"
+            | ".uv-cache"
+            | ".ipynb_checkpoints"
+    )
 }
 
 fn source_for_repo(root: &Path) -> SourceState {
@@ -273,7 +285,7 @@ fn parse_scp_remote(raw: &str) -> Option<(&str, &str)> {
         return None;
     }
     let (lhs, path) = raw.split_once(':')?;
-    let (_, host) = lhs.rsplit_once('@')?;
+    let host = lhs.rsplit_once('@').map_or(lhs, |(_, rhs)| rhs);
     Some((host, path))
 }
 
@@ -371,11 +383,8 @@ fn strip_git_suffix(path: &str) -> String {
 fn web_label(host: &str, path: &str) -> String {
     let rel = strip_git_suffix(path);
     match forge_for_host(host) {
-        Forge::GitHub | Forge::Bitbucket | Forge::GitLab | Forge::Codeberg => {
-            rel.replace('/', " / ")
-        }
-        Forge::SourceHut => rel.replace('/', " / "),
         Forge::Generic => format!("{host}/{rel}"),
+        _ => rel.replace('/', " / "),
     }
 }
 

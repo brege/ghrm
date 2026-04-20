@@ -15,7 +15,10 @@ pub struct Config {
 impl Config {
     pub fn load(path: Option<&Path>) -> Result<Self> {
         let explicit = path.is_some();
-        let Some(path) = path.map(PathBuf::from).map(Some).unwrap_or(path_default()?) else {
+        let Some(path) = (match path {
+            Some(p) => Some(p.to_path_buf()),
+            None => path_default()?,
+        }) else {
             return Ok(Self::default());
         };
         if !path.is_file() {

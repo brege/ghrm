@@ -31,6 +31,7 @@ pub struct AppState {
     pub nav: Arc<RwLock<NavSet>>,
     pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
+    pub home: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,23 +77,28 @@ pub async fn run(
 
     let (reload_tx, _) = broadcast::channel::<()>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
-    let repo_root = if mode == Mode::Dir {
-        target.as_path()
+    let repo_root_buf = if mode == Mode::Dir {
+        target.clone()
     } else {
-        target.parent().unwrap_or(target.as_path())
+        target.parent().unwrap_or(&target).to_path_buf()
     };
-    let repos = RepoSet::discover(repo_root);
 
-    match mode {
+    let repos = match mode {
         Mode::Dir => {
-            let fresh = walk::build_all(&target, use_ignore);
-            *nav.write().unwrap() = fresh;
+            let target2 = target.clone();
+            let repo_root2 = repo_root_buf.clone();
+            let walk_h = tokio::task::spawn_blocking(move || walk::build_all(&target2, use_ignore));
+            let repo_h = tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2));
+            let (fresh, repos) = tokio::join!(walk_h, repo_h);
+            *nav.write().unwrap() = fresh?;
             watch::spawn_dir(target.clone(), nav.clone(), reload_tx.clone(), use_ignore)?;
+            repos?
         }
         Mode::File => {
             watch::spawn_file(target.clone(), reload_tx.clone())?;
+            tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root_buf)).await?
         }
-    }
+    };
 
     let state = AppState {
         target: target.clone(),
@@ -100,6 +106,7 @@ pub async fn run(
         nav,
         repos,
         reload: reload_tx,
+        home: std::env::var_os("HOME").map(PathBuf::from),
     };
 
     let app = Router::new()
@@ -165,10 +172,8 @@ fn with_scope(href: &str, scope: Scope) -> String {
     }
 }
 
-fn breadcrumb_html(target: &Path, rel: &str, scope: Scope) -> String {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
+fn breadcrumb_html(target: &Path, home: Option<&Path>, rel: &str, scope: Scope) -> String {
     let display_root = home
-        .as_deref()
         .and_then(|home| target.strip_prefix(home).ok())
         .unwrap_or(target);
 
@@ -332,7 +337,7 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
         .map(|p| p.to_string_lossy().into_owned())
         .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_default();
-    let crumbs = breadcrumb_html(root, &rel, scope);
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), &rel, scope);
     let raw_html = raw_blob_html(&md, Some("markdown"));
     let view = FileView::markdown();
     let view_attrs = file_view_attrs(&rel, view);
@@ -377,28 +382,12 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
     let has_parent = !rel.is_empty();
     let parent_href = with_scope(&parent_href, scope);
 
-    struct ScopedEntry {
-        name: String,
-        href: String,
-        is_dir: bool,
-        modified: Option<u64>,
-    }
-
-    let scoped_entries: Vec<ScopedEntry> = dir
+    let entries: Vec<ExplorerEntry> = dir
         .entries
         .iter()
-        .map(|e| ScopedEntry {
+        .map(|e| ExplorerEntry {
             name: e.name.clone(),
             href: with_scope(&e.href, scope),
-            is_dir: e.is_dir,
-            modified: e.modified,
-        })
-        .collect();
-    let entries: Vec<ExplorerEntry> = scoped_entries
-        .iter()
-        .map(|e| ExplorerEntry {
-            name: &e.name,
-            href: &e.href,
             is_dir: e.is_dir,
             modified: e.modified,
         })
@@ -437,7 +426,7 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         name: &readme_name,
         html: &r.html,
     });
-    let crumbs = breadcrumb_html(&s.target, rel, scope);
+    let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, scope);
 
     let body = match tmpl::explorer(ExplorerCtx {
         crumbs: &crumbs,
@@ -453,18 +442,16 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         }
     };
 
+    let (has_mermaid, has_math, has_map) = readme_rendered
+        .as_ref()
+        .map(|r| (r.has_mermaid, r.has_math, r.has_map))
+        .unwrap_or_default();
     let combined = Rendered {
         html: String::new(),
         title,
-        has_mermaid: readme_rendered
-            .as_ref()
-            .map(|r| r.has_mermaid)
-            .unwrap_or(false),
-        has_math: readme_rendered
-            .as_ref()
-            .map(|r| r.has_math)
-            .unwrap_or(false),
-        has_map: readme_rendered.as_ref().map(|r| r.has_map).unwrap_or(false),
+        has_mermaid,
+        has_math,
+        has_map,
     };
 
     let current = if rel.is_empty() {
@@ -780,7 +767,7 @@ async fn dispatch_file(
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
     let rendered = render::render_text(filename, &text);
-    let crumbs = breadcrumb_html(root, rel, scope);
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, scope);
     let raw_html = raw_blob_html(
         &text,
         path.extension()

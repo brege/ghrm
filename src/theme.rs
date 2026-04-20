@@ -24,6 +24,9 @@ pub fn ensure() -> Result<()> {
         return Ok(());
     }
     let d = dir()?;
+    if fs::read_to_string(d.join("VERSION")).ok().as_deref() == Some(THEME_VERSION) {
+        return Ok(());
+    }
     install(&d)?;
     Ok(())
 }

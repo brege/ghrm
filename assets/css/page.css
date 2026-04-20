@@ -430,7 +430,7 @@ html {
 }
 
 .ghrm-raw-pane .ghrm-blob {
-  margin: -24px -32px -32px;
+  margin: -16px -32px -32px;
 }
 
 body.ghrm-doc-flat .ghrm-page-shell {
@@ -798,7 +798,7 @@ body.ghrm-doc-flat #ghrm-source-slot {
   }
 
   .ghrm-raw-pane .ghrm-blob {
-    margin: -16px;
+    margin: -8px -16px -16px;
   }
 
   .ghrm-topbar-inner {
