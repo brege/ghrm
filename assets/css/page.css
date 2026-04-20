@@ -154,6 +154,8 @@ html {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -180,8 +182,255 @@ html {
   padding: 24px 32px 32px;
 }
 
-.ghrm-page-content > :first-child {
+.ghrm-page-content > :first-child,
+.ghrm-file-pane > :first-child {
   margin-top: 0;
+}
+
+.ghrm-file-pane > :last-child {
+  margin-bottom: 0;
+}
+
+.ghrm-raw-pre {
+  margin: 0;
+}
+
+.ghrm-file-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ghrm-file-toggle,
+.ghrm-file-action,
+.ghrm-file-link {
+  height: 32px;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+}
+
+.ghrm-file-toggle {
+  width: 32px;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ghrm-file-toggle:hover:not(:disabled),
+.ghrm-file-action:hover,
+.ghrm-file-link:hover {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+.ghrm-file-toggle.is-active {
+  background: var(--bgColor-muted, #f6f8fa);
+}
+
+.ghrm-file-toggle:disabled {
+  cursor: default;
+  color: var(--fgColor-muted, #636c76);
+  opacity: 0.5;
+}
+
+.ghrm-file-actions {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.ghrm-file-action,
+.ghrm-file-link {
+  border-radius: 0;
+  border-left-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fgColor-default, #1f2328);
+  text-decoration: none;
+}
+
+.markdown-body .ghrm-file-link,
+.markdown-body .ghrm-file-link:visited,
+.markdown-body .ghrm-file-link:hover,
+.markdown-body .ghrm-file-link:active,
+.markdown-body .ghrm-file-action,
+.markdown-body .ghrm-file-action:visited,
+.markdown-body .ghrm-file-action:hover,
+.markdown-body .ghrm-file-action:active {
+  color: var(--fgColor-default, #1f2328);
+  text-decoration: none;
+}
+
+.ghrm-file-actions > :first-child {
+  border-left-width: 1px;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.ghrm-file-actions > :last-child {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.ghrm-file-link {
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ghrm-file-action {
+  position: relative;
+  width: 32px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ghrm-file-action::before {
+  content: "";
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--overlay-bgColor, #343942);
+  color: var(--fgColor-onEmphasis, #ffffff);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ghrm-file-action.is-copied {
+  color: var(--fgColor-success, #1a7f37);
+}
+
+.ghrm-file-action.is-copied::before {
+  content: attr(data-copy-feedback);
+  display: block;
+}
+
+.ghrm-file-action.is-copied .ghrm-copy-icon-copy {
+  display: none;
+}
+
+.ghrm-file-action.is-copied .ghrm-copy-icon-check {
+  display: block;
+}
+
+.ghrm-file-icon {
+  fill: currentColor;
+}
+
+.ghrm-blob {
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--bgColor-default, #ffffff);
+}
+
+.ghrm-blob-source,
+.ghrm-blob-source[hidden] {
+  display: none;
+}
+
+.markdown-body .ghrm-blob-table {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  margin: 0;
+  border-collapse: collapse;
+  border: 0;
+  border-radius: 0;
+  table-layout: auto;
+  overflow: visible;
+  font:
+    400 12px / 20px
+    var(
+      --fontStack-monospace,
+      ui-monospace,
+      SFMono-Regular,
+      SF Mono,
+      Menlo,
+      Consolas,
+      Liberation Mono,
+      monospace
+    );
+}
+
+.markdown-body .ghrm-blob-table tr,
+.markdown-body .ghrm-blob-table tr:nth-child(2n) {
+  background: transparent;
+  border-top: 0;
+}
+
+.markdown-body .ghrm-blob-table td {
+  padding: 0;
+  border: 0;
+  vertical-align: baseline;
+  white-space: pre;
+}
+
+.markdown-body td.ghrm-blob-line-no {
+  width: 1%;
+  min-width: calc(4ch + 24px);
+  padding: 0 8px 0 16px;
+  color: var(--fgColor-muted, #636c76);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  user-select: none;
+}
+
+.ghrm-blob-line-no-text,
+.ghrm-blob-line-text {
+  display: inline-block;
+  font: inherit;
+  line-height: 20px;
+  vertical-align: baseline;
+}
+
+.ghrm-blob-line-no-text {
+  transform: translateY(1px);
+}
+
+.markdown-body td.ghrm-blob-line-code {
+  width: 99%;
+  padding: 0 16px 0 34px;
+  color: var(--fgColor-default, #1f2328);
+}
+
+.ghrm-blob-line-code code {
+  display: inline-block;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.ghrm-blob-line-code .hljs {
+  background: transparent;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.ghrm-blob-line-code .hljs span {
+  white-space: inherit;
+  word-break: inherit;
+  overflow-wrap: inherit;
+}
+
+.ghrm-raw-pane .ghrm-blob {
+  margin: -24px -32px -32px;
 }
 
 body.ghrm-doc-flat .ghrm-page-shell {
@@ -210,6 +459,10 @@ body.ghrm-doc-flat .ghrm-readme-header {
 
 body.ghrm-doc-flat .ghrm-readme-content {
   padding: 0;
+}
+
+body.ghrm-doc-flat #ghrm-source-slot {
+  display: none;
 }
 
 .ghrm-topbar {
@@ -415,6 +668,7 @@ body.ghrm-doc-flat .ghrm-readme-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 4px 16px;
   background: var(--bgColor-muted, #f6f8fa);
@@ -539,6 +793,14 @@ body.ghrm-doc-flat .ghrm-readme-content {
     padding: 16px;
   }
 
+  .ghrm-readme-content {
+    padding: 16px;
+  }
+
+  .ghrm-raw-pane .ghrm-blob {
+    margin: -16px;
+  }
+
   .ghrm-topbar-inner {
     min-height: 56px;
     padding: 0 14px;
@@ -556,7 +818,7 @@ body.ghrm-doc-flat .ghrm-readme-content {
 .ghrm-toc-btn {
   width: 28px;
   height: 28px;
-  border: 1px solid var(--borderColor-default, #d0d7de);
+  border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--fgColor-default, #1f2328);
@@ -575,8 +837,13 @@ body.ghrm-doc-flat .ghrm-readme-content {
   background: var(--bgColor-neutral-muted, #afb8c133);
 }
 
-.ghrm-readme-header .ghrm-toc-btn {
-  border: 0;
+.ghrm-toc-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.ghrm-toc-btn:disabled:hover {
+  background: transparent;
 }
 
 .ghrm-readme-header .ghrm-toc-btn:hover {

@@ -9,6 +9,15 @@ pub struct PageShell<'a> {
     pub source: &'a str,
 }
 
+pub struct PageCtx<'a> {
+    pub crumbs: &'a str,
+    pub preview_html: &'a str,
+    pub raw_html: &'a str,
+    pub view_attrs: &'a str,
+    pub preview_hidden: bool,
+    pub raw_hidden: bool,
+}
+
 pub struct ExplorerCtx<'a> {
     pub crumbs: &'a str,
     pub has_parent: bool,
@@ -44,11 +53,23 @@ pub fn base(p: PageShell) -> Result<String> {
     Ok(out)
 }
 
-pub fn page(content_html: &str, crumbs: &str) -> Result<String> {
+pub fn page(ctx: PageCtx<'_>) -> Result<String> {
     let path = crate::theme::dir()?.join("templates/page.html");
     let mut out = read_tmpl(&path)?;
-    replace(&mut out, "{{ crumbs }}", crumbs);
-    replace(&mut out, "{{ content }}", content_html);
+    replace(&mut out, "{{ crumbs }}", ctx.crumbs);
+    replace(&mut out, "{{ preview_html }}", ctx.preview_html);
+    replace(&mut out, "{{ raw_html }}", ctx.raw_html);
+    replace(&mut out, "{{ view_attrs }}", ctx.view_attrs);
+    replace(
+        &mut out,
+        "{{ preview_hidden }}",
+        if ctx.preview_hidden { " hidden" } else { "" },
+    );
+    replace(
+        &mut out,
+        "{{ raw_hidden }}",
+        if ctx.raw_hidden { " hidden" } else { "" },
+    );
     Ok(out)
 }
 

@@ -1,3 +1,5 @@
+import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
+
 const DEFAULT_SCOPE = 'md';
 const VALID_SCOPES = new Set(['md', 'files', 'all']);
 
@@ -113,6 +115,140 @@ function setupThemeToggle() {
   });
 }
 
+function rawToggleIcon() {
+  return `
+    <svg aria-hidden="true" height="16" viewBox="0 0 640 512" width="16" class="ghrm-file-icon">
+      <path d="M392.8 1.2c-17-4.9-34.7 5-39.6 22l-128 448c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l128-448c4.9-17-5-34.7-22-39.6zm80.6 120.1c-12.5 12.5-12.5 32.8 0 45.3L562.7 256l-89.4 89.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l112-112c12.5-12.5 12.5-32.8 0-45.3l-112-112c-12.5-12.5-32.8-12.5-45.3 0zm-306.7 0c-12.5-12.5-32.8-12.5-45.3 0l-112 112c-12.5 12.5-12.5 32.8 0 45.3l112 112c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256l89.4-89.4c12.5-12.5 12.5-32.8 0-45.3z"></path>
+    </svg>
+  `;
+}
+
+function downloadIcon() {
+  return `
+    <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16" class="ghrm-file-icon">
+      <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"></path>
+      <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"></path>
+    </svg>
+  `;
+}
+
+function visiblePane(selector) {
+  return document.querySelector(`${selector}:not([hidden])`);
+}
+
+function fileViewRoot() {
+  return visiblePane('.ghrm-page-content [data-ghrm-preview-pane]');
+}
+
+function rawText(container) {
+  return (
+    container.querySelector('[data-ghrm-raw-pane] .ghrm-data')?.content
+      ?.textContent ||
+    container.querySelector('[data-ghrm-raw-pane] code')?.textContent ||
+    ''
+  );
+}
+
+function syncFileView(container, raw) {
+  const preview = container.querySelector('[data-ghrm-preview-pane]');
+  const rawPane = container.querySelector('[data-ghrm-raw-pane]');
+  const toggle = container.querySelector('[data-ghrm-raw-toggle]');
+  if (!preview || !rawPane || !toggle) return;
+
+  preview.hidden = raw;
+  rawPane.hidden = !raw;
+  toggle.classList.toggle('is-active', raw);
+  toggle.setAttribute('aria-pressed', raw ? 'true' : 'false');
+
+  const label = raw ? 'Show preview' : 'Show raw';
+  toggle.setAttribute('aria-label', label);
+  toggle.title = label;
+}
+
+function fileActionsHost(container) {
+  return container.querySelector('.ghrm-explorer-header .ghrm-header-actions');
+}
+
+function setupFileView(container) {
+  const kind = container.dataset.ghrmViewKind;
+  const rawUrl = container.dataset.ghrmRawUrl;
+  const downloadUrl = container.dataset.ghrmDownloadUrl;
+  const host = fileActionsHost(container);
+  if (!kind || !rawUrl || !downloadUrl || !host) return;
+  if (host.querySelector('.ghrm-file-tools')) return;
+
+  const tools = document.createElement('div');
+  tools.className = 'ghrm-file-tools';
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'ghrm-file-toggle';
+  toggle.dataset.ghrmRawToggle = '1';
+  toggle.innerHTML = rawToggleIcon();
+
+  if (kind === 'markdown') {
+    toggle.addEventListener('click', () => {
+      const raw = toggle.getAttribute('aria-pressed') !== 'true';
+      syncFileView(container, raw);
+      buildToc();
+      const panel = document.getElementById('ghrm-toc-panel');
+      if (panel) {
+        panel.hidden = true;
+      }
+    });
+  } else {
+    toggle.disabled = true;
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'ghrm-file-actions';
+
+  const rawLink = document.createElement('a');
+  rawLink.className = 'ghrm-file-link';
+  rawLink.href = rawUrl;
+  rawLink.textContent = 'Raw';
+  rawLink.target = '_blank';
+  rawLink.rel = 'noopener noreferrer';
+  rawLink.dataset.ghrmNative = '1';
+  rawLink.setAttribute('aria-label', 'Open raw file');
+  rawLink.title = 'Open raw file';
+
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'ghrm-file-action';
+  copy.innerHTML = `${copyIcon()}${checkIcon()}`;
+  copy.dataset.copyLabel = 'Copy raw file';
+  copy.dataset.copyFeedback = 'Copied!';
+  copy.setAttribute('aria-label', 'Copy raw file');
+  copy.title = 'Copy raw file';
+  copy.addEventListener('click', async () => {
+    await writeClipboard(rawText(container));
+    showCopied(copy);
+  });
+
+  const download = document.createElement('a');
+  download.className = 'ghrm-file-action';
+  download.href = downloadUrl;
+  download.dataset.ghrmNative = '1';
+  download.setAttribute('download', '');
+  download.setAttribute('aria-label', 'Download raw file');
+  download.title = 'Download raw file';
+  download.innerHTML = downloadIcon();
+
+  actions.append(rawLink, copy, download);
+  tools.append(toggle, actions);
+  host.prepend(tools);
+  syncFileView(container, kind === 'raw');
+}
+
+function setupFileViews() {
+  for (const container of document.querySelectorAll(
+    '.ghrm-page-shell[data-ghrm-view-kind]',
+  )) {
+    setupFileView(container);
+  }
+}
+
 function hasDocChrome() {
   return !!document.querySelector('.ghrm-page-shell, .ghrm-readme-box');
 }
@@ -172,6 +308,7 @@ function setupSpaNav() {
     if (!a || !a.href) return;
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
       return;
+    if (a.dataset.ghrmNative === '1') return;
     if (a.target && a.target !== '_self') return;
     if (a.origin !== location.origin) return;
     if (a.pathname === location.pathname && a.hash) return;
@@ -218,6 +355,7 @@ async function navigate(path, push = true) {
 
   document.title = doc.title;
   if (push) history.pushState(null, '', target);
+  setupFileViews();
   setupScopeSwitch();
   syncScopeSwitch();
   syncScopeVisibility();
@@ -232,6 +370,9 @@ async function navigate(path, push = true) {
 }
 
 function tocRoot() {
+  const viewRoot = fileViewRoot();
+  if (viewRoot) return viewRoot;
+  if (document.querySelector('[data-ghrm-view-kind]')) return null;
   return (
     document.querySelector('article[data-explorer] .ghrm-readme-content') ||
     document.querySelector('article.markdown-body')
@@ -243,11 +384,11 @@ function tocButton() {
 }
 
 function syncTocButtons(show) {
-  for (const btn of document.querySelectorAll('[data-ghrm-toc-btn]')) {
-    btn.hidden = true;
-  }
   const btn = tocButton();
-  if (btn) btn.hidden = !show;
+  for (const current of document.querySelectorAll('[data-ghrm-toc-btn]')) {
+    current.hidden = current !== btn;
+    current.disabled = current === btn ? !show : true;
+  }
   return btn;
 }
 
@@ -347,7 +488,7 @@ function setupToc() {
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-ghrm-toc-btn]');
     if (btn) {
-      if (btn.hidden) return;
+      if (btn.hidden || btn.disabled) return;
       buildToc();
       const nextHidden = !panel.hidden;
       panel.hidden = nextHidden;
@@ -379,6 +520,7 @@ function setupToc() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  setupFileViews();
   setupScopeSwitch();
   syncScopeVisibility();
   setupDocChromeToggle();

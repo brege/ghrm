@@ -1,5 +1,5 @@
 <article class="markdown-body">
-  <section class="ghrm-page-shell">
+  <section class="ghrm-page-shell" {{ view_attrs }}>
     <div class="ghrm-explorer-header">
       <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs }}</nav>
       <div class="ghrm-header-actions">
@@ -11,7 +11,12 @@
       </div>
     </div>
     <div class="ghrm-page-content">
-{{ content }}
+      <div class="ghrm-file-pane" data-ghrm-preview-pane{{ preview_hidden }}>
+{{ preview_html }}
+      </div>
+      <div class="ghrm-file-pane ghrm-raw-pane" data-ghrm-raw-pane{{ raw_hidden }}>
+{{ raw_html }}
+      </div>
     </div>
   </section>
 </article>

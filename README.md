@@ -68,7 +68,6 @@ rm --recursive ~/.cache/ghrm
 
 ## Roadmap
 
-- add code numbers to file-view on non-markdown files
 - detect languages via shebang
 - build up config.toml capabilities
 - add toggle for gitignore'd items in UI

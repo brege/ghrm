@@ -1,6 +1,6 @@
 let mermaidId = 0;
 let mermaidVersionPromise;
-const copyResetDelay = 2000;
+const copyResetDelay = 1000;
 const SHELL_BUILTINS = new Set([
   '.',
   ':',
@@ -64,7 +64,7 @@ const SHELL_BUILTINS = new Set([
   'wait',
 ]);
 
-function copyIcon() {
+export function copyIcon() {
   return `
     <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16" class="ghrm-copy-icon ghrm-copy-icon-copy">
       <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path>
@@ -73,7 +73,7 @@ function copyIcon() {
   `;
 }
 
-function checkIcon() {
+export function checkIcon() {
   return `
     <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16" class="ghrm-copy-icon ghrm-copy-icon-check">
       <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path>
@@ -102,40 +102,38 @@ function getCopyText(pre) {
   return pre.querySelector('code')?.textContent || pre.textContent || '';
 }
 
-async function writeClipboard(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+export async function writeClipboard(text) {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error('Clipboard API unavailable');
   }
-
-  const input = document.createElement('textarea');
-  input.value = text;
-  input.setAttribute('readonly', '');
-  input.style.position = 'absolute';
-  input.style.left = '-9999px';
-  document.body.appendChild(input);
-  input.select();
-  document.execCommand('copy');
-  input.remove();
+  await navigator.clipboard.writeText(text);
 }
 
-function showCopied(button) {
+export function showCopied(button) {
   if (button._ghrmCopyReset) {
     window.clearTimeout(button._ghrmCopyReset);
   }
 
   button.classList.add('is-copied');
-  button.setAttribute('aria-label', button.dataset.copyFeedback || 'Copied!');
+  const feedback = button.dataset.copyFeedback || 'Copied!';
+  button.setAttribute('aria-label', feedback);
+  button.title = feedback;
 
   button._ghrmCopyReset = window.setTimeout(() => {
     button.classList.remove('is-copied');
-    button.setAttribute('aria-label', button.dataset.copyLabel || 'Copy');
+    const label = button.dataset.copyLabel || 'Copy';
+    button.setAttribute('aria-label', label);
+    button.title = label;
     button._ghrmCopyReset = null;
   }, copyResetDelay);
 }
 
 function addCopyButtons() {
   for (const pre of document.querySelectorAll('.markdown-body pre')) {
+    if (pre.closest('[data-ghrm-raw-pane]')) {
+      continue;
+    }
+
     const host = getCopyHost(pre);
     if (!host || host.querySelector(':scope > .ghrm-copy-button')) {
       continue;
@@ -150,6 +148,7 @@ function addCopyButtons() {
     button.setAttribute('aria-label', 'Copy');
     button.dataset.copyLabel = 'Copy';
     button.dataset.copyFeedback = 'Copied!';
+    button.title = 'Copy';
     button.innerHTML = `${copyIcon()}${checkIcon()}`;
     button.addEventListener('click', async () => {
       await writeClipboard(getCopyText(pre));
@@ -301,6 +300,100 @@ function renderCode() {
     window.hljs.highlightElement(code);
     normalizeShellHighlight(code);
     code.dataset.ghrmHighlighted = '1';
+  }
+}
+
+function highlightBlobCode(code) {
+  if (code.dataset.ghrmHighlighted === '1') {
+    return;
+  }
+
+  const hasLanguage = [...code.classList].some((name) =>
+    name.startsWith('language-'),
+  );
+  if (!hasLanguage || typeof window.hljs?.highlightElement !== 'function') {
+    return;
+  }
+
+  window.hljs.highlightElement(code);
+  normalizeShellHighlight(code);
+  code.dataset.ghrmHighlighted = '1';
+}
+
+function escapeHtml(text) {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function openTag(node) {
+  const attrs = [...node.attributes]
+    .map((attr) => `${attr.name}="${escapeHtml(attr.value)}"`)
+    .join(' ');
+  return attrs
+    ? `<${node.tagName.toLowerCase()} ${attrs}>`
+    : `<${node.tagName.toLowerCase()}>`;
+}
+
+function pushHighlightedNode(node, lines, stack) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const parts = node.textContent.split('\n');
+    for (let idx = 0; idx < parts.length; idx += 1) {
+      if (idx > 0) {
+        for (let rev = stack.length - 1; rev >= 0; rev -= 1) {
+          lines[lines.length - 1] += `</${stack[rev].tagName.toLowerCase()}>`;
+        }
+        lines.push('');
+        for (const el of stack) {
+          lines[lines.length - 1] += openTag(el);
+        }
+      }
+      lines[lines.length - 1] += escapeHtml(parts[idx]);
+    }
+    return;
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return;
+  }
+
+  lines[lines.length - 1] += openTag(node);
+  stack.push(node);
+  for (const child of node.childNodes) {
+    pushHighlightedNode(child, lines, stack);
+  }
+  stack.pop();
+  lines[lines.length - 1] += `</${node.tagName.toLowerCase()}>`;
+}
+
+function renderBlob(block) {
+  const code = block.querySelector('.ghrm-blob-source code');
+  const body = block.querySelector('.ghrm-blob-table tbody');
+  if (!code || !body) {
+    return;
+  }
+
+  highlightBlobCode(code);
+
+  const lines = [''];
+  for (const child of code.childNodes) {
+    pushHighlightedNode(child, lines, []);
+  }
+
+  body.innerHTML = lines
+    .map((line, idx) => {
+      const content = line || '&#8203;';
+      const lineNo = idx + 1;
+      return `<tr><td class="ghrm-blob-line-no" data-line-number="${lineNo}"><span class="ghrm-blob-line-no-text">${lineNo}</span></td><td class="ghrm-blob-line-code"><code class="ghrm-blob-line-text">${content}</code></td></tr>`;
+    })
+    .join('');
+}
+
+function renderBlobs() {
+  for (const block of document.querySelectorAll('.ghrm-blob')) {
+    renderBlob(block);
   }
 }
 
@@ -657,6 +750,7 @@ function renderMaps() {
 
 async function runAll() {
   renderCode();
+  renderBlobs();
   renderMath();
   await renderMermaid();
   renderMaps();

@@ -6,11 +6,13 @@
         </svg>
         {{ name }}
       </div>
-      <button type="button" class="ghrm-toc-btn" data-ghrm-toc-btn="readme" hidden title="Table of contents" aria-label="Table of contents">
-        <svg aria-hidden="true" focusable="false">
-          <use href="#ghrm-icon-list"></use>
-        </svg>
-      </button>
+      <div class="ghrm-header-actions">
+        <button type="button" class="ghrm-toc-btn" data-ghrm-toc-btn="readme" hidden title="Table of contents" aria-label="Table of contents">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-list"></use>
+          </svg>
+        </button>
+      </div>
     </div>
     <div class="ghrm-readme-content">
       {{ html }}
