@@ -20,14 +20,6 @@ impl Scope {
             _ => Self::Md,
         }
     }
-
-    pub fn query(self) -> Option<&'static str> {
-        match self {
-            Self::Md => None,
-            Self::Files => Some("files"),
-            Self::All => Some("all"),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize)]

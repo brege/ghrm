@@ -1,4 +1,5 @@
 use crate::walk::{self, NavSet};
+use ignore::gitignore::GitignoreBuilder;
 use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{DebouncedEvent, new_debouncer};
 use std::path::{Component, Path, PathBuf};
@@ -45,16 +46,20 @@ pub fn spawn_dir(
             if events.is_empty() {
                 continue;
             }
+            let changed = changed_paths(&root, &events, use_ignore, &exclude_names);
+            if changed.is_empty() {
+                continue;
+            }
             let nav_dirty = events
                 .iter()
-                .any(|e| is_nav_event(&root, e, &exclude_names));
+                .any(|e| is_nav_event(&root, e, use_ignore, &exclude_names));
             if nav_dirty {
                 let fresh = walk::build_all(&root, use_ignore, &exclude_names);
                 if let Ok(mut guard) = nav.write() {
                     *guard = fresh;
                 }
             }
-            for p in changed_paths(&root, &events, &exclude_names) {
+            for p in changed {
                 let rel = p.strip_prefix(&root).unwrap_or(&p).display();
                 info!(
                     kind = if nav_dirty { "nav+reload" } else { "reload" },
@@ -106,12 +111,16 @@ fn skip_watch_path(rel: &Path, exclude_names: &[String]) -> bool {
     })
 }
 
-fn changed_paths(root: &Path, events: &[DebouncedEvent], exclude_names: &[String]) -> Vec<PathBuf> {
+fn changed_paths(
+    root: &Path,
+    events: &[DebouncedEvent],
+    use_ignore: bool,
+    exclude_names: &[String],
+) -> Vec<PathBuf> {
     let mut seen: Vec<PathBuf> = Vec::new();
     for ev in events {
         for p in &ev.event.paths {
-            let rel = p.strip_prefix(root).unwrap_or(p);
-            if skip_watch_path(rel, exclude_names) {
+            if !is_relevant_watch_path(root, p, use_ignore, exclude_names) {
                 continue;
             }
             if !seen.contains(p) {
@@ -122,7 +131,12 @@ fn changed_paths(root: &Path, events: &[DebouncedEvent], exclude_names: &[String
     seen
 }
 
-fn is_nav_event(root: &Path, ev: &DebouncedEvent, exclude_names: &[String]) -> bool {
+fn is_nav_event(
+    root: &Path,
+    ev: &DebouncedEvent,
+    use_ignore: bool,
+    exclude_names: &[String],
+) -> bool {
     use notify::event::{EventKind, ModifyKind};
     let kind_nav = matches!(
         ev.event.kind,
@@ -131,10 +145,256 @@ fn is_nav_event(root: &Path, ev: &DebouncedEvent, exclude_names: &[String]) -> b
     if !kind_nav {
         return false;
     }
-    ev.event.paths.iter().any(|p| {
-        let Ok(rel) = p.strip_prefix(root) else {
-            return false;
-        };
-        !skip_watch_path(rel, exclude_names)
-    })
+    ev.event
+        .paths
+        .iter()
+        .any(|p| is_relevant_watch_path(root, p, use_ignore, exclude_names))
+}
+
+fn is_relevant_watch_path(
+    root: &Path,
+    path: &Path,
+    use_ignore: bool,
+    exclude_names: &[String],
+) -> bool {
+    let Ok(rel) = path.strip_prefix(root) else {
+        return false;
+    };
+    if skip_watch_path(rel, exclude_names) {
+        return false;
+    }
+    if !use_ignore {
+        return true;
+    }
+    !matches_ignore(root, rel, path_kind(path))
+}
+
+fn matches_ignore(root: &Path, rel: &Path, is_dir: Option<bool>) -> bool {
+    match is_dir {
+        Some(is_dir) => ignore_state(root, rel, is_dir).is_ignore(),
+        None => {
+            let file_match = ignore_state(root, rel, false);
+            if file_match.is_whitelist() {
+                return false;
+            }
+            let dir_match = ignore_state(root, rel, true);
+            if dir_match.is_whitelist() {
+                return false;
+            }
+            file_match.is_ignore() || dir_match.is_ignore()
+        }
+    }
+}
+
+fn path_kind(path: &Path) -> Option<bool> {
+    std::fs::metadata(path).ok().map(|meta| meta.is_dir())
+}
+
+fn ignore_state(root: &Path, rel: &Path, is_dir: bool) -> MatchState {
+    match ignore_match(root, rel, is_dir, ".ignore") {
+        MatchState::None => {}
+        state => return state,
+    }
+    match ignore_match(root, rel, is_dir, ".gitignore") {
+        MatchState::None => {}
+        state => return state,
+    }
+    match ignore_match(root, rel, is_dir, ".git/info/exclude") {
+        MatchState::None => {}
+        state => return state,
+    }
+    global_ignore_match(root, rel, is_dir)
+}
+
+fn ignore_match(root: &Path, rel: &Path, is_dir: bool, name: &str) -> MatchState {
+    let Some(parent_dirs) = path_ancestors(rel) else {
+        return MatchState::None;
+    };
+    let mut builder = GitignoreBuilder::new(root);
+    let mut found = false;
+    for dir in parent_dirs {
+        let path = root.join(dir).join(name);
+        if !path.is_file() {
+            continue;
+        }
+        let _ = builder.add(path);
+        found = true;
+    }
+    if !found {
+        return MatchState::None;
+    }
+    let Ok(matcher) = builder.build() else {
+        return MatchState::None;
+    };
+    MatchState::from_match(matcher.matched_path_or_any_parents(rel, is_dir))
+}
+
+fn global_ignore_match(root: &Path, rel: &Path, is_dir: bool) -> MatchState {
+    let (matcher, _) = GitignoreBuilder::new(root).build_global();
+    MatchState::from_match(matcher.matched_path_or_any_parents(rel, is_dir))
+}
+
+fn path_ancestors(rel: &Path) -> Option<Vec<PathBuf>> {
+    let parent = rel.parent()?;
+    let mut dirs = vec![PathBuf::new()];
+    let mut current = PathBuf::new();
+    for part in parent.iter() {
+        current.push(part);
+        dirs.push(current.clone());
+    }
+    Some(dirs)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MatchState {
+    None,
+    Ignore,
+    Whitelist,
+}
+
+impl MatchState {
+    fn from_match<T>(matched: ignore::Match<T>) -> Self {
+        match matched {
+            ignore::Match::None => Self::None,
+            ignore::Match::Ignore(_) => Self::Ignore,
+            ignore::Match::Whitelist(_) => Self::Whitelist,
+        }
+    }
+
+    fn is_ignore(self) -> bool {
+        matches!(self, Self::Ignore)
+    }
+
+    fn is_whitelist(self) -> bool {
+        matches!(self, Self::Whitelist)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use notify::Event;
+    use std::fs;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn changed_paths_skip_excluded_names() {
+        let td = TempDir::new();
+        let path = td.path().join(".venv/bin/python");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "").unwrap();
+
+        let changed = changed_paths(
+            td.path(),
+            &[DebouncedEvent::from(Event::default().add_path(path))],
+            true,
+            &[".venv".to_string()],
+        );
+
+        assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn changed_paths_honor_gitignore() {
+        let td = TempDir::new();
+        fs::write(td.path().join(".gitignore"), ".venv/\n").unwrap();
+        let path = td.path().join(".venv/bin/python");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "").unwrap();
+
+        let changed = changed_paths(
+            td.path(),
+            &[DebouncedEvent::from(Event::default().add_path(path))],
+            true,
+            &[],
+        );
+
+        assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn changed_paths_honor_global_gitignore() {
+        let _guard = env_lock().lock().unwrap();
+        let td = TempDir::new();
+        let xdg = td.path().join("xdg/git");
+        fs::create_dir_all(&xdg).unwrap();
+        fs::write(xdg.join("ignore"), ".venv/\n").unwrap();
+
+        let prev_xdg = std::env::var_os("XDG_CONFIG_HOME");
+        std::env::set_var("XDG_CONFIG_HOME", td.path().join("xdg"));
+
+        let path = td.path().join(".venv/bin/python");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "").unwrap();
+
+        let changed = changed_paths(
+            td.path(),
+            &[DebouncedEvent::from(Event::default().add_path(path))],
+            true,
+            &[],
+        );
+
+        if let Some(value) = prev_xdg {
+            std::env::set_var("XDG_CONFIG_HOME", value);
+        } else {
+            std::env::remove_var("XDG_CONFIG_HOME");
+        }
+
+        assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn changed_paths_keep_whitelisted_paths() {
+        let td = TempDir::new();
+        fs::write(td.path().join(".gitignore"), "*\n!notes.md\n").unwrap();
+        let path = td.path().join("notes.md");
+        fs::write(&path, "# notes\n").unwrap();
+
+        let changed = changed_paths(
+            td.path(),
+            &[DebouncedEvent::from(
+                Event::default().add_path(path.clone()),
+            )],
+            true,
+            &[],
+        );
+
+        assert_eq!(changed, vec![path]);
+    }
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new() -> Self {
+            let unique = format!(
+                "ghrm-watch-test-{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            );
+            let path = std::env::temp_dir().join(unique);
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 }

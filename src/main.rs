@@ -12,6 +12,8 @@ use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
 
+use crate::walk::Scope;
+
 #[derive(Parser, Debug)]
 #[command(name = "ghrm", version, about = "GitHub-flavored markdown preview")]
 struct Cli {
@@ -27,10 +29,14 @@ struct Cli {
     bind: Option<String>,
 
     #[arg(
+        short = 'I',
         long,
         help = "Ignore .gitignore, .git/info/exclude, and global gitignore rules"
     )]
     no_ignore: bool,
+
+    #[arg(short = 'a', long, help = "Default the explorer to all files on load")]
+    all: bool,
 
     #[arg(long, help = "Clear cached frontend assets before startup")]
     clean: bool,
@@ -72,6 +78,7 @@ fn main() -> Result<()> {
         Ok(_) => true,
         Err(_) => cfg.open.unwrap_or(true),
     };
+    let default_scope = if cli.all { Scope::All } else { Scope::Md };
     let exclude_names = cfg
         .walk
         .exclude_names
@@ -86,6 +93,7 @@ fn main() -> Result<()> {
         open,
         abs,
         !no_ignore,
+        default_scope,
         exclude_names,
     ))
 }

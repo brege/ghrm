@@ -31,6 +31,7 @@ pub struct AppState {
     pub nav: Arc<RwLock<NavSet>>,
     pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
+    pub default_scope: Scope,
     pub home: Option<PathBuf>,
 }
 
@@ -71,6 +72,7 @@ pub async fn run(
     open: bool,
     target: PathBuf,
     use_ignore: bool,
+    default_scope: Scope,
     exclude_names: Vec<String>,
 ) -> Result<()> {
     let meta = std::fs::metadata(&target)?;
@@ -119,6 +121,7 @@ pub async fn run(
         nav,
         repos,
         reload: reload_tx,
+        default_scope,
         home: std::env::var_os("HOME").map(PathBuf::from),
     };
 
@@ -173,19 +176,32 @@ struct ScopeQuery {
     scope: Option<String>,
 }
 
-fn scope_from_query(q: &ScopeQuery) -> Scope {
-    Scope::parse(q.scope.as_deref())
+fn scope_from_query(q: &ScopeQuery, default_scope: Scope) -> Scope {
+    q.scope
+        .as_deref()
+        .map(|raw| Scope::parse(Some(raw)))
+        .unwrap_or(default_scope)
 }
 
-fn with_scope(href: &str, scope: Scope) -> String {
-    match scope.query() {
-        Some(scope) if href.contains('?') => format!("{href}&scope={scope}"),
-        Some(scope) => format!("{href}?scope={scope}"),
-        None => href.to_string(),
+fn with_scope(href: &str, scope: Scope, default_scope: Scope) -> String {
+    if scope == default_scope {
+        return href.to_string();
+    }
+    let scope = scope_name(scope);
+    if href.contains('?') {
+        format!("{href}&scope={scope}")
+    } else {
+        format!("{href}?scope={scope}")
     }
 }
 
-fn breadcrumb_html(target: &Path, home: Option<&Path>, rel: &str, scope: Scope) -> String {
+fn breadcrumb_html(
+    target: &Path,
+    home: Option<&Path>,
+    rel: &str,
+    scope: Scope,
+    default_scope: Scope,
+) -> String {
     let display_root = home
         .and_then(|home| target.strip_prefix(home).ok())
         .unwrap_or(target);
@@ -244,7 +260,9 @@ fn breadcrumb_html(target: &Path, home: Option<&Path>, rel: &str, scope: Scope) 
         };
         out.push_str(r#"<a class="ghrm-crumb ghrm-crumb-link" href=""#);
         out.push_str(&html_escape::encode_double_quoted_attribute(&with_scope(
-            &href, scope,
+            &href,
+            scope,
+            default_scope,
         )));
         out.push_str(r#"">"#);
         out.push_str(&label);
@@ -255,7 +273,7 @@ fn breadcrumb_html(target: &Path, home: Option<&Path>, rel: &str, scope: Scope) 
 }
 
 async fn root(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
-    let scope = scope_from_query(&q);
+    let scope = scope_from_query(&q, s.default_scope);
     match s.mode {
         Mode::File => render_target(&s, &s.target, None, scope).await,
         Mode::Dir => render_explorer(&s, "", scope).await,
@@ -267,7 +285,7 @@ async fn any_path(
     AxPath(path): AxPath<String>,
     Query(q): Query<ScopeQuery>,
 ) -> Response {
-    let scope = scope_from_query(&q);
+    let scope = scope_from_query(&q, s.default_scope);
     if s.mode == Mode::File {
         return serve_file_mode(&s, &path, scope).await;
     }
@@ -284,7 +302,7 @@ async fn any_path(
     };
     if meta.is_dir() {
         if !had_trailing {
-            let loc = with_scope(&format!("/{}/", clean), scope);
+            let loc = with_scope(&format!("/{}/", clean), scope, s.default_scope);
             return Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
                 .header(header::LOCATION, loc)
@@ -350,7 +368,7 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
         .map(|p| p.to_string_lossy().into_owned())
         .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_default();
-    let crumbs = breadcrumb_html(root, s.home.as_deref(), &rel, scope);
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), &rel, scope, s.default_scope);
     let raw_html = raw_blob_html(&md, Some("markdown"));
     let view = FileView::markdown();
     let view_attrs = file_view_attrs(&rel, view);
@@ -368,7 +386,7 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
             return not_found();
         }
     };
-    respond_html(&rendered, &body, s.repos.source_for(path))
+    respond_html_with_scope(&rendered, &body, s.repos.source_for(path), s.default_scope)
 }
 
 async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
@@ -393,14 +411,14 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         "/".to_string()
     };
     let has_parent = !rel.is_empty();
-    let parent_href = with_scope(&parent_href, scope);
+    let parent_href = with_scope(&parent_href, scope, s.default_scope);
 
     let entries: Vec<ExplorerEntry> = dir
         .entries
         .iter()
         .map(|e| ExplorerEntry {
             name: e.name.clone(),
-            href: with_scope(&e.href, scope),
+            href: with_scope(&e.href, scope, s.default_scope),
             is_dir: e.is_dir,
             modified: e.modified,
         })
@@ -439,7 +457,7 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         name: &readme_name,
         html: &r.html,
     });
-    let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, scope);
+    let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, scope, s.default_scope);
 
     let body = match tmpl::explorer(ExplorerCtx {
         crumbs: &crumbs,
@@ -472,10 +490,20 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
     } else {
         s.target.join(rel)
     };
-    respond_html(&combined, &body, s.repos.source_for(&current))
+    respond_html_with_scope(
+        &combined,
+        &body,
+        s.repos.source_for(&current),
+        s.default_scope,
+    )
 }
 
-fn respond_html(r: &Rendered, body: &str, source: SourceState) -> Response {
+fn respond_html_with_scope(
+    r: &Rendered,
+    body: &str,
+    source: SourceState,
+    default_scope: Scope,
+) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
     } else {
@@ -486,6 +514,7 @@ fn respond_html(r: &Rendered, body: &str, source: SourceState) -> Response {
         title,
         body,
         source: &source,
+        default_scope: scope_name(default_scope),
     }) {
         Ok(h) => h,
         Err(e) => {
@@ -494,6 +523,14 @@ fn respond_html(r: &Rendered, body: &str, source: SourceState) -> Response {
         }
     };
     Html(html).into_response()
+}
+
+fn scope_name(scope: Scope) -> &'static str {
+    match scope {
+        Scope::Md => "md",
+        Scope::Files => "files",
+        Scope::All => "all",
+    }
 }
 
 fn source_html(source: &SourceState) -> String {
@@ -576,7 +613,7 @@ struct TreeResponse {
 
 async fn api_tree(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
     let nav = s.nav.read().unwrap();
-    let scope = scope_from_query(&q);
+    let scope = scope_from_query(&q, s.default_scope);
     let tree = nav.get(scope);
     let root = s
         .target
@@ -780,7 +817,7 @@ async fn dispatch_file(
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
     let rendered = render::render_text(filename, &text);
-    let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, scope);
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, scope, s.default_scope);
     let raw_html = raw_blob_html(
         &text,
         path.extension()
@@ -803,7 +840,7 @@ async fn dispatch_file(
             return not_found();
         }
     };
-    respond_html(&rendered, &body, s.repos.source_for(path))
+    respond_html_with_scope(&rendered, &body, s.repos.source_for(path), s.default_scope)
 }
 
 fn mime_guess(path: &Path) -> &'static str {
@@ -992,5 +1029,27 @@ mod tests {
         assert!(html.contains("ghrm-blob-source"));
         assert!(html.contains(r#"class="language-rust""#));
         assert!(html.contains("<tbody></tbody>"));
+    }
+
+    #[test]
+    fn scope_from_query_uses_default_when_missing() {
+        let q = ScopeQuery::default();
+        assert_eq!(scope_from_query(&q, Scope::All), Scope::All);
+        assert_eq!(scope_from_query(&q, Scope::Md), Scope::Md);
+    }
+
+    #[test]
+    fn with_scope_omits_default_scope() {
+        assert_eq!(with_scope("/", Scope::All, Scope::All), "/");
+        assert_eq!(with_scope("/", Scope::Md, Scope::Md), "/");
+    }
+
+    #[test]
+    fn with_scope_preserves_non_default_scope() {
+        assert_eq!(with_scope("/", Scope::All, Scope::Md), "/?scope=all");
+        assert_eq!(
+            with_scope("/docs/", Scope::Md, Scope::All),
+            "/docs/?scope=md"
+        );
     }
 }

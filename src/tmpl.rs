@@ -7,6 +7,7 @@ pub struct PageShell<'a> {
     pub title: &'a str,
     pub body: &'a str,
     pub source: &'a str,
+    pub default_scope: &'a str,
 }
 
 pub struct PageCtx<'a> {
@@ -50,6 +51,11 @@ pub fn base(p: PageShell) -> Result<String> {
     );
     replace(&mut out, "{{ source }}", p.source);
     replace(&mut out, "{{ body }}", p.body);
+    replace(
+        &mut out,
+        "{{ default_scope }}",
+        &html_escape::encode_double_quoted_attribute(p.default_scope),
+    );
     Ok(out)
 }
 

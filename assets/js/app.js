@@ -1,7 +1,11 @@
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
 
-const DEFAULT_SCOPE = 'md';
 const VALID_SCOPES = new Set(['md', 'files', 'all']);
+
+function defaultScope() {
+  const scope = document.body?.dataset.defaultScope;
+  return VALID_SCOPES.has(scope) ? scope : 'md';
+}
 
 function scrollOffset() {
   return 16;
@@ -21,12 +25,12 @@ function scrollToHash(hash) {
 function currentScope() {
   const params = new URLSearchParams(location.search);
   const scope = params.get('scope');
-  return VALID_SCOPES.has(scope) ? scope : DEFAULT_SCOPE;
+  return VALID_SCOPES.has(scope) ? scope : defaultScope();
 }
 
 function withScope(urlLike, scope = currentScope()) {
   const url = new URL(urlLike, location.origin);
-  if (scope === DEFAULT_SCOPE) {
+  if (scope === defaultScope()) {
     url.searchParams.delete('scope');
   } else {
     url.searchParams.set('scope', scope);
@@ -92,7 +96,7 @@ function setupScopeSwitch() {
     button.addEventListener('click', () => {
       const scope = VALID_SCOPES.has(button.dataset.scope)
         ? button.dataset.scope
-        : DEFAULT_SCOPE;
+        : defaultScope();
       if (scope === currentScope()) {
         return;
       }
