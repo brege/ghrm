@@ -2,15 +2,12 @@
     <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs }}</nav>
     <div class="ghrm-header-actions">
       <div class="ghrm-scope-switch" aria-label="Preview scope" role="group">
-        <button class="ghrm-scope-option is-active" type="button" data-scope="md" aria-pressed="true" aria-label="Markdown files" title="Markdown files only">
+        <button class="ghrm-scope-option" type="button" data-scope="filter" aria-pressed="false" aria-label="Filtered files" title="Filtered files">
           <span class="ghrm-scope-combo" aria-hidden="true">
-            <svg class="ghrm-scope-glyph" aria-hidden="true" focusable="false">
-              <use href="#ghrm-icon-asterisk"></use>
-            </svg>
-            <span class="ghrm-scope-text">.md</span>
+            <span class="ghrm-scope-text">-e ..</span>
           </span>
         </button>
-        <button class="ghrm-scope-option" type="button" data-scope="files" aria-pressed="false" aria-label="Files" title="All files">
+        <button class="ghrm-scope-option is-active" type="button" data-scope="files" aria-pressed="true" aria-label="Files" title="Files">
           <svg class="ghrm-scope-glyph" aria-hidden="true" focusable="false">
             <use href="#ghrm-icon-asterisk"></use>
           </svg>

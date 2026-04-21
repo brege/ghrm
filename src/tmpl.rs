@@ -8,6 +8,7 @@ pub struct PageShell<'a> {
     pub body: &'a str,
     pub source: &'a str,
     pub default_scope: &'a str,
+    pub filter_scope: bool,
 }
 
 pub struct PageCtx<'a> {
@@ -55,6 +56,11 @@ pub fn base(p: PageShell) -> Result<String> {
         &mut out,
         "{{ default_scope }}",
         &html_escape::encode_double_quoted_attribute(p.default_scope),
+    );
+    replace(
+        &mut out,
+        "{{ filter_scope }}",
+        if p.filter_scope { "1" } else { "0" },
     );
     Ok(out)
 }

@@ -7,17 +7,18 @@ use std::time::UNIX_EPOCH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scope {
-    Md,
+    Filtered,
     Files,
     All,
 }
 
 impl Scope {
-    pub fn parse(raw: Option<&str>) -> Self {
+    pub fn parse(raw: &str) -> Option<Self> {
         match raw {
-            Some("files") | Some("*") => Self::Files,
-            Some("all") | Some("**") => Self::All,
-            _ => Self::Md,
+            "filter" => Some(Self::Filtered),
+            "files" | "*" => Some(Self::Files),
+            "all" | "**" => Some(Self::All),
+            _ => None,
         }
     }
 }
@@ -43,7 +44,7 @@ pub struct NavTree {
 
 #[derive(Clone, Debug, Default)]
 pub struct NavSet {
-    pub md: NavTree,
+    pub filtered: NavTree,
     pub files: NavTree,
     pub all: NavTree,
 }
@@ -51,7 +52,7 @@ pub struct NavSet {
 impl NavSet {
     pub fn get(&self, scope: Scope) -> &NavTree {
         match scope {
-            Scope::Md => &self.md,
+            Scope::Filtered => &self.filtered,
             Scope::Files => &self.files,
             Scope::All => &self.all,
         }
@@ -66,10 +67,15 @@ struct Snapshot {
     modified: BTreeMap<PathBuf, u64>,
 }
 
-pub fn build_all(root: &Path, use_ignore: bool, exclude_names: &[String]) -> NavSet {
+pub fn build_all(
+    root: &Path,
+    use_ignore: bool,
+    exclude_names: &[String],
+    extensions: &[String],
+) -> NavSet {
     let snap = scan(root, use_ignore, exclude_names);
     NavSet {
-        md: build_md(&snap, false),
+        filtered: build_filtered(&snap, false, extensions),
         files: build_files(&snap, false),
         all: build_files(&snap, true),
     }
@@ -191,20 +197,20 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String]) -> Snapshot {
     }
 }
 
-fn build_md(snap: &Snapshot, show_hidden: bool) -> NavTree {
-    let mut dirs_with_md: HashSet<PathBuf> = HashSet::new();
-    dirs_with_md.insert(PathBuf::new());
+fn build_filtered(snap: &Snapshot, show_hidden: bool, extensions: &[String]) -> NavTree {
+    let mut dirs_with_files: HashSet<PathBuf> = HashSet::new();
+    dirs_with_files.insert(PathBuf::new());
 
     for file_rel in &snap.files {
         if !allow_scope_path(file_rel, show_hidden) {
             continue;
         }
-        if !is_markdown(file_rel) {
+        if !has_extension(file_rel, extensions) {
             continue;
         }
         let mut current = file_rel.parent().unwrap_or(Path::new("")).to_path_buf();
         loop {
-            dirs_with_md.insert(current.clone());
+            dirs_with_files.insert(current.clone());
             if current.as_os_str().is_empty() {
                 break;
             }
@@ -217,7 +223,7 @@ fn build_md(snap: &Snapshot, show_hidden: bool) -> NavTree {
         if !allow_scope_dir(dir_rel, show_hidden) {
             continue;
         }
-        if !dirs_with_md.contains(dir_rel) {
+        if !dirs_with_files.contains(dir_rel) {
             continue;
         }
 
@@ -228,7 +234,7 @@ fn build_md(snap: &Snapshot, show_hidden: bool) -> NavTree {
             .into_iter()
             .flatten()
             .filter(|child| allow_scope_path(child, show_hidden))
-            .filter(|child| dirs_with_md.contains(*child))
+            .filter(|child| dirs_with_files.contains(*child))
         {
             entries.push(NavEntry {
                 name: file_name(child_dir),
@@ -243,7 +249,7 @@ fn build_md(snap: &Snapshot, show_hidden: bool) -> NavTree {
             if !allow_scope_path(file_rel, show_hidden) {
                 continue;
             }
-            if !is_markdown(file_rel) {
+            if !has_extension(file_rel, extensions) {
                 continue;
             }
             if is_readme(file_rel) {
@@ -334,8 +340,11 @@ fn allow_scope_path(path: &Path, show_hidden: bool) -> bool {
     true
 }
 
-fn is_markdown(path: &Path) -> bool {
-    matches!(path.extension().and_then(|s| s.to_str()), Some("md"))
+fn has_extension(path: &Path, extensions: &[String]) -> bool {
+    let Some(ext) = path.extension().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    extensions.iter().any(|entry| entry == &ext.to_lowercase())
 }
 
 fn is_readme(path: &Path) -> bool {

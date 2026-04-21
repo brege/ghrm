@@ -3,9 +3,10 @@
 port = 1331
 bind = "127.0.0.1"
 open = true
-no_ignore = false
 
 [walk]
+no_ignore = false
+extensions = []
 exclude_names = [
   "node_modules",
   "__pycache__",

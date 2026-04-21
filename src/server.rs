@@ -32,6 +32,7 @@ pub struct AppState {
     pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
     pub default_scope: Scope,
+    pub filter_scope: bool,
     pub home: Option<PathBuf>,
 }
 
@@ -39,6 +40,17 @@ pub struct AppState {
 pub enum Mode {
     File,
     Dir,
+}
+
+pub struct Options {
+    pub bind: String,
+    pub port: u16,
+    pub open: bool,
+    pub target: PathBuf,
+    pub use_ignore: bool,
+    pub default_scope: Scope,
+    pub extensions: Vec<String>,
+    pub exclude_names: Vec<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -66,20 +78,24 @@ impl FileView {
     }
 }
 
-pub async fn run(
-    bind: String,
-    port: u16,
-    open: bool,
-    target: PathBuf,
-    use_ignore: bool,
-    default_scope: Scope,
-    exclude_names: Vec<String>,
-) -> Result<()> {
+pub async fn run(options: Options) -> Result<()> {
+    let Options {
+        bind,
+        port,
+        open,
+        target,
+        use_ignore,
+        default_scope,
+        extensions,
+        exclude_names,
+    } = options;
+
     let meta = std::fs::metadata(&target)?;
     let mode = if meta.is_dir() { Mode::Dir } else { Mode::File };
 
     let (reload_tx, _) = broadcast::channel::<()>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
+    let filter_scope = !extensions.is_empty();
     let repo_root_buf = if mode == Mode::Dir {
         target.clone()
     } else {
@@ -92,8 +108,9 @@ pub async fn run(
             let repo_root2 = repo_root_buf.clone();
             let walk_excludes = exclude_names.clone();
             let repo_excludes = exclude_names.clone();
+            let walk_extensions = extensions.clone();
             let walk_h = tokio::task::spawn_blocking(move || {
-                walk::build_all(&target2, use_ignore, &walk_excludes)
+                walk::build_all(&target2, use_ignore, &walk_excludes, &walk_extensions)
             });
             let repo_h =
                 tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes));
@@ -105,6 +122,7 @@ pub async fn run(
                 reload_tx.clone(),
                 use_ignore,
                 exclude_names.clone(),
+                extensions.clone(),
             )?;
             repos?
         }
@@ -122,6 +140,7 @@ pub async fn run(
         repos,
         reload: reload_tx,
         default_scope,
+        filter_scope,
         home: std::env::var_os("HOME").map(PathBuf::from),
     };
 
@@ -176,11 +195,17 @@ struct ScopeQuery {
     scope: Option<String>,
 }
 
-fn scope_from_query(q: &ScopeQuery, default_scope: Scope) -> Scope {
-    q.scope
+fn scope_from_query(q: &ScopeQuery, default_scope: Scope, filter_scope: bool) -> Scope {
+    let scope = q
+        .scope
         .as_deref()
-        .map(|raw| Scope::parse(Some(raw)))
-        .unwrap_or(default_scope)
+        .and_then(Scope::parse)
+        .unwrap_or(default_scope);
+    if scope == Scope::Filtered && !filter_scope {
+        default_scope
+    } else {
+        scope
+    }
 }
 
 fn with_scope(href: &str, scope: Scope, default_scope: Scope) -> String {
@@ -273,7 +298,7 @@ fn breadcrumb_html(
 }
 
 async fn root(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
-    let scope = scope_from_query(&q, s.default_scope);
+    let scope = scope_from_query(&q, s.default_scope, s.filter_scope);
     match s.mode {
         Mode::File => render_target(&s, &s.target, None, scope).await,
         Mode::Dir => render_explorer(&s, "", scope).await,
@@ -285,7 +310,7 @@ async fn any_path(
     AxPath(path): AxPath<String>,
     Query(q): Query<ScopeQuery>,
 ) -> Response {
-    let scope = scope_from_query(&q, s.default_scope);
+    let scope = scope_from_query(&q, s.default_scope, s.filter_scope);
     if s.mode == Mode::File {
         return serve_file_mode(&s, &path, scope).await;
     }
@@ -386,7 +411,13 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
             return not_found();
         }
     };
-    respond_html_with_scope(&rendered, &body, s.repos.source_for(path), s.default_scope)
+    respond_html_with_scope(
+        &rendered,
+        &body,
+        s.repos.source_for(path),
+        s.default_scope,
+        s.filter_scope,
+    )
 }
 
 async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
@@ -495,6 +526,7 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         &body,
         s.repos.source_for(&current),
         s.default_scope,
+        s.filter_scope,
     )
 }
 
@@ -503,6 +535,7 @@ fn respond_html_with_scope(
     body: &str,
     source: SourceState,
     default_scope: Scope,
+    filter_scope: bool,
 ) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
@@ -515,6 +548,7 @@ fn respond_html_with_scope(
         body,
         source: &source,
         default_scope: scope_name(default_scope),
+        filter_scope,
     }) {
         Ok(h) => h,
         Err(e) => {
@@ -527,7 +561,7 @@ fn respond_html_with_scope(
 
 fn scope_name(scope: Scope) -> &'static str {
     match scope {
-        Scope::Md => "md",
+        Scope::Filtered => "filter",
         Scope::Files => "files",
         Scope::All => "all",
     }
@@ -613,7 +647,7 @@ struct TreeResponse {
 
 async fn api_tree(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
     let nav = s.nav.read().unwrap();
-    let scope = scope_from_query(&q, s.default_scope);
+    let scope = scope_from_query(&q, s.default_scope, s.filter_scope);
     let tree = nav.get(scope);
     let root = s
         .target
@@ -840,7 +874,13 @@ async fn dispatch_file(
             return not_found();
         }
     };
-    respond_html_with_scope(&rendered, &body, s.repos.source_for(path), s.default_scope)
+    respond_html_with_scope(
+        &rendered,
+        &body,
+        s.repos.source_for(path),
+        s.default_scope,
+        s.filter_scope,
+    )
 }
 
 fn mime_guess(path: &Path) -> &'static str {
@@ -1034,22 +1074,22 @@ mod tests {
     #[test]
     fn scope_from_query_uses_default_when_missing() {
         let q = ScopeQuery::default();
-        assert_eq!(scope_from_query(&q, Scope::All), Scope::All);
-        assert_eq!(scope_from_query(&q, Scope::Md), Scope::Md);
+        assert_eq!(scope_from_query(&q, Scope::All, false), Scope::All);
+        assert_eq!(scope_from_query(&q, Scope::Filtered, true), Scope::Filtered);
     }
 
     #[test]
     fn with_scope_omits_default_scope() {
         assert_eq!(with_scope("/", Scope::All, Scope::All), "/");
-        assert_eq!(with_scope("/", Scope::Md, Scope::Md), "/");
+        assert_eq!(with_scope("/", Scope::Filtered, Scope::Filtered), "/");
     }
 
     #[test]
     fn with_scope_preserves_non_default_scope() {
-        assert_eq!(with_scope("/", Scope::All, Scope::Md), "/?scope=all");
+        assert_eq!(with_scope("/", Scope::All, Scope::Filtered), "/?scope=all");
         assert_eq!(
-            with_scope("/docs/", Scope::Md, Scope::All),
-            "/docs/?scope=md"
+            with_scope("/docs/", Scope::Filtered, Scope::All),
+            "/docs/?scope=filter"
         );
     }
 }

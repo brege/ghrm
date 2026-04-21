@@ -10,13 +10,14 @@ pub struct Config {
     pub port: Option<u16>,
     pub bind: Option<String>,
     pub open: Option<bool>,
-    pub no_ignore: Option<bool>,
     #[serde(default)]
     pub walk: WalkConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
 pub struct WalkConfig {
+    pub no_ignore: Option<bool>,
+    pub extensions: Option<Vec<String>>,
     pub exclude_names: Option<Vec<String>>,
 }
 

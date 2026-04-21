@@ -1,10 +1,14 @@
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
 
-const VALID_SCOPES = new Set(['md', 'files', 'all']);
+const VALID_SCOPES = new Set(['filter', 'files', 'all']);
 
 function defaultScope() {
   const scope = document.body?.dataset.defaultScope;
-  return VALID_SCOPES.has(scope) ? scope : 'md';
+  return VALID_SCOPES.has(scope) ? scope : 'files';
+}
+
+function hasFilterScope() {
+  return document.body?.dataset.filterScope === '1';
 }
 
 function scrollOffset() {
@@ -25,6 +29,7 @@ function scrollToHash(hash) {
 function currentScope() {
   const params = new URLSearchParams(location.search);
   const scope = params.get('scope');
+  if (scope === 'filter' && !hasFilterScope()) return defaultScope();
   return VALID_SCOPES.has(scope) ? scope : defaultScope();
 }
 
@@ -43,6 +48,10 @@ function syncScopeSwitch() {
   for (const button of document.querySelectorAll(
     '.ghrm-scope-option[data-scope]',
   )) {
+    if (button.dataset.scope === 'filter' && !hasFilterScope()) {
+      button.hidden = true;
+      continue;
+    }
     const active = button.dataset.scope === scope;
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -94,6 +103,9 @@ function setupScopeSwitch() {
   syncScopeSwitch();
   for (const button of buttons) {
     button.addEventListener('click', () => {
+      if (button.dataset.scope === 'filter' && !hasFilterScope()) {
+        return;
+      }
       const scope = VALID_SCOPES.has(button.dataset.scope)
         ? button.dataset.scope
         : defaultScope();
