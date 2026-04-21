@@ -5,6 +5,7 @@ bind = "127.0.0.1"
 open = true
 
 [walk]
+hidden = false
 no_ignore = false
 exclude_names = [
   "node_modules",

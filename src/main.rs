@@ -29,12 +29,22 @@ struct Cli {
     #[arg(short = 'b', long)]
     bind: Option<String>,
 
+    #[arg(short = 'O', long, help = "Do not open a browser on startup")]
+    no_browser: bool,
+
     #[arg(
         short = 'I',
         long,
         help = "Ignore .gitignore, .git/info/exclude, and global gitignore rules"
     )]
     no_ignore: bool,
+
+    #[arg(
+        short = 'H',
+        long,
+        help = "Default the explorer to include hidden paths"
+    )]
+    hidden: bool,
 
     #[arg(
         short = 'e',
@@ -79,18 +89,23 @@ fn main() -> Result<()> {
         .or(cfg.bind)
         .unwrap_or_else(|| "127.0.0.1".to_string());
     let no_ignore = cli.no_ignore || cfg.walk.no_ignore.unwrap_or(false);
-    let open = match std::env::var("GHRM_OPEN").as_deref() {
-        Ok("0") => false,
-        Ok(_) => true,
-        Err(_) => cfg.open.unwrap_or(true),
-    };
+    let open = !cli.no_browser
+        && match std::env::var("GHRM_OPEN").as_deref() {
+            Ok("0") => false,
+            Ok(_) => true,
+            Err(_) => cfg.open.unwrap_or(true),
+        };
     let extensions = if cli.extensions.is_empty() {
         normalize_extensions(cfg.walk.extensions.unwrap_or_default())?
     } else {
         normalize_extensions(cli.extensions)?
     };
     let default_scope = if extensions.is_empty() {
-        Scope::Files
+        if cli.hidden || cfg.walk.hidden.unwrap_or(false) {
+            Scope::All
+        } else {
+            Scope::Files
+        }
     } else {
         Scope::Filtered
     };
