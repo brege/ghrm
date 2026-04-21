@@ -32,7 +32,7 @@ pub struct AppState {
     pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
     pub default_scope: Scope,
-    pub filter_scope: bool,
+    pub has_ext_filter: bool,
     pub home: Option<PathBuf>,
 }
 
@@ -95,7 +95,7 @@ pub async fn run(options: Options) -> Result<()> {
 
     let (reload_tx, _) = broadcast::channel::<()>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
-    let filter_scope = !extensions.is_empty();
+    let has_ext_filter = !extensions.is_empty();
     let repo_root_buf = if mode == Mode::Dir {
         target.clone()
     } else {
@@ -140,7 +140,7 @@ pub async fn run(options: Options) -> Result<()> {
         repos,
         reload: reload_tx,
         default_scope,
-        filter_scope,
+        has_ext_filter,
         home: std::env::var_os("HOME").map(PathBuf::from),
     };
 
@@ -195,13 +195,13 @@ struct ScopeQuery {
     scope: Option<String>,
 }
 
-fn scope_from_query(q: &ScopeQuery, default_scope: Scope, filter_scope: bool) -> Scope {
+fn scope_from_query(q: &ScopeQuery, default_scope: Scope, has_ext_filter: bool) -> Scope {
     let scope = q
         .scope
         .as_deref()
         .and_then(Scope::parse)
         .unwrap_or(default_scope);
-    if scope == Scope::Filtered && !filter_scope {
+    if scope == Scope::Filtered && !has_ext_filter {
         default_scope
     } else {
         scope
@@ -298,7 +298,7 @@ fn breadcrumb_html(
 }
 
 async fn root(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
-    let scope = scope_from_query(&q, s.default_scope, s.filter_scope);
+    let scope = scope_from_query(&q, s.default_scope, s.has_ext_filter);
     match s.mode {
         Mode::File => render_target(&s, &s.target, None, scope).await,
         Mode::Dir => render_explorer(&s, "", scope).await,
@@ -310,7 +310,7 @@ async fn any_path(
     AxPath(path): AxPath<String>,
     Query(q): Query<ScopeQuery>,
 ) -> Response {
-    let scope = scope_from_query(&q, s.default_scope, s.filter_scope);
+    let scope = scope_from_query(&q, s.default_scope, s.has_ext_filter);
     if s.mode == Mode::File {
         return serve_file_mode(&s, &path, scope).await;
     }
@@ -416,7 +416,7 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
         &body,
         s.repos.source_for(path),
         s.default_scope,
-        s.filter_scope,
+        s.has_ext_filter,
     )
 }
 
@@ -526,7 +526,7 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         &body,
         s.repos.source_for(&current),
         s.default_scope,
-        s.filter_scope,
+        s.has_ext_filter,
     )
 }
 
@@ -535,7 +535,7 @@ fn respond_html_with_scope(
     body: &str,
     source: SourceState,
     default_scope: Scope,
-    filter_scope: bool,
+    has_ext_filter: bool,
 ) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
@@ -548,7 +548,7 @@ fn respond_html_with_scope(
         body,
         source: &source,
         default_scope: scope_name(default_scope),
-        filter_scope,
+        has_ext_filter,
     }) {
         Ok(h) => h,
         Err(e) => {
@@ -647,7 +647,7 @@ struct TreeResponse {
 
 async fn api_tree(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
     let nav = s.nav.read().unwrap();
-    let scope = scope_from_query(&q, s.default_scope, s.filter_scope);
+    let scope = scope_from_query(&q, s.default_scope, s.has_ext_filter);
     let tree = nav.get(scope);
     let root = s
         .target
@@ -879,7 +879,7 @@ async fn dispatch_file(
         &body,
         s.repos.source_for(path),
         s.default_scope,
-        s.filter_scope,
+        s.has_ext_filter,
     )
 }
 

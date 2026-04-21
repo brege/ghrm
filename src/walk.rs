@@ -75,9 +75,27 @@ pub fn build_all(
 ) -> NavSet {
     let snap = scan(root, use_ignore, exclude_names);
     NavSet {
-        filtered: build_filtered(&snap, false, extensions),
-        files: build_files(&snap, false),
-        all: build_files(&snap, true),
+        filtered: build_tree(
+            &snap,
+            TreeOpts {
+                show_hidden: false,
+                extensions,
+            },
+        ),
+        files: build_tree(
+            &snap,
+            TreeOpts {
+                show_hidden: false,
+                extensions: &[],
+            },
+        ),
+        all: build_tree(
+            &snap,
+            TreeOpts {
+                show_hidden: true,
+                extensions: &[],
+            },
+        ),
     }
 }
 
@@ -197,33 +215,25 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String]) -> Snapshot {
     }
 }
 
-fn build_filtered(snap: &Snapshot, show_hidden: bool, extensions: &[String]) -> NavTree {
-    let mut dirs_with_files: HashSet<PathBuf> = HashSet::new();
-    dirs_with_files.insert(PathBuf::new());
+struct TreeOpts<'a> {
+    show_hidden: bool,
+    extensions: &'a [String],
+}
 
-    for file_rel in &snap.files {
-        if !allow_scope_path(file_rel, show_hidden) {
-            continue;
-        }
-        if !has_extension(file_rel, extensions) {
-            continue;
-        }
-        let mut current = file_rel.parent().unwrap_or(Path::new("")).to_path_buf();
-        loop {
-            dirs_with_files.insert(current.clone());
-            if current.as_os_str().is_empty() {
-                break;
-            }
-            current = current.parent().unwrap_or(Path::new("")).to_path_buf();
-        }
-    }
+fn build_tree(snap: &Snapshot, opts: TreeOpts<'_>) -> NavTree {
+    let prune_empty = !opts.extensions.is_empty();
+    let dirs_with_files = if prune_empty {
+        compute_dirs_with_files(snap, opts.show_hidden, opts.extensions)
+    } else {
+        HashSet::new()
+    };
 
     let mut dirs = BTreeMap::new();
     for dir_rel in &snap.dirs {
-        if !allow_scope_dir(dir_rel, show_hidden) {
+        if !allow_scope_dir(dir_rel, opts.show_hidden) {
             continue;
         }
-        if !dirs_with_files.contains(dir_rel) {
+        if prune_empty && !dirs_with_files.contains(dir_rel) {
             continue;
         }
 
@@ -233,8 +243,8 @@ fn build_filtered(snap: &Snapshot, show_hidden: bool, extensions: &[String]) -> 
             .get(dir_rel)
             .into_iter()
             .flatten()
-            .filter(|child| allow_scope_path(child, show_hidden))
-            .filter(|child| dirs_with_files.contains(*child))
+            .filter(|child| allow_scope_path(child, opts.show_hidden))
+            .filter(|child| !prune_empty || dirs_with_files.contains(*child))
         {
             entries.push(NavEntry {
                 name: file_name(child_dir),
@@ -246,10 +256,10 @@ fn build_filtered(snap: &Snapshot, show_hidden: bool, extensions: &[String]) -> 
 
         let mut readme = None;
         for file_rel in snap.direct_files.get(dir_rel).into_iter().flatten() {
-            if !allow_scope_path(file_rel, show_hidden) {
+            if !allow_scope_path(file_rel, opts.show_hidden) {
                 continue;
             }
-            if !has_extension(file_rel, extensions) {
+            if !opts.extensions.is_empty() && !has_extension(file_rel, opts.extensions) {
                 continue;
             }
             if is_readme(file_rel) {
@@ -274,50 +284,31 @@ fn build_filtered(snap: &Snapshot, show_hidden: bool, extensions: &[String]) -> 
     NavTree { dirs }
 }
 
-fn build_files(snap: &Snapshot, show_hidden: bool) -> NavTree {
-    let mut dirs = BTreeMap::new();
-    for dir_rel in &snap.dirs {
-        if !allow_scope_dir(dir_rel, show_hidden) {
+fn compute_dirs_with_files(
+    snap: &Snapshot,
+    show_hidden: bool,
+    extensions: &[String],
+) -> HashSet<PathBuf> {
+    let mut dirs_with_files = HashSet::new();
+    dirs_with_files.insert(PathBuf::new());
+
+    for file_rel in &snap.files {
+        if !allow_scope_path(file_rel, show_hidden) {
             continue;
         }
-        let mut entries = Vec::new();
-
-        for child_dir in snap
-            .direct_dirs
-            .get(dir_rel)
-            .into_iter()
-            .flatten()
-            .filter(|child| allow_scope_path(child, show_hidden))
-        {
-            entries.push(NavEntry {
-                name: file_name(child_dir),
-                href: dir_href(child_dir),
-                is_dir: true,
-                modified: snap.modified.get(child_dir).copied(),
-            });
+        if !has_extension(file_rel, extensions) {
+            continue;
         }
-
-        let mut readme = None;
-        for file_rel in snap.direct_files.get(dir_rel).into_iter().flatten() {
-            if !allow_scope_path(file_rel, show_hidden) {
-                continue;
+        let mut current = file_rel.parent().unwrap_or(Path::new("")).to_path_buf();
+        loop {
+            dirs_with_files.insert(current.clone());
+            if current.as_os_str().is_empty() {
+                break;
             }
-            if is_readme(file_rel) {
-                readme = Some(path_key(file_rel));
-            }
-            entries.push(NavEntry {
-                name: file_name(file_rel),
-                href: file_href(file_rel),
-                is_dir: false,
-                modified: snap.modified.get(file_rel).copied(),
-            });
+            current = current.parent().unwrap_or(Path::new("")).to_path_buf();
         }
-
-        sort_entries(&mut entries);
-        dirs.insert(path_key(dir_rel), NavDir { entries, readme });
     }
-
-    NavTree { dirs }
+    dirs_with_files
 }
 
 fn allow_walk_name(name: &str, exclude_names: &[String]) -> bool {

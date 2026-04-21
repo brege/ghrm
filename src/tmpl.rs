@@ -8,7 +8,7 @@ pub struct PageShell<'a> {
     pub body: &'a str,
     pub source: &'a str,
     pub default_scope: &'a str,
-    pub filter_scope: bool,
+    pub has_ext_filter: bool,
 }
 
 pub struct PageCtx<'a> {
@@ -59,8 +59,8 @@ pub fn base(p: PageShell) -> Result<String> {
     );
     replace(
         &mut out,
-        "{{ filter_scope }}",
-        if p.filter_scope { "1" } else { "0" },
+        "{{ has_ext_filter }}",
+        if p.has_ext_filter { "1" } else { "0" },
     );
     Ok(out)
 }

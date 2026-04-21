@@ -7,8 +7,8 @@ function defaultScope() {
   return VALID_SCOPES.has(scope) ? scope : 'files';
 }
 
-function hasFilterScope() {
-  return document.body?.dataset.filterScope === '1';
+function hasExtFilter() {
+  return document.body?.dataset.hasExtFilter === '1';
 }
 
 function scrollOffset() {
@@ -29,7 +29,7 @@ function scrollToHash(hash) {
 function currentScope() {
   const params = new URLSearchParams(location.search);
   const scope = params.get('scope');
-  if (scope === 'filter' && !hasFilterScope()) return defaultScope();
+  if (scope === 'filter' && !hasExtFilter()) return defaultScope();
   return VALID_SCOPES.has(scope) ? scope : defaultScope();
 }
 
@@ -48,7 +48,7 @@ function syncScopeSwitch() {
   for (const button of document.querySelectorAll(
     '.ghrm-scope-option[data-scope]',
   )) {
-    if (button.dataset.scope === 'filter' && !hasFilterScope()) {
+    if (button.dataset.scope === 'filter' && !hasExtFilter()) {
       button.hidden = true;
       continue;
     }
@@ -103,7 +103,7 @@ function setupScopeSwitch() {
   syncScopeSwitch();
   for (const button of buttons) {
     button.addEventListener('click', () => {
-      if (button.dataset.scope === 'filter' && !hasFilterScope()) {
+      if (button.dataset.scope === 'filter' && !hasExtFilter()) {
         return;
       }
       const scope = VALID_SCOPES.has(button.dataset.scope)

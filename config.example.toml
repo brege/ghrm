@@ -6,7 +6,6 @@ open = true
 
 [walk]
 no_ignore = false
-extensions = []
 exclude_names = [
   "node_modules",
   "__pycache__",
@@ -18,3 +17,5 @@ exclude_names = [
   ".uv-cache",
   ".ipynb_checkpoints",
 ]
+
+# extensions = ["md", "tex", "txt", "rst"]
