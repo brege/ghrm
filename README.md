@@ -69,7 +69,6 @@ rm --recursive ~/.cache/ghrm
 ## Roadmap
 
 - detect languages via shebang
-- build up config.toml capabilities
 - add toggle for gitignore'd items in UI
 
 ## License
