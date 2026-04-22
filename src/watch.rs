@@ -1,6 +1,6 @@
 use crate::walk::{self, NavSet};
 use ignore::gitignore::GitignoreBuilder;
-use notify::{RecursiveMode, Watcher};
+use notify::RecursiveMode;
 use notify_debouncer_full::{DebouncedEvent, new_debouncer};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -27,7 +27,6 @@ pub fn spawn_dir(
 
     std::thread::spawn(move || {
         let result = debouncer
-            .watcher()
             .watch(&root, RecursiveMode::Recursive)
             .map_err(anyhow::Error::from);
         let failed = result.is_err();
@@ -82,9 +81,7 @@ pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<()>) -> anyhow::Re
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(120), None, tx)?;
     let parent = file.parent().unwrap_or(Path::new(".")).to_path_buf();
-    debouncer
-        .watcher()
-        .watch(&parent, RecursiveMode::NonRecursive)?;
+    debouncer.watch(&parent, RecursiveMode::NonRecursive)?;
 
     std::thread::spawn(move || {
         let _debouncer = debouncer;
@@ -118,8 +115,12 @@ fn changed_paths(
     use_ignore: bool,
     exclude_names: &[String],
 ) -> Vec<PathBuf> {
+    use notify::event::EventKind;
     let mut seen: Vec<PathBuf> = Vec::new();
     for ev in events {
+        if matches!(ev.event.kind, EventKind::Access(_)) {
+            continue;
+        }
         for p in &ev.event.paths {
             if !is_relevant_watch_path(root, p, use_ignore, exclude_names) {
                 continue;
@@ -277,7 +278,7 @@ mod tests {
     use notify::Event;
     use std::fs;
     use std::sync::{Mutex, OnceLock};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
     #[test]
     fn changed_paths_skip_excluded_names() {
@@ -288,7 +289,10 @@ mod tests {
 
         let changed = changed_paths(
             td.path(),
-            &[DebouncedEvent::from(Event::default().add_path(path))],
+            &[DebouncedEvent::new(
+                Event::default().add_path(path),
+                Instant::now(),
+            )],
             true,
             &[".venv".to_string()],
         );
@@ -306,7 +310,10 @@ mod tests {
 
         let changed = changed_paths(
             td.path(),
-            &[DebouncedEvent::from(Event::default().add_path(path))],
+            &[DebouncedEvent::new(
+                Event::default().add_path(path),
+                Instant::now(),
+            )],
             true,
             &[],
         );
@@ -331,7 +338,10 @@ mod tests {
 
         let changed = changed_paths(
             td.path(),
-            &[DebouncedEvent::from(Event::default().add_path(path))],
+            &[DebouncedEvent::new(
+                Event::default().add_path(path),
+                Instant::now(),
+            )],
             true,
             &[],
         );
@@ -354,8 +364,9 @@ mod tests {
 
         let changed = changed_paths(
             td.path(),
-            &[DebouncedEvent::from(
+            &[DebouncedEvent::new(
                 Event::default().add_path(path.clone()),
+                Instant::now(),
             )],
             true,
             &[],

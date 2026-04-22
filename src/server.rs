@@ -149,11 +149,11 @@ pub async fn run(options: Options) -> Result<()> {
         .route("/_ghrm/ws", get(ws_handler))
         .route("/_ghrm/tree", get(api_tree))
         .route("/_ghrm/render", get(api_render))
-        .route("/_ghrm/raw/*path", get(raw_file))
-        .route("/_ghrm/download/*path", get(download_file))
-        .route("/_ghrm/assets/*path", get(theme_asset))
-        .route("/vendor/*path", get(vendor))
-        .route("/*path", get(any_path))
+        .route("/_ghrm/raw/{*path}", get(raw_file))
+        .route("/_ghrm/download/{*path}", get(download_file))
+        .route("/_ghrm/assets/{*path}", get(theme_asset))
+        .route("/vendor/{*path}", get(vendor))
+        .route("/{*path}", get(any_path))
         .with_state(state);
 
     let addr = find_addr(&bind, port).await?;

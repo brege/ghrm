@@ -4,7 +4,7 @@ Preview GitHub-flavored Markdown locally, offline, and in your browser. It rende
 
 ## Ethos
 
-People who lose internet and power often: this tool is for you. It renders Markdown the exact same way as GitHub would. If you are offline and still need to make meaningful contributions to your projects, focusing on documentation is often the cromulent choice when online resources are unavailable.
+People who lose internet and power often: this tool is for you. It renders Markdown and file trees the exact same way as GitHub would. If you are offline and still need to make meaningful contributions to your projects, focusing on documentation and organization activity hold you over until resources become unavailable.
 
 ## Install
 
@@ -37,6 +37,7 @@ Commands: `:Ghrm` to start, `:GhrmStop` to stop, or just exit nvim.
 ## Supported Features
 
 - **Works offline**
+- File explorer with [fd](https://github.com/sharkdp/fd)-like semantics
 - Syntax highlighting
 - Focus filters for Markdown, source, and hidden files
 - GitHub alert admonitions (`[!NOTE]`, `[!TIP]`, `[!WARNING]`, etc.)
