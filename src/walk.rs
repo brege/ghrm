@@ -47,6 +47,7 @@ pub struct NavSet {
     pub filtered: NavTree,
     pub files: NavTree,
     pub all: NavTree,
+    pub excluded_dirs: HashSet<PathBuf>,
 }
 
 impl NavSet {
@@ -65,6 +66,7 @@ struct Snapshot {
     direct_files: BTreeMap<PathBuf, Vec<PathBuf>>,
     files: Vec<PathBuf>,
     modified: BTreeMap<PathBuf, u64>,
+    excluded_dirs: HashSet<PathBuf>,
 }
 
 pub fn build_all(
@@ -72,8 +74,9 @@ pub fn build_all(
     use_ignore: bool,
     exclude_names: &[String],
     extensions: &[String],
+    show_excludes: bool,
 ) -> NavSet {
-    let snap = scan(root, use_ignore, exclude_names);
+    let snap = scan(root, use_ignore, exclude_names, show_excludes);
     NavSet {
         filtered: build_tree(
             &snap,
@@ -96,86 +99,109 @@ pub fn build_all(
                 extensions: &[],
             },
         ),
+        excluded_dirs: snap.excluded_dirs,
     }
 }
 
-fn scan(root: &Path, use_ignore: bool, exclude_names: &[String]) -> Snapshot {
+fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: bool) -> Snapshot {
     let root_buf = root.to_path_buf();
-    let exclude_names = exclude_names.to_vec();
+    let filter_excludes = exclude_names.to_vec();
+    let check_excludes: Arc<Vec<String>> = Arc::new(exclude_names.to_vec());
     let dirs_seen: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new({
         let mut s = HashSet::new();
         s.insert(PathBuf::new());
         s
     }));
+    let excluded_dirs: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new(HashSet::new()));
     let direct_files: Arc<Mutex<BTreeMap<PathBuf, Vec<PathBuf>>>> =
         Arc::new(Mutex::new(BTreeMap::new()));
     let files: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
     let modified: Arc<Mutex<BTreeMap<PathBuf, u64>>> = Arc::new(Mutex::new(BTreeMap::new()));
 
-    WalkBuilder::new(&root_buf)
+    let mut builder = WalkBuilder::new(&root_buf);
+    builder
         .hidden(false)
         .follow_links(true)
         .same_file_system(true)
         .require_git(false)
         .git_ignore(use_ignore)
         .git_exclude(use_ignore)
-        .git_global(use_ignore)
-        .filter_entry(move |e| allow_walk_name(&e.file_name().to_string_lossy(), &exclude_names))
-        .build_parallel()
-        .run(|| {
-            let root = root_buf.clone();
-            let dirs_seen = dirs_seen.clone();
-            let direct_files = direct_files.clone();
-            let files = files.clone();
-            let modified = modified.clone();
-            Box::new(move |res| {
-                let entry = match res {
-                    Ok(e) => e,
-                    Err(_) => return WalkState::Continue,
-                };
-                let path = entry.path();
-                if path == root {
-                    return WalkState::Continue;
-                }
-                let Some(file_type) = entry.file_type() else {
-                    return WalkState::Continue;
-                };
-                let rel = match path.strip_prefix(&root) {
-                    Ok(r) => r.to_path_buf(),
-                    Err(_) => return WalkState::Continue,
-                };
-                let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
-                let mtime = entry
-                    .metadata()
-                    .ok()
-                    .and_then(|m| m.modified().ok())
-                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs());
-                if let Some(ts) = mtime {
-                    modified.lock().unwrap().insert(rel.clone(), ts);
-                }
-                {
-                    let mut guard = dirs_seen.lock().unwrap();
-                    guard.insert(parent.clone());
-                    if file_type.is_dir() {
-                        guard.insert(rel.clone());
-                        return WalkState::Continue;
-                    }
-                }
-                if file_type.is_file() {
-                    files.lock().unwrap().push(rel.clone());
-                    direct_files
-                        .lock()
-                        .unwrap()
-                        .entry(parent)
-                        .or_default()
-                        .push(rel);
-                }
-                WalkState::Continue
-            })
+        .git_global(use_ignore);
+
+    if !show_excludes {
+        builder.filter_entry(move |e| {
+            allow_walk_name(&e.file_name().to_string_lossy(), &filter_excludes)
         });
+    }
+
+    builder.build_parallel().run(|| {
+        let root = root_buf.clone();
+        let dirs_seen = dirs_seen.clone();
+        let excluded_dirs = excluded_dirs.clone();
+        let direct_files = direct_files.clone();
+        let files = files.clone();
+        let modified = modified.clone();
+        let excludes = check_excludes.clone();
+        Box::new(move |res| {
+            let entry = match res {
+                Ok(e) => e,
+                Err(_) => return WalkState::Continue,
+            };
+            let path = entry.path();
+            if path == root {
+                return WalkState::Continue;
+            }
+            let Some(file_type) = entry.file_type() else {
+                return WalkState::Continue;
+            };
+            let rel = match path.strip_prefix(&root) {
+                Ok(r) => r.to_path_buf(),
+                Err(_) => return WalkState::Continue,
+            };
+            let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
+            let mtime = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_secs());
+            if let Some(ts) = mtime {
+                modified.lock().unwrap().insert(rel.clone(), ts);
+            }
+
+            let name = entry.file_name().to_string_lossy();
+            let is_excluded = show_excludes && !allow_walk_name(&name, &excludes);
+
+            {
+                let mut guard = dirs_seen.lock().unwrap();
+                guard.insert(parent.clone());
+                if file_type.is_dir() {
+                    guard.insert(rel.clone());
+                    if is_excluded {
+                        excluded_dirs.lock().unwrap().insert(rel);
+                        return WalkState::Skip;
+                    }
+                    return WalkState::Continue;
+                }
+            }
+            if file_type.is_file() {
+                files.lock().unwrap().push(rel.clone());
+                direct_files
+                    .lock()
+                    .unwrap()
+                    .entry(parent)
+                    .or_default()
+                    .push(rel);
+            }
+            WalkState::Continue
+        })
+    });
 
     let dirs_seen = Arc::try_unwrap(dirs_seen).unwrap().into_inner().unwrap();
+    let excluded_dirs = Arc::try_unwrap(excluded_dirs)
+        .unwrap()
+        .into_inner()
+        .unwrap();
     let mut direct_files = Arc::try_unwrap(direct_files).unwrap().into_inner().unwrap();
     let files = Arc::try_unwrap(files).unwrap().into_inner().unwrap();
     let modified = Arc::try_unwrap(modified).unwrap().into_inner().unwrap();
@@ -212,6 +238,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String]) -> Snapshot {
         direct_files,
         files,
         modified,
+        excluded_dirs,
     }
 }
 
@@ -366,6 +393,56 @@ fn dir_href(path: &Path) -> String {
     } else {
         format!("/{key}/")
     }
+}
+
+pub fn list_dir(root: &Path, rel: &Path, show_hidden: bool) -> Option<NavDir> {
+    let abs = root.join(rel);
+    let read_dir = std::fs::read_dir(&abs).ok()?;
+
+    let mut entries = Vec::new();
+    let mut readme = None;
+
+    for entry in read_dir.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !show_hidden && name.starts_with('.') {
+            continue;
+        }
+
+        let file_type = match entry.file_type() {
+            Ok(ft) => ft,
+            Err(_) => continue,
+        };
+
+        let entry_rel = rel.join(&name);
+        let mtime = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs());
+
+        if file_type.is_dir() {
+            entries.push(NavEntry {
+                name,
+                href: dir_href(&entry_rel),
+                is_dir: true,
+                modified: mtime,
+            });
+        } else if file_type.is_file() {
+            if is_readme(&entry_rel) {
+                readme = Some(path_key(&entry_rel));
+            }
+            entries.push(NavEntry {
+                name,
+                href: file_href(&entry_rel),
+                is_dir: false,
+                modified: mtime,
+            });
+        }
+    }
+
+    sort_entries(&mut entries);
+    Some(NavDir { entries, readme })
 }
 
 fn sort_entries(entries: &mut [NavEntry]) {

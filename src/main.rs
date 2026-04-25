@@ -54,6 +54,13 @@ struct Cli {
     )]
     extensions: Vec<String>,
 
+    #[arg(
+        short = 'S',
+        long,
+        help = "Show excluded directories (.git, node_modules, etc.) in explorer"
+    )]
+    show_excludes: bool,
+
     #[arg(long, help = "Clear cached frontend assets before startup")]
     clean: bool,
 }
@@ -126,6 +133,7 @@ fn main() -> Result<()> {
         default_scope,
         extensions,
         exclude_names,
+        show_excludes: cli.show_excludes,
     }))
 }
 

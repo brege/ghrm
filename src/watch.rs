@@ -15,14 +15,11 @@ pub fn spawn_dir(
     use_ignore: bool,
     exclude_names: Vec<String>,
     extensions: Vec<String>,
+    show_excludes: bool,
 ) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(150), None, tx)?;
 
-    // Propagate the watch result through a channel. Block briefly to catch
-    // fast failures (bad path, permission denied). For large trees, watch()
-    // takes O(n_dirs) inotify calls; after the timeout we proceed so the
-    // server starts immediately and the watcher finishes in the background.
     let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel::<anyhow::Result<()>>(1);
 
     std::thread::spawn(move || {
@@ -54,7 +51,13 @@ pub fn spawn_dir(
                 .iter()
                 .any(|e| is_nav_event(&root, e, use_ignore, &exclude_names));
             if nav_dirty {
-                let fresh = walk::build_all(&root, use_ignore, &exclude_names, &extensions);
+                let fresh = walk::build_all(
+                    &root,
+                    use_ignore,
+                    &exclude_names,
+                    &extensions,
+                    show_excludes,
+                );
                 if let Ok(mut guard) = nav.write() {
                     *guard = fresh;
                 }

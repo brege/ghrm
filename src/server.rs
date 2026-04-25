@@ -51,6 +51,7 @@ pub struct Options {
     pub default_scope: Scope,
     pub extensions: Vec<String>,
     pub exclude_names: Vec<String>,
+    pub show_excludes: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -88,6 +89,7 @@ pub async fn run(options: Options) -> Result<()> {
         default_scope,
         extensions,
         exclude_names,
+        show_excludes,
     } = options;
 
     let meta = std::fs::metadata(&target)?;
@@ -110,7 +112,13 @@ pub async fn run(options: Options) -> Result<()> {
             let repo_excludes = exclude_names.clone();
             let walk_extensions = extensions.clone();
             let walk_h = tokio::task::spawn_blocking(move || {
-                walk::build_all(&target2, use_ignore, &walk_excludes, &walk_extensions)
+                walk::build_all(
+                    &target2,
+                    use_ignore,
+                    &walk_excludes,
+                    &walk_extensions,
+                    show_excludes,
+                )
             });
             let repo_h =
                 tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes));
@@ -123,6 +131,7 @@ pub async fn run(options: Options) -> Result<()> {
                 use_ignore,
                 exclude_names.clone(),
                 extensions.clone(),
+                show_excludes,
             )?;
             repos?
         }
@@ -421,12 +430,27 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
 }
 
 async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
-    let dir_opt = {
+    let (dir_opt, is_excluded) = {
         let guard = s.nav.read().unwrap();
-        guard.get(scope).dirs.get(rel).cloned()
+        let dir = guard.get(scope).dirs.get(rel).cloned();
+        let excluded = guard.excluded_dirs.contains(Path::new(rel));
+        (dir, excluded)
     };
-    let Some(dir) = dir_opt else {
-        return not_found();
+
+    let dir = match dir_opt {
+        Some(d) if is_excluded && d.entries.is_empty() => {
+            let show_hidden = scope == Scope::All;
+            walk::list_dir(&s.target, Path::new(rel), show_hidden).unwrap_or(d)
+        }
+        Some(d) => d,
+        None if is_excluded => {
+            let show_hidden = scope == Scope::All;
+            match walk::list_dir(&s.target, Path::new(rel), show_hidden) {
+                Some(d) => d,
+                None => return not_found(),
+            }
+        }
+        None => return not_found(),
     };
 
     let parent_href = if rel.is_empty() {
