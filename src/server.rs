@@ -175,6 +175,7 @@ pub async fn run(options: Options) -> Result<()> {
         .route("/_ghrm/tree", get(api_tree))
         .route("/_ghrm/render", get(api_render))
         .route("/_ghrm/raw/{*path}", get(raw_file))
+        .route("/_ghrm/html/{*path}", get(html_file))
         .route("/_ghrm/download/{*path}", get(download_file))
         .route("/_ghrm/assets/{*path}", get(theme_asset))
         .route("/vendor/{*path}", get(vendor))
@@ -942,6 +943,22 @@ async fn raw_file(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Re
         return not_found();
     };
     stream_export(&path, false).await
+}
+
+async fn html_file(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Response {
+    let Some(path) = resolve_internal_file(&s, &path) else {
+        return not_found();
+    };
+    let bytes = match tokio::fs::read(&path).await {
+        Ok(b) => b,
+        Err(_) => return not_found(),
+    };
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime_guess(&path))
+        .header(header::CACHE_CONTROL, "no-cache")
+        .body(Body::from(bytes))
+        .unwrap()
 }
 
 async fn download_file(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Response {

@@ -210,6 +210,15 @@ function fileActionsHost(container) {
   return container.querySelector('.ghrm-explorer-header .ghrm-header-actions');
 }
 
+function isHtmlFile(url) {
+  try {
+    const path = new URL(url, location.origin).pathname;
+    return path.endsWith('.html') || path.endsWith('.htm');
+  } catch {
+    return false;
+  }
+}
+
 function setupFileView(container) {
   const kind = container.dataset.ghrmViewKind;
   const rawUrl = container.dataset.ghrmRawUrl;
@@ -256,6 +265,20 @@ function setupFileView(container) {
   });
 
   toggles.append(toggle, wrapToggle);
+
+  if (isHtmlFile(rawUrl)) {
+    const htmlUrl = rawUrl.replace('/_ghrm/raw/', '/_ghrm/html/');
+    const external = document.createElement('a');
+    external.className = 'ghrm-file-toggle';
+    external.href = htmlUrl;
+    external.target = '_blank';
+    external.rel = 'noopener noreferrer';
+    external.dataset.ghrmNative = '1';
+    external.setAttribute('aria-label', 'Open in browser');
+    external.title = 'Open in browser';
+    external.innerHTML = icon('external');
+    toggles.append(external);
+  }
 
   const actions = document.createElement('div');
   actions.className = 'ghrm-file-actions';
@@ -413,6 +436,7 @@ async function navigate(path, push = true) {
   document.title = doc.title;
   if (push) history.pushState(null, '', target);
   setupFileViews();
+  setupNavExternalLinks();
   setupScopeSwitch();
   syncScopeSwitch();
   syncScopeVisibility();
@@ -576,6 +600,37 @@ function setupToc() {
   buildToc();
 }
 
+function setupNavExternalLinks() {
+  for (const row of document.querySelectorAll('.ghrm-nav-table tr')) {
+    const iconCell = row.querySelector('.ghrm-nav-icon');
+    const nameLink = row.querySelector('.ghrm-nav-name a');
+    if (!iconCell || !nameLink) continue;
+
+    const href = nameLink.getAttribute('href');
+    if (!isHtmlFile(href)) continue;
+    if (iconCell.querySelector('a')) continue;
+
+    const htmlHref = href.replace(/^\//, '/_ghrm/html/');
+    const svg = iconCell.querySelector('svg');
+    if (!svg) continue;
+
+    const use = svg.querySelector('use');
+    if (use) {
+      use.setAttribute('href', '#ghrm-icon-external');
+    }
+
+    const link = document.createElement('a');
+    link.href = htmlHref;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.dataset.ghrmNative = '1';
+    link.setAttribute('aria-label', 'Open in browser');
+    link.title = 'Open in browser';
+    link.appendChild(svg);
+    iconCell.appendChild(link);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   setupFileViews();
   setupScopeSwitch();
@@ -586,5 +641,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setupThemeToggle();
   setupLiveReload();
   setupSpaNav();
+  setupNavExternalLinks();
   scrollToHash(location.hash);
 });
