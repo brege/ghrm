@@ -106,34 +106,50 @@ pub async fn run(options: Options) -> Result<()> {
 
     let repos = match mode {
         Mode::Dir => {
-            let target2 = target.clone();
             let repo_root2 = repo_root_buf.clone();
-            let walk_excludes = exclude_names.clone();
             let repo_excludes = exclude_names.clone();
-            let walk_extensions = extensions.clone();
-            let walk_h = tokio::task::spawn_blocking(move || {
-                walk::build_all(
-                    &target2,
+
+            if has_ext_filter {
+                let target2 = target.clone();
+                let walk_excludes = exclude_names.clone();
+                let walk_extensions = extensions.clone();
+                let walk_h = tokio::task::spawn_blocking(move || {
+                    walk::build_all(
+                        &target2,
+                        use_ignore,
+                        &walk_excludes,
+                        &walk_extensions,
+                        show_excludes,
+                    )
+                });
+                let repo_h = tokio::task::spawn_blocking(move || {
+                    RepoSet::discover(&repo_root2, &repo_excludes)
+                });
+                let (fresh, repos) = tokio::join!(walk_h, repo_h);
+                *nav.write().unwrap() = fresh?;
+                watch::spawn_dir(
+                    target.clone(),
+                    nav.clone(),
+                    reload_tx.clone(),
                     use_ignore,
-                    &walk_excludes,
-                    &walk_extensions,
+                    exclude_names.clone(),
+                    extensions.clone(),
                     show_excludes,
-                )
-            });
-            let repo_h =
-                tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes));
-            let (fresh, repos) = tokio::join!(walk_h, repo_h);
-            *nav.write().unwrap() = fresh?;
-            watch::spawn_dir(
-                target.clone(),
-                nav.clone(),
-                reload_tx.clone(),
-                use_ignore,
-                exclude_names.clone(),
-                extensions.clone(),
-                show_excludes,
-            )?;
-            repos?
+                )?;
+                repos?
+            } else {
+                watch::spawn_dir(
+                    target.clone(),
+                    nav.clone(),
+                    reload_tx.clone(),
+                    use_ignore,
+                    exclude_names.clone(),
+                    extensions.clone(),
+                    show_excludes,
+                )?;
+                tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes))
+                    .await?
+            }
         }
         Mode::File => {
             watch::spawn_file(target.clone(), reload_tx.clone())?;
@@ -430,27 +446,21 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
 }
 
 async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
-    let (dir_opt, is_excluded) = {
+    let dir_opt = {
         let guard = s.nav.read().unwrap();
-        let dir = guard.get(scope).dirs.get(rel).cloned();
-        let excluded = guard.excluded_dirs.contains(Path::new(rel));
-        (dir, excluded)
+        guard.get(scope).dirs.get(rel).cloned()
     };
 
+    let show_hidden = scope == Scope::All;
     let dir = match dir_opt {
-        Some(d) if is_excluded && d.entries.is_empty() => {
-            let show_hidden = scope == Scope::All;
+        Some(d) if d.entries.is_empty() => {
             walk::list_dir(&s.target, Path::new(rel), show_hidden).unwrap_or(d)
         }
         Some(d) => d,
-        None if is_excluded => {
-            let show_hidden = scope == Scope::All;
-            match walk::list_dir(&s.target, Path::new(rel), show_hidden) {
-                Some(d) => d,
-                None => return not_found(),
-            }
-        }
-        None => return not_found(),
+        None => match walk::list_dir(&s.target, Path::new(rel), show_hidden) {
+            Some(d) => d,
+            None => return not_found(),
+        },
     };
 
     let parent_href = if rel.is_empty() {

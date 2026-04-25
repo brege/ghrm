@@ -47,7 +47,6 @@ pub struct NavSet {
     pub filtered: NavTree,
     pub files: NavTree,
     pub all: NavTree,
-    pub excluded_dirs: HashSet<PathBuf>,
 }
 
 impl NavSet {
@@ -66,7 +65,6 @@ struct Snapshot {
     direct_files: BTreeMap<PathBuf, Vec<PathBuf>>,
     files: Vec<PathBuf>,
     modified: BTreeMap<PathBuf, u64>,
-    excluded_dirs: HashSet<PathBuf>,
 }
 
 pub fn build_all(
@@ -99,7 +97,6 @@ pub fn build_all(
                 extensions: &[],
             },
         ),
-        excluded_dirs: snap.excluded_dirs,
     }
 }
 
@@ -112,7 +109,6 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: 
         s.insert(PathBuf::new());
         s
     }));
-    let excluded_dirs: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new(HashSet::new()));
     let direct_files: Arc<Mutex<BTreeMap<PathBuf, Vec<PathBuf>>>> =
         Arc::new(Mutex::new(BTreeMap::new()));
     let files: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
@@ -137,7 +133,6 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: 
     builder.build_parallel().run(|| {
         let root = root_buf.clone();
         let dirs_seen = dirs_seen.clone();
-        let excluded_dirs = excluded_dirs.clone();
         let direct_files = direct_files.clone();
         let files = files.clone();
         let modified = modified.clone();
@@ -176,9 +171,8 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: 
                 let mut guard = dirs_seen.lock().unwrap();
                 guard.insert(parent.clone());
                 if file_type.is_dir() {
-                    guard.insert(rel.clone());
+                    guard.insert(rel);
                     if is_excluded {
-                        excluded_dirs.lock().unwrap().insert(rel);
                         return WalkState::Skip;
                     }
                     return WalkState::Continue;
@@ -198,10 +192,6 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: 
     });
 
     let dirs_seen = Arc::try_unwrap(dirs_seen).unwrap().into_inner().unwrap();
-    let excluded_dirs = Arc::try_unwrap(excluded_dirs)
-        .unwrap()
-        .into_inner()
-        .unwrap();
     let mut direct_files = Arc::try_unwrap(direct_files).unwrap().into_inner().unwrap();
     let files = Arc::try_unwrap(files).unwrap().into_inner().unwrap();
     let modified = Arc::try_unwrap(modified).unwrap().into_inner().unwrap();
@@ -238,7 +228,6 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: 
         direct_files,
         files,
         modified,
-        excluded_dirs,
     }
 }
 
