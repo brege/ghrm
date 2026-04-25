@@ -51,7 +51,7 @@ pub struct Options {
     pub default_scope: Scope,
     pub extensions: Vec<String>,
     pub exclude_names: Vec<String>,
-    pub show_excludes: bool,
+    pub no_excludes: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -89,7 +89,7 @@ pub async fn run(options: Options) -> Result<()> {
         default_scope,
         extensions,
         exclude_names,
-        show_excludes,
+        no_excludes,
     } = options;
 
     let meta = std::fs::metadata(&target)?;
@@ -119,7 +119,7 @@ pub async fn run(options: Options) -> Result<()> {
                         use_ignore,
                         &walk_excludes,
                         &walk_extensions,
-                        show_excludes,
+                        no_excludes,
                     )
                 });
                 let repo_h = tokio::task::spawn_blocking(move || {
@@ -134,7 +134,7 @@ pub async fn run(options: Options) -> Result<()> {
                     use_ignore,
                     exclude_names.clone(),
                     extensions.clone(),
-                    show_excludes,
+                    no_excludes,
                 )?;
                 repos?
             } else {
@@ -145,7 +145,7 @@ pub async fn run(options: Options) -> Result<()> {
                     use_ignore,
                     exclude_names.clone(),
                     extensions.clone(),
-                    show_excludes,
+                    no_excludes,
                 )?;
                 tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes))
                     .await?

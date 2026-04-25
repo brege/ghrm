@@ -72,9 +72,9 @@ pub fn build_all(
     use_ignore: bool,
     exclude_names: &[String],
     extensions: &[String],
-    show_excludes: bool,
+    no_excludes: bool,
 ) -> NavSet {
-    let snap = scan(root, use_ignore, exclude_names, show_excludes);
+    let snap = scan(root, use_ignore, exclude_names, no_excludes);
     NavSet {
         filtered: build_tree(
             &snap,
@@ -100,7 +100,7 @@ pub fn build_all(
     }
 }
 
-fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: bool) -> Snapshot {
+fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bool) -> Snapshot {
     let root_buf = root.to_path_buf();
     let filter_excludes = exclude_names.to_vec();
     let check_excludes: Arc<Vec<String>> = Arc::new(exclude_names.to_vec());
@@ -124,7 +124,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: 
         .git_exclude(use_ignore)
         .git_global(use_ignore);
 
-    if !show_excludes {
+    if !no_excludes {
         builder.filter_entry(move |e| {
             allow_walk_name(&e.file_name().to_string_lossy(), &filter_excludes)
         });
@@ -165,7 +165,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: 
             }
 
             let name = entry.file_name().to_string_lossy();
-            let is_excluded = show_excludes && !allow_walk_name(&name, &excludes);
+            let is_excluded = no_excludes && !allow_walk_name(&name, &excludes);
 
             {
                 let mut guard = dirs_seen.lock().unwrap();

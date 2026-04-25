@@ -18,6 +18,7 @@ pub struct Config {
 pub struct WalkConfig {
     pub hidden: Option<bool>,
     pub no_ignore: Option<bool>,
+    pub no_excludes: Option<bool>,
     pub extensions: Option<Vec<String>>,
     pub exclude_names: Option<Vec<String>>,
 }

@@ -55,11 +55,11 @@ struct Cli {
     extensions: Vec<String>,
 
     #[arg(
-        short = 'S',
+        short = 'E',
         long,
-        help = "Show excluded directories (.git, node_modules, etc.) in explorer"
+        help = "Do not hide excluded directories (.git, node_modules, etc.) in explorer"
     )]
-    show_excludes: bool,
+    no_excludes: bool,
 
     #[arg(long, help = "Clear cached frontend assets before startup")]
     clean: bool,
@@ -120,6 +120,7 @@ fn main() -> Result<()> {
         .walk
         .exclude_names
         .unwrap_or_else(config::default_exclude_names);
+    let no_excludes = cli.no_excludes || cfg.walk.no_excludes.unwrap_or(false);
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -133,7 +134,7 @@ fn main() -> Result<()> {
         default_scope,
         extensions,
         exclude_names,
-        show_excludes: cli.show_excludes,
+        no_excludes,
     }))
 }
 
