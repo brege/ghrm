@@ -201,6 +201,29 @@ html {
   gap: 8px;
 }
 
+.ghrm-file-toggles {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.ghrm-file-toggles .ghrm-file-toggle {
+  border-radius: 0;
+  border-left-width: 0;
+}
+
+.ghrm-file-toggles .ghrm-file-toggle:first-child {
+  border-left-width: 1px;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.ghrm-file-toggles .ghrm-file-toggle:last-child {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
 .ghrm-file-toggle,
 .ghrm-file-action,
 .ghrm-file-link {
@@ -427,6 +450,30 @@ html {
   white-space: inherit;
   word-break: inherit;
   overflow-wrap: inherit;
+}
+
+body.ghrm-wrap .markdown-body .ghrm-blob-table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+body.ghrm-wrap .markdown-body td.ghrm-blob-line-no {
+  width: calc(4ch + 24px);
+}
+
+body.ghrm-wrap .markdown-body td.ghrm-blob-line-code {
+  width: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+body.ghrm-wrap .ghrm-blob-line-code code,
+body.ghrm-wrap .ghrm-blob-line-code .hljs {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .ghrm-raw-pane .ghrm-blob {

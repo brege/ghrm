@@ -148,6 +148,15 @@ function downloadIcon() {
   `;
 }
 
+function wrapToggleIcon() {
+  return `
+    <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16" class="ghrm-file-icon">
+      <path fill="none" d="M0 0h24v24H0V0z"></path>
+      <path d="M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3 3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"></path>
+    </svg>
+  `;
+}
+
 function visiblePane(selector) {
   return document.querySelector(`${selector}:not([hidden])`);
 }
@@ -179,6 +188,44 @@ function syncFileView(container, raw) {
   const label = raw ? 'Show preview' : 'Show raw';
   toggle.setAttribute('aria-label', label);
   toggle.title = label;
+
+  syncWrapToggle(container, raw);
+}
+
+function getWrapPref() {
+  return localStorage.getItem('ghrm-wrap') === '1';
+}
+
+function setWrapPref(wrap) {
+  localStorage.setItem('ghrm-wrap', wrap ? '1' : '0');
+}
+
+function applyWrapState(wrap) {
+  document.body.classList.toggle('ghrm-wrap', wrap);
+}
+
+function syncWrapToggle(container, isRaw) {
+  const wrapToggle = container.querySelector('[data-ghrm-wrap-toggle]');
+  if (!wrapToggle) return;
+
+  const disabled = !isRaw;
+  wrapToggle.disabled = disabled;
+
+  if (disabled) {
+    wrapToggle.classList.remove('is-active');
+    wrapToggle.setAttribute('aria-pressed', 'false');
+    wrapToggle.setAttribute('aria-label', 'Wrap lines (code view only)');
+    wrapToggle.title = 'Wrap lines (code view only)';
+    applyWrapState(false);
+  } else {
+    const wrap = getWrapPref();
+    wrapToggle.classList.toggle('is-active', wrap);
+    wrapToggle.setAttribute('aria-pressed', wrap ? 'true' : 'false');
+    const label = wrap ? 'Disable line wrap' : 'Wrap lines';
+    wrapToggle.setAttribute('aria-label', label);
+    wrapToggle.title = label;
+    applyWrapState(wrap);
+  }
 }
 
 function fileActionsHost(container) {
@@ -195,6 +242,9 @@ function setupFileView(container) {
 
   const tools = document.createElement('div');
   tools.className = 'ghrm-file-tools';
+
+  const toggles = document.createElement('div');
+  toggles.className = 'ghrm-file-toggles';
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
@@ -215,6 +265,19 @@ function setupFileView(container) {
   } else {
     toggle.disabled = true;
   }
+
+  const wrapToggle = document.createElement('button');
+  wrapToggle.type = 'button';
+  wrapToggle.className = 'ghrm-file-toggle';
+  wrapToggle.dataset.ghrmWrapToggle = '1';
+  wrapToggle.innerHTML = wrapToggleIcon();
+
+  wrapToggle.addEventListener('click', () => {
+    setWrapPref(!getWrapPref());
+    syncWrapToggle(container, true);
+  });
+
+  toggles.append(toggle, wrapToggle);
 
   const actions = document.createElement('div');
   actions.className = 'ghrm-file-actions';
@@ -252,7 +315,7 @@ function setupFileView(container) {
   download.innerHTML = downloadIcon();
 
   actions.append(rawLink, copy, download);
-  tools.append(toggle, actions);
+  tools.append(toggles, actions);
   host.prepend(tools);
   syncFileView(container, kind === 'raw');
 }
