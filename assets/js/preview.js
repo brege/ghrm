@@ -64,29 +64,21 @@ const SHELL_BUILTINS = new Set([
   'wait',
 ]);
 
+function icon(name, cls = '') {
+  const classes = cls ? `${cls}` : 'ghrm-action-icon';
+  return `<svg aria-hidden="true" height="16" width="16" class="${classes}"><use href="#ghrm-icon-${name}"></use></svg>`;
+}
+
 export function copyIcon() {
-  return `
-    <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16" class="ghrm-copy-icon ghrm-copy-icon-copy">
-      <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path>
-      <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path>
-    </svg>
-  `;
+  return icon('copy', 'ghrm-copy-icon ghrm-copy-icon-copy');
 }
 
 export function checkIcon() {
-  return `
-    <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16" class="ghrm-copy-icon ghrm-copy-icon-check">
-      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path>
-    </svg>
-  `;
+  return icon('check', 'ghrm-copy-icon ghrm-copy-icon-check');
 }
 
 function fullscreenIcon() {
-  return `
-    <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16" class="ghrm-action-icon">
-      <path d="M3.72 3.72a.75.75 0 0 1 1.06 1.06L2.56 7h10.88l-2.22-2.22a.75.75 0 0 1 1.06-1.06l3.5 3.5a.75.75 0 0 1 0 1.06l-3.5 3.5a.75.75 0 1 1-1.06-1.06l2.22-2.22H2.56l2.22 2.22a.75.75 0 1 1-1.06 1.06l-3.5-3.5a.75.75 0 0 1 0-1.06Z"></path>
-    </svg>
-  `;
+  return icon('fullscreen');
 }
 
 function getCopyHost(pre) {
@@ -416,30 +408,20 @@ function normalizeShellHighlight(code) {
   }
 }
 
-function mermaidNavIcon(action) {
-  const icons = {
-    'zoom-in':
-      '<path d="M3.75 7.5a.75.75 0 0 1 .75-.75h2.25V4.5a.75.75 0 0 1 1.5 0v2.25h2.25a.75.75 0 0 1 0 1.5H8.25v2.25a.75.75 0 0 1-1.5 0V8.25H4.5a.75.75 0 0 1-.75-.75Z"></path><path d="M7.5 0a7.5 7.5 0 0 1 5.807 12.247l2.473 2.473a.749.749 0 1 1-1.06 1.06l-2.473-2.473A7.5 7.5 0 1 1 7.5 0Zm-6 7.5a6 6 0 1 0 12 0 6 6 0 0 0-12 0Z"></path>',
-    'zoom-out':
-      '<path d="M4.5 6.75h6a.75.75 0 0 1 0 1.5h-6a.75.75 0 0 1 0-1.5Z"></path><path d="M0 7.5a7.5 7.5 0 1 1 13.307 4.747l2.473 2.473a.749.749 0 1 1-1.06 1.06l-2.473-2.473A7.5 7.5 0 0 1 0 7.5Zm7.5-6a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z"></path>',
-    reset:
-      '<path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z"></path>',
-    up: '<path d="M3.22 10.53a.749.749 0 0 1 0-1.06l4.25-4.25a.749.749 0 0 1 1.06 0l4.25 4.25a.749.749 0 1 1-1.06 1.06L8 6.811 4.28 10.53a.749.749 0 0 1-1.06 0Z"></path>',
-    down: '<path d="M12.78 5.22a.749.749 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.06 0L3.22 6.28a.749.749 0 1 1 1.06-1.06L8 8.939l3.72-3.719a.749.749 0 0 1 1.06 0Z"></path>',
-    left: '<path d="M9.78 12.78a.75.75 0 0 1-1.06 0L4.47 8.53a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L6.06 8l3.72 3.72a.75.75 0 0 1 0 1.06Z"></path>',
-    right:
-      '<path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"></path>',
-  };
-  return icons[action] || '';
-}
+const mermaidIconMap = {
+  'zoom-in': 'zoom-in',
+  'zoom-out': 'zoom-out',
+  reset: 'reset',
+  up: 'chevron-up',
+  down: 'chevron-down',
+  left: 'chevron-left',
+  right: 'chevron-right',
+};
 
 function mermaidNavButton(action, label, classes = '') {
   const className = ['ghrm-mermaid-button', classes].filter(Boolean).join(' ');
-  return `<button type="button" class="${className}" data-action="${action}" aria-label="${label}">
-    <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16" class="ghrm-action-icon">
-      ${mermaidNavIcon(action)}
-    </svg>
-  </button>`;
+  const iconName = mermaidIconMap[action] || action;
+  return `<button type="button" class="${className}" data-action="${action}" aria-label="${label}">${icon(iconName)}</button>`;
 }
 
 function mermaidNav() {

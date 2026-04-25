@@ -131,30 +131,8 @@ function setupThemeToggle() {
   });
 }
 
-function rawToggleIcon() {
-  return `
-    <svg aria-hidden="true" height="16" viewBox="0 0 640 512" width="16" class="ghrm-file-icon">
-      <path d="M392.8 1.2c-17-4.9-34.7 5-39.6 22l-128 448c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l128-448c4.9-17-5-34.7-22-39.6zm80.6 120.1c-12.5 12.5-12.5 32.8 0 45.3L562.7 256l-89.4 89.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l112-112c12.5-12.5 12.5-32.8 0-45.3l-112-112c-12.5-12.5-32.8-12.5-45.3 0zm-306.7 0c-12.5-12.5-32.8-12.5-45.3 0l-112 112c-12.5 12.5-12.5 32.8 0 45.3l112 112c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256l89.4-89.4c12.5-12.5 12.5-32.8 0-45.3z"></path>
-    </svg>
-  `;
-}
-
-function downloadIcon() {
-  return `
-    <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16" class="ghrm-file-icon">
-      <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"></path>
-      <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"></path>
-    </svg>
-  `;
-}
-
-function wrapToggleIcon() {
-  return `
-    <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16" class="ghrm-file-icon">
-      <path fill="none" d="M0 0h24v24H0V0z"></path>
-      <path d="M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3 3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"></path>
-    </svg>
-  `;
+function icon(name) {
+  return `<svg aria-hidden="true" height="16" width="16" class="ghrm-file-icon"><use href="#ghrm-icon-${name}"></use></svg>`;
 }
 
 function visiblePane(selector) {
@@ -250,7 +228,7 @@ function setupFileView(container) {
   toggle.type = 'button';
   toggle.className = 'ghrm-file-toggle';
   toggle.dataset.ghrmRawToggle = '1';
-  toggle.innerHTML = rawToggleIcon();
+  toggle.innerHTML = icon('code');
 
   if (kind === 'markdown') {
     toggle.addEventListener('click', () => {
@@ -270,7 +248,7 @@ function setupFileView(container) {
   wrapToggle.type = 'button';
   wrapToggle.className = 'ghrm-file-toggle';
   wrapToggle.dataset.ghrmWrapToggle = '1';
-  wrapToggle.innerHTML = wrapToggleIcon();
+  wrapToggle.innerHTML = icon('wrap');
 
   wrapToggle.addEventListener('click', () => {
     setWrapPref(!getWrapPref());
@@ -312,7 +290,7 @@ function setupFileView(container) {
   download.setAttribute('download', '');
   download.setAttribute('aria-label', 'Download raw file');
   download.title = 'Download raw file';
-  download.innerHTML = downloadIcon();
+  download.innerHTML = icon('download');
 
   actions.append(rawLink, copy, download);
   tools.append(toggles, actions);
