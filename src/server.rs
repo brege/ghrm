@@ -584,6 +584,9 @@ fn respond_html_with_scope(
         source: &source,
         default_scope: scope_name(default_scope),
         has_ext_filter,
+        has_mermaid: r.has_mermaid,
+        has_math: r.has_math,
+        has_map: r.has_map,
     }) {
         Ok(h) => h,
         Err(e) => {

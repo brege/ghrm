@@ -19,9 +19,7 @@
   <link rel="stylesheet" href="/_ghrm/assets/css/admonitions.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/page.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/features.css">
-  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
-  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
-</head>
+{{ css_math }}{{ css_map }}</head>
 <body data-default-scope="{{ default_scope }}" data-has-ext-filter="{{ has_ext_filter }}">
 {{ icons }}  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">
@@ -44,12 +42,9 @@
     </div>
   </header>
   <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
-{{ body }}  <script defer src="/vendor/mermaid.js"></script>
-  <script defer src="/vendor/svg-pan-zoom.min.js"></script>
-  <script defer src="/vendor/katex/katex.min.js"></script>
-  <script defer src="/vendor/katex/auto-render.min.js"></script>
-  <script defer src="/vendor/leaflet/leaflet.js"></script>
-  <script defer src="/vendor/topojson-client.min.js"></script>
+{{ body }}{{ vendor_mermaid }}
+{{ vendor_math }}
+{{ vendor_map }}
   <script defer src="/vendor/highlightjs/highlight.min.js"></script>
   <script type="module" src="/_ghrm/assets/js/preview.js"></script>
   <script type="module" src="/_ghrm/assets/js/app.js"></script>

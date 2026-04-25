@@ -9,6 +9,9 @@ pub struct PageShell<'a> {
     pub source: &'a str,
     pub default_scope: &'a str,
     pub has_ext_filter: bool,
+    pub has_mermaid: bool,
+    pub has_math: bool,
+    pub has_map: bool,
 }
 
 pub struct PageCtx<'a> {
@@ -61,6 +64,56 @@ pub fn base(p: PageShell) -> Result<String> {
         &mut out,
         "{{ has_ext_filter }}",
         if p.has_ext_filter { "1" } else { "0" },
+    );
+    replace(
+        &mut out,
+        "{{ css_math }}",
+        if p.has_math {
+            r#"  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
+"#
+        } else {
+            ""
+        },
+    );
+    replace(
+        &mut out,
+        "{{ css_map }}",
+        if p.has_map {
+            r#"  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+"#
+        } else {
+            ""
+        },
+    );
+    replace(
+        &mut out,
+        "{{ vendor_mermaid }}",
+        if p.has_mermaid {
+            r#"<script defer src="/vendor/mermaid.js"></script>
+  <script defer src="/vendor/svg-pan-zoom.min.js"></script>"#
+        } else {
+            ""
+        },
+    );
+    replace(
+        &mut out,
+        "{{ vendor_math }}",
+        if p.has_math {
+            r#"<script defer src="/vendor/katex/katex.min.js"></script>
+  <script defer src="/vendor/katex/auto-render.min.js"></script>"#
+        } else {
+            ""
+        },
+    );
+    replace(
+        &mut out,
+        "{{ vendor_map }}",
+        if p.has_map {
+            r#"<script defer src="/vendor/leaflet/leaflet.js"></script>
+  <script defer src="/vendor/topojson-client.min.js"></script>"#
+        } else {
+            ""
+        },
     );
     Ok(out)
 }
