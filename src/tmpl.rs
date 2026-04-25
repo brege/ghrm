@@ -89,7 +89,7 @@ pub fn base(p: PageShell) -> Result<String> {
         &mut out,
         "{{ vendor_mermaid }}",
         if p.has_mermaid {
-            r#"<script defer src="/vendor/mermaid.js"></script>
+            r#"  <script defer src="/vendor/mermaid.js"></script>
   <script defer src="/vendor/svg-pan-zoom.min.js"></script>"#
         } else {
             ""

@@ -192,16 +192,17 @@ function mermaidTheme() {
     return {
       theme: 'base',
       themeVariables: {
-        primaryColor: '#161b22',
-        primaryBorderColor: '#8b949e',
+        primaryColor: '#1f2020',
+        primaryBorderColor: '#ccc',
         primaryTextColor: '#e6edf3',
-        lineColor: '#c9d1d9',
-        secondaryColor: '#161b22',
-        tertiaryColor: '#161b22',
-        mainBkg: '#0d1117',
-        nodeBkg: '#161b22',
-        clusterBkg: '#0d1117',
-        clusterBorder: '#30363d',
+        lineColor: '#ccc',
+        secondaryColor: '#1f2020',
+        tertiaryColor: '#1f2020',
+        mainBkg: '#1f2020',
+        nodeBkg: '#1f2020',
+        nodeBorder: '#ccc',
+        clusterBkg: '#161b22',
+        clusterBorder: '#ccc',
         edgeLabelBackground: '#0d1117',
       },
     };
@@ -408,112 +409,82 @@ function normalizeShellHighlight(code) {
   }
 }
 
-const mermaidIconMap = {
-  'zoom-in': 'zoom-in',
-  'zoom-out': 'zoom-out',
-  reset: 'reset',
-  up: 'chevron-up',
-  down: 'chevron-down',
-  left: 'chevron-left',
-  right: 'chevron-right',
-};
-
-function mermaidNavButton(action, label, classes = '') {
-  const className = ['ghrm-mermaid-button', classes].filter(Boolean).join(' ');
-  const iconName = mermaidIconMap[action] || action;
-  return `<button type="button" class="${className}" data-action="${action}" aria-label="${label}">${icon(iconName)}</button>`;
+function mermaidControls() {
+  return `<div class="ghrm-mermaid-controls">
+    <button type="button" data-action="up" aria-label="Pan up">${icon('chevron-up')}</button>
+    <button type="button" data-action="zoom-in" aria-label="Zoom in">${icon('zoom-in')}</button>
+    <button type="button" data-action="left" aria-label="Pan left">${icon('chevron-left')}</button>
+    <button type="button" data-action="reset" aria-label="Reset">${icon('reset')}</button>
+    <button type="button" data-action="right" aria-label="Pan right">${icon('chevron-right')}</button>
+    <button type="button" data-action="down" aria-label="Pan down">${icon('chevron-down')}</button>
+    <button type="button" data-action="zoom-out" aria-label="Zoom out">${icon('zoom-out')}</button>
+  </div>`;
 }
 
-function mermaidNav() {
-  return `
-    <div class="ghrm-mermaid-nav" aria-label="Mermaid navigation">
-      ${mermaidNavButton('up', 'Pan up', 'ghrm-mermaid-up')}
-      ${mermaidNavButton('zoom-in', 'Zoom in', 'ghrm-mermaid-zoom-in')}
-      ${mermaidNavButton('left', 'Pan left', 'ghrm-mermaid-left')}
-      ${mermaidNavButton('reset', 'Reset view', 'ghrm-mermaid-reset')}
-      ${mermaidNavButton('right', 'Pan right', 'ghrm-mermaid-right')}
-      ${mermaidNavButton('down', 'Pan down', 'ghrm-mermaid-down')}
-      ${mermaidNavButton('zoom-out', 'Zoom out', 'ghrm-mermaid-zoom-out')}
-    </div>
-  `;
-}
-
-function destroyMermaidNav(block) {
-  if (block._ghrmMermaid?.panZoom) {
-    block._ghrmMermaid.panZoom.destroy();
-  }
-
-  block._ghrmMermaid = null;
-}
-
-function handleMermaidNav(panZoom, action) {
-  if (action === 'reset') {
-    panZoom.resetZoom();
-    panZoom.center();
-    return;
-  }
-
-  if (action === 'zoom-in') {
-    panZoom.zoomIn();
-    return;
-  }
-
-  if (action === 'zoom-out') {
-    panZoom.zoomOut();
-    return;
-  }
-
-  const step = 48;
-  const pan = panZoom.getPan();
-  if (action === 'up') {
-    panZoom.pan({ x: pan.x, y: pan.y + step });
-  } else if (action === 'right') {
-    panZoom.pan({ x: pan.x - step, y: pan.y });
-  } else if (action === 'down') {
-    panZoom.pan({ x: pan.x, y: pan.y - step });
-  } else if (action === 'left') {
-    panZoom.pan({ x: pan.x + step, y: pan.y });
-  }
-}
-
-function setupMermaidNav(block, target) {
+function setupMermaidControls(block, target) {
   const svg = target.querySelector('svg');
   if (!svg || typeof window.svgPanZoom !== 'function') {
     return;
   }
 
-  destroyMermaidNav(block);
-  target.classList.add('ghrm-mermaid-interactive');
-  target.insertAdjacentHTML('beforeend', mermaidNav());
+  if (block._ghrmPanZoom) {
+    block._ghrmPanZoom.destroy();
+    block._ghrmPanZoom = null;
+  }
+
+  const existing = target.querySelector('.ghrm-mermaid-controls');
+  if (existing) existing.remove();
+
+  target.insertAdjacentHTML('beforeend', mermaidControls());
+
+  const naturalHeight = svg.getBoundingClientRect().height;
+  const containerHeight = Math.max(naturalHeight, 200);
+  target.style.height = `${containerHeight}px`;
+
   svg.removeAttribute('width');
   svg.removeAttribute('height');
-  svg.setAttribute('width', '100%');
-  svg.setAttribute('height', '100%');
-  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  svg.style.overflow = 'visible';
 
   const panZoom = window.svgPanZoom(svg, {
     center: true,
+    contain: false,
     controlIconsEnabled: false,
     dblClickZoomEnabled: false,
     fit: true,
-    maxZoom: 25,
+    maxZoom: 10,
     minZoom: 0.5,
-    mouseWheelZoomEnabled: true,
-    panEnabled: true,
+    mouseWheelZoomEnabled: false,
+    panEnabled: false,
     zoomEnabled: true,
     zoomScaleSensitivity: 0.3,
   });
+
   panZoom.resize();
   panZoom.fit();
   panZoom.center();
 
-  for (const button of target.querySelectorAll('.ghrm-mermaid-button')) {
-    button.addEventListener('click', () => {
-      handleMermaidNav(panZoom, button.dataset.action || '');
+  const step = 50;
+  for (const btn of target.querySelectorAll('.ghrm-mermaid-controls button')) {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      if (action === 'zoom-in') panZoom.zoomIn();
+      else if (action === 'zoom-out') panZoom.zoomOut();
+      else if (action === 'reset') {
+        panZoom.resetZoom();
+        panZoom.center();
+      } else {
+        const pan = panZoom.getPan();
+        if (action === 'up') panZoom.pan({ x: pan.x, y: pan.y + step });
+        else if (action === 'down') panZoom.pan({ x: pan.x, y: pan.y - step });
+        else if (action === 'left') panZoom.pan({ x: pan.x + step, y: pan.y });
+        else if (action === 'right') panZoom.pan({ x: pan.x - step, y: pan.y });
+      }
     });
   }
 
-  block._ghrmMermaid = { panZoom };
+  block._ghrmPanZoom = panZoom;
 }
 
 function ensureMermaidActions(block) {
@@ -577,10 +548,8 @@ async function renderMermaid() {
       continue;
     }
 
-    destroyMermaidNav(block);
     clearError(block);
     target.innerHTML = '';
-    target.classList.remove('ghrm-mermaid-interactive');
 
     try {
       if (source.trim() === 'info') {
@@ -599,7 +568,7 @@ async function renderMermaid() {
         result.bindFunctions(target);
       }
       ensureMermaidActions(block).hidden = false;
-      setupMermaidNav(block, target);
+      setupMermaidControls(block, target);
     } catch (error) {
       setError(block, error.message);
     }

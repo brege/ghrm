@@ -95,28 +95,15 @@
 
 .ghrm-mermaid-diagram {
   position: relative;
-  padding: 0;
+  min-height: 200px;
+  padding: 16px;
   text-align: center;
+  overflow: visible;
 }
 
 .ghrm-mermaid-diagram svg {
   max-width: 100%;
   height: auto;
-}
-
-.ghrm-mermaid-diagram.ghrm-mermaid-interactive {
-  height: 358px;
-  overflow: hidden;
-}
-
-.ghrm-mermaid-diagram.ghrm-mermaid-interactive svg {
-  width: 100%;
-  height: 100%;
-}
-
-.ghrm-mermaid-diagram.ghrm-mermaid-interactive {
-  padding: 52px 16px 56px;
-  box-sizing: border-box;
 }
 
 .ghrm-render-actions {
@@ -190,77 +177,72 @@
   fill: currentColor;
 }
 
-.ghrm-mermaid-nav {
+.ghrm-mermaid-controls {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  z-index: 2;
+  right: 8px;
+  bottom: 8px;
   display: grid;
-  grid-template-columns: repeat(3, 32px);
-  grid-template-rows: repeat(3, 32px);
+  grid-template-columns: repeat(3, 28px);
+  grid-template-rows: repeat(3, 28px);
   gap: 4px;
+  z-index: 2;
 }
 
-.ghrm-mermaid-button {
-  display: inline-flex;
+.ghrm-mermaid-controls button {
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border: 1px solid
-    color-mix(in srgb, var(--borderColor-default, #d0d7de) 80%, transparent);
+  border: 1px solid var(--borderColor-muted, #d0d7de);
   border-radius: 6px;
-  background: color-mix(
-    in srgb,
-    var(--bgColor-default, #ffffff) 92%,
-    transparent
-  );
-  color: var(--fgColor-default, #1f2328);
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-}
-
-.ghrm-mermaid-button:hover {
   background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-muted, #636c76);
+  cursor: pointer;
 }
 
-.ghrm-mermaid-button:focus-visible {
+.ghrm-mermaid-controls button:hover {
+  background: var(--bgColor-muted, #f6f8fa);
+  color: var(--fgColor-default, #1f2328);
+}
+
+.ghrm-mermaid-controls button:focus-visible {
   outline: 2px solid var(--focus-outlineColor, #0969da);
   outline-offset: 2px;
 }
 
-.ghrm-mermaid-up {
+.ghrm-mermaid-controls button svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.ghrm-mermaid-controls button[data-action="up"] {
   grid-column: 2;
   grid-row: 1;
 }
-
-.ghrm-mermaid-zoom-in {
+.ghrm-mermaid-controls button[data-action="zoom-in"] {
   grid-column: 3;
   grid-row: 1;
 }
-
-.ghrm-mermaid-left {
+.ghrm-mermaid-controls button[data-action="left"] {
   grid-column: 1;
   grid-row: 2;
 }
-
-.ghrm-mermaid-reset {
+.ghrm-mermaid-controls button[data-action="reset"] {
   grid-column: 2;
   grid-row: 2;
 }
-
-.ghrm-mermaid-right {
+.ghrm-mermaid-controls button[data-action="right"] {
   grid-column: 3;
   grid-row: 2;
 }
-
-.ghrm-mermaid-down {
+.ghrm-mermaid-controls button[data-action="down"] {
   grid-column: 2;
   grid-row: 3;
 }
-
-.ghrm-mermaid-zoom-out {
+.ghrm-mermaid-controls button[data-action="zoom-out"] {
   grid-column: 3;
   grid-row: 3;
 }
@@ -270,7 +252,14 @@
 }
 
 .ghrm-mermaid:fullscreen .ghrm-mermaid-diagram {
-  height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.ghrm-mermaid:fullscreen .ghrm-mermaid-diagram svg {
+  max-height: 90vh;
 }
 
 .ghrm-map-canvas {
