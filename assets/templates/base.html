@@ -20,7 +20,11 @@
   <link rel="stylesheet" href="/_ghrm/assets/css/page.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/features.css">
 {{ css_math }}{{ css_map }}</head>
-<body data-default-scope="{{ default_scope }}" data-has-ext-filter="{{ has_ext_filter }}">
+<body
+  data-default-show-hidden="{{ default_show_hidden }}"
+  data-default-show-excludes="{{ default_show_excludes }}"
+  data-default-filter-ext="{{ default_filter_ext }}"
+  data-can-toggle-excludes="{{ can_toggle_excludes }}">
 {{ icons }}  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">
 {{ source }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>

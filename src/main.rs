@@ -13,8 +13,6 @@ use clap::Parser;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use crate::walk::Scope;
-
 #[derive(Parser, Debug)]
 #[command(name = "ghrm", version, about = "GitHub-flavored markdown preview")]
 struct Cli {
@@ -102,19 +100,21 @@ fn main() -> Result<()> {
             Ok(_) => true,
             Err(_) => cfg.open.unwrap_or(true),
         };
+    let has_explicit_ext_filter = !cli.extensions.is_empty()
+        || cfg
+            .walk
+            .extensions
+            .as_ref()
+            .is_some_and(|extensions| !extensions.is_empty());
     let extensions = if cli.extensions.is_empty() {
         normalize_extensions(cfg.walk.extensions.unwrap_or_default())?
     } else {
         normalize_extensions(cli.extensions)?
     };
-    let default_scope = if extensions.is_empty() {
-        if cli.hidden || cfg.walk.hidden.unwrap_or(false) {
-            Scope::All
-        } else {
-            Scope::Files
-        }
+    let extensions = if extensions.is_empty() {
+        vec!["md".to_string()]
     } else {
-        Scope::Filtered
+        extensions
     };
     let exclude_names = cfg
         .walk
@@ -131,7 +131,8 @@ fn main() -> Result<()> {
         open,
         target: abs,
         use_ignore: !no_ignore,
-        default_scope,
+        default_hidden: cli.hidden || cfg.walk.hidden.unwrap_or(false),
+        default_filter_ext: has_explicit_ext_filter,
         extensions,
         exclude_names,
         no_excludes,

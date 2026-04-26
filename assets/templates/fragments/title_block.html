@@ -1,27 +1,33 @@
   <div class="ghrm-explorer-header">
     <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs }}</nav>
     <div class="ghrm-header-actions">
-      <div class="ghrm-scope-switch" aria-label="Preview scope" role="group">
-        <button class="ghrm-scope-option" type="button" data-scope="filter" aria-pressed="false" aria-label="Filtered files" title="Filtered files">
-          <span class="ghrm-scope-combo" aria-hidden="true">
-            <span class="ghrm-scope-text">-e</span>
-          </span>
-        </button>
-        <button class="ghrm-scope-option is-active" type="button" data-scope="files" aria-pressed="true" aria-label="Files" title="Files">
-          <svg class="ghrm-scope-glyph" aria-hidden="true" focusable="false">
-            <use href="#ghrm-icon-asterisk"></use>
+      <div class="ghrm-view-menu-shell">
+        <button id="ghrm-view-menu-toggle" class="ghrm-view-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Explorer options" title="Explorer options">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-chevron-down"></use>
           </svg>
         </button>
-        <button class="ghrm-scope-option" type="button" data-scope="all" aria-pressed="false" aria-label="Files including dotfiles" title="All files including hidden">
-          <span class="ghrm-scope-double" aria-hidden="true">
-            <svg class="ghrm-scope-glyph" focusable="false">
-              <use href="#ghrm-icon-asterisk"></use>
+        <div id="ghrm-view-menu" class="ghrm-view-menu" role="menu" aria-label="Explorer options" hidden>
+          <button class="ghrm-view-option" type="button" data-view-toggle="hidden" role="menuitemcheckbox" aria-checked="false" title="Set by -H">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
             </svg>
-            <svg class="ghrm-scope-glyph" focusable="false">
-              <use href="#ghrm-icon-asterisk"></use>
+            <span class="ghrm-view-option-label">Show hidden</span>
+          </button>
+          <button class="ghrm-view-option" type="button" data-view-toggle="excludes" role="menuitemcheckbox" aria-checked="false" title="Set by -E"{{ excludes_hidden }}>
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
             </svg>
-          </span>
-        </button>
+            <span class="ghrm-view-option-label">Show excludes</span>
+          </button>
+          <button class="ghrm-view-option" type="button" data-view-toggle="filter" role="menuitemcheckbox" aria-checked="false" title="Customize with -e &lt;file extension&gt;">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Filter filetype</span>
+            <span class="ghrm-view-option-detail">{{ filter_label }}</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

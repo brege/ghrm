@@ -5,22 +5,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Scope {
-    Filtered,
-    Files,
-    All,
-}
-
-impl Scope {
-    pub fn parse(raw: &str) -> Option<Self> {
-        match raw {
-            "filter" => Some(Self::Filtered),
-            "files" | "*" => Some(Self::Files),
-            "all" | "**" => Some(Self::All),
-            _ => None,
-        }
-    }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ViewOpts {
+    pub show_hidden: bool,
+    pub show_excludes: bool,
+    pub filter_ext: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -44,18 +33,15 @@ pub struct NavTree {
 
 #[derive(Clone, Debug, Default)]
 pub struct NavSet {
-    pub filtered: NavTree,
-    pub files: NavTree,
-    pub all: NavTree,
+    trees: BTreeMap<u8, NavTree>,
 }
 
 impl NavSet {
-    pub fn get(&self, scope: Scope) -> &NavTree {
-        match scope {
-            Scope::Filtered => &self.filtered,
-            Scope::Files => &self.files,
-            Scope::All => &self.all,
-        }
+    pub fn get(&self, opts: ViewOpts) -> &NavTree {
+        self.trees
+            .get(&view_key(opts))
+            .or_else(|| self.trees.get(&view_key(ViewOpts::default())))
+            .expect("missing default nav tree")
     }
 }
 
@@ -75,29 +61,23 @@ pub fn build_all(
     no_excludes: bool,
 ) -> NavSet {
     let snap = scan(root, use_ignore, exclude_names, no_excludes);
-    NavSet {
-        filtered: build_tree(
-            &snap,
-            TreeOpts {
-                show_hidden: false,
-                extensions,
-            },
-        ),
-        files: build_tree(
-            &snap,
-            TreeOpts {
-                show_hidden: false,
-                extensions: &[],
-            },
-        ),
-        all: build_tree(
-            &snap,
-            TreeOpts {
-                show_hidden: true,
-                extensions: &[],
-            },
-        ),
+    let mut trees = BTreeMap::new();
+    for show_hidden in [false, true] {
+        for show_excludes in [false, true] {
+            for filter_ext in [false, true] {
+                let opts = ViewOpts {
+                    show_hidden,
+                    show_excludes,
+                    filter_ext,
+                };
+                trees.insert(
+                    view_key(opts),
+                    build_tree(&snap, exclude_names, extensions, opts),
+                );
+            }
+        }
     }
+    NavSet { trees }
 }
 
 fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bool) -> Snapshot {
@@ -231,22 +211,22 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
     }
 }
 
-struct TreeOpts<'a> {
-    show_hidden: bool,
-    extensions: &'a [String],
-}
-
-fn build_tree(snap: &Snapshot, opts: TreeOpts<'_>) -> NavTree {
-    let prune_empty = !opts.extensions.is_empty();
+fn build_tree(
+    snap: &Snapshot,
+    exclude_names: &[String],
+    extensions: &[String],
+    opts: ViewOpts,
+) -> NavTree {
+    let prune_empty = opts.filter_ext;
     let dirs_with_files = if prune_empty {
-        compute_dirs_with_files(snap, opts.show_hidden, opts.extensions)
+        compute_dirs_with_files(snap, exclude_names, extensions, opts)
     } else {
         HashSet::new()
     };
 
     let mut dirs = BTreeMap::new();
     for dir_rel in &snap.dirs {
-        if !allow_scope_dir(dir_rel, opts.show_hidden) {
+        if !allow_dir(dir_rel, exclude_names, opts) {
             continue;
         }
         if prune_empty && !dirs_with_files.contains(dir_rel) {
@@ -259,7 +239,7 @@ fn build_tree(snap: &Snapshot, opts: TreeOpts<'_>) -> NavTree {
             .get(dir_rel)
             .into_iter()
             .flatten()
-            .filter(|child| allow_scope_path(child, opts.show_hidden))
+            .filter(|child| allow_path(child, exclude_names, opts))
             .filter(|child| !prune_empty || dirs_with_files.contains(*child))
         {
             entries.push(NavEntry {
@@ -272,10 +252,10 @@ fn build_tree(snap: &Snapshot, opts: TreeOpts<'_>) -> NavTree {
 
         let mut readme = None;
         for file_rel in snap.direct_files.get(dir_rel).into_iter().flatten() {
-            if !allow_scope_path(file_rel, opts.show_hidden) {
+            if !allow_path(file_rel, exclude_names, opts) {
                 continue;
             }
-            if !opts.extensions.is_empty() && !has_extension(file_rel, opts.extensions) {
+            if opts.filter_ext && !has_extension(file_rel, extensions) {
                 continue;
             }
             if is_readme(file_rel) {
@@ -302,14 +282,15 @@ fn build_tree(snap: &Snapshot, opts: TreeOpts<'_>) -> NavTree {
 
 fn compute_dirs_with_files(
     snap: &Snapshot,
-    show_hidden: bool,
+    exclude_names: &[String],
     extensions: &[String],
+    opts: ViewOpts,
 ) -> HashSet<PathBuf> {
     let mut dirs_with_files = HashSet::new();
     dirs_with_files.insert(PathBuf::new());
 
     for file_rel in &snap.files {
-        if !allow_scope_path(file_rel, show_hidden) {
+        if !allow_path(file_rel, exclude_names, opts) {
             continue;
         }
         if !has_extension(file_rel, extensions) {
@@ -331,20 +312,30 @@ fn allow_walk_name(name: &str, exclude_names: &[String]) -> bool {
     name != ".git" && !exclude_names.iter().any(|entry| entry == name)
 }
 
-fn allow_scope_dir(path: &Path, show_hidden: bool) -> bool {
-    path.as_os_str().is_empty() || allow_scope_path(path, show_hidden)
+fn allow_dir(path: &Path, exclude_names: &[String], opts: ViewOpts) -> bool {
+    path.as_os_str().is_empty() || allow_path(path, exclude_names, opts)
 }
 
-fn allow_scope_path(path: &Path, show_hidden: bool) -> bool {
-    if show_hidden {
-        return true;
+fn allow_path(path: &Path, exclude_names: &[String], opts: ViewOpts) -> bool {
+    if !opts.show_hidden && has_hidden_part(path) {
+        return false;
     }
-    for part in path.iter() {
-        if part.to_string_lossy().starts_with('.') {
-            return false;
-        }
+    if !opts.show_excludes && has_excluded_part(path, exclude_names) {
+        return false;
     }
     true
+}
+
+fn has_hidden_part(path: &Path) -> bool {
+    path.iter()
+        .any(|part| part.to_string_lossy().starts_with('.'))
+}
+
+fn has_excluded_part(path: &Path, exclude_names: &[String]) -> bool {
+    path.iter().any(|part| {
+        let name = part.to_string_lossy();
+        name.as_ref() == ".git" || exclude_names.iter().any(|entry| entry == name.as_ref())
+    })
 }
 
 fn has_extension(path: &Path, extensions: &[String]) -> bool {
@@ -384,7 +375,13 @@ fn dir_href(path: &Path) -> String {
     }
 }
 
-pub fn list_dir(root: &Path, rel: &Path, show_hidden: bool) -> Option<NavDir> {
+pub fn list_dir(
+    root: &Path,
+    rel: &Path,
+    exclude_names: &[String],
+    extensions: &[String],
+    opts: ViewOpts,
+) -> Option<NavDir> {
     let abs = root.join(rel);
     let read_dir = std::fs::read_dir(&abs).ok()?;
 
@@ -393,16 +390,15 @@ pub fn list_dir(root: &Path, rel: &Path, show_hidden: bool) -> Option<NavDir> {
 
     for entry in read_dir.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if !show_hidden && name.starts_with('.') {
-            continue;
-        }
-
         let file_type = match entry.file_type() {
             Ok(ft) => ft,
             Err(_) => continue,
         };
 
         let entry_rel = rel.join(&name);
+        if !allow_path(&entry_rel, exclude_names, opts) {
+            continue;
+        }
         let mtime = entry
             .metadata()
             .ok()
@@ -418,6 +414,9 @@ pub fn list_dir(root: &Path, rel: &Path, show_hidden: bool) -> Option<NavDir> {
                 modified: mtime,
             });
         } else if file_type.is_file() {
+            if opts.filter_ext && !has_extension(&entry_rel, extensions) {
+                continue;
+            }
             if is_readme(&entry_rel) {
                 readme = Some(path_key(&entry_rel));
             }
@@ -440,4 +439,8 @@ fn sort_entries(entries: &mut [NavEntry]) {
         (false, true) => std::cmp::Ordering::Greater,
         _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
+}
+
+fn view_key(opts: ViewOpts) -> u8 {
+    (opts.show_hidden as u8) | ((opts.show_excludes as u8) << 1) | ((opts.filter_ext as u8) << 2)
 }

@@ -1,19 +1,43 @@
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
 
-const VALID_SCOPES = new Set(['filter', 'files', 'all']);
 const treeCache = new Map();
+let viewMenuBound = false;
 
-function defaultScope() {
-  const scope = document.body?.dataset.defaultScope;
-  return VALID_SCOPES.has(scope) ? scope : 'files';
+function defaultShowHidden() {
+  return document.body?.dataset.defaultShowHidden === '1';
 }
 
-function hasExtFilter() {
-  return document.body?.dataset.hasExtFilter === '1';
+function defaultShowExcludes() {
+  return document.body?.dataset.defaultShowExcludes === '1';
+}
+
+function defaultFilterExt() {
+  return document.body?.dataset.defaultFilterExt === '1';
+}
+
+function canToggleExcludes() {
+  return document.body?.dataset.canToggleExcludes === '1';
+}
+
+function parseQueryBool(raw) {
+  if (raw === '1' || raw === 'true') return true;
+  if (raw === '0' || raw === 'false') return false;
+  return null;
 }
 
 function scrollOffset() {
   return 16;
+}
+
+function positionFloatingPanel(panel, button, fallbackWidth = 220) {
+  const rect = button.getBoundingClientRect();
+  const width = panel.offsetWidth || fallbackWidth;
+  const left = Math.max(
+    16,
+    Math.min(rect.right - width, window.innerWidth - width - 16),
+  );
+  panel.style.top = `${Math.round(rect.bottom + 8)}px`;
+  panel.style.left = `${Math.round(left)}px`;
 }
 
 function scrollToHash(hash) {
@@ -27,41 +51,76 @@ function scrollToHash(hash) {
   return true;
 }
 
-function currentScope() {
+function currentView() {
   const params = new URLSearchParams(location.search);
-  const scope = params.get('scope');
-  if (scope === 'filter' && !hasExtFilter()) return defaultScope();
-  return VALID_SCOPES.has(scope) ? scope : defaultScope();
+  return {
+    showHidden: parseQueryBool(params.get('hidden')) ?? defaultShowHidden(),
+    showExcludes: canToggleExcludes()
+      ? (parseQueryBool(params.get('excludes')) ?? defaultShowExcludes())
+      : false,
+    filterExt: parseQueryBool(params.get('filter')) ?? defaultFilterExt(),
+  };
 }
 
-function withScope(urlLike, scope = currentScope()) {
-  const url = new URL(urlLike, location.origin);
-  if (scope === defaultScope()) {
-    url.searchParams.delete('scope');
+function viewKey(view = currentView()) {
+  return [
+    view.showHidden ? '1' : '0',
+    view.showExcludes ? '1' : '0',
+    view.filterExt ? '1' : '0',
+  ].join('');
+}
+
+function setQueryBool(params, key, value, defaultValue) {
+  if (value === defaultValue) {
+    params.delete(key);
   } else {
-    url.searchParams.set('scope', scope);
+    params.set(key, value ? '1' : '0');
   }
+}
+
+function withView(urlLike, view = currentView()) {
+  const url = new URL(urlLike, location.origin);
+  setQueryBool(
+    url.searchParams,
+    'hidden',
+    view.showHidden,
+    defaultShowHidden(),
+  );
+  if (canToggleExcludes()) {
+    setQueryBool(
+      url.searchParams,
+      'excludes',
+      view.showExcludes,
+      defaultShowExcludes(),
+    );
+  } else {
+    url.searchParams.delete('excludes');
+  }
+  setQueryBool(url.searchParams, 'filter', view.filterExt, defaultFilterExt());
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-function syncScopeSwitch() {
-  const scope = currentScope();
-  for (const button of document.querySelectorAll(
-    '.ghrm-scope-option[data-scope]',
-  )) {
-    if (button.dataset.scope === 'filter' && !hasExtFilter()) {
+function syncViewMenu() {
+  const view = currentView();
+  const toggle = document.getElementById('ghrm-view-menu-toggle');
+  if (toggle) {
+    const active =
+      view.showHidden !== defaultShowHidden() ||
+      (canToggleExcludes() && view.showExcludes !== defaultShowExcludes()) ||
+      view.filterExt !== defaultFilterExt();
+    toggle.classList.toggle('is-active', active);
+  }
+  for (const button of document.querySelectorAll('.ghrm-view-option')) {
+    if (button.dataset.viewToggle === 'excludes' && !canToggleExcludes()) {
       button.hidden = true;
       continue;
     }
-    const active = button.dataset.scope === scope;
+    const active =
+      (button.dataset.viewToggle === 'hidden' && view.showHidden) ||
+      (button.dataset.viewToggle === 'excludes' && view.showExcludes) ||
+      (button.dataset.viewToggle === 'filter' && view.filterExt);
     button.classList.toggle('is-active', active);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-  }
-}
-
-function syncScopeVisibility() {
-  for (const scopeSwitch of document.querySelectorAll('.ghrm-scope-switch')) {
-    scopeSwitch.style.display = '';
+    button.setAttribute('aria-checked', active ? 'true' : 'false');
   }
 }
 
@@ -97,25 +156,78 @@ function populateDates() {
   }
 }
 
-function setupScopeSwitch() {
-  const buttons = document.querySelectorAll('.ghrm-scope-option[data-scope]');
-  if (!buttons.length) return;
+function setupViewMenu() {
+  const toggle = document.getElementById('ghrm-view-menu-toggle');
+  const panel = document.getElementById('ghrm-view-menu');
+  if (!toggle || !panel) return;
 
-  syncScopeSwitch();
-  for (const button of buttons) {
-    button.addEventListener('click', () => {
-      if (button.dataset.scope === 'filter' && !hasExtFilter()) {
-        return;
+  syncViewMenu();
+  panel.hidden = true;
+  toggle.setAttribute('aria-expanded', 'false');
+
+  toggle.onclick = () => {
+    const nextHidden = !panel.hidden;
+    panel.hidden = nextHidden;
+    toggle.setAttribute('aria-expanded', nextHidden ? 'false' : 'true');
+    if (!nextHidden) {
+      positionFloatingPanel(panel, toggle);
+    }
+  };
+
+  for (const button of panel.querySelectorAll('.ghrm-view-option')) {
+    button.onclick = () => {
+      const view = currentView();
+      const next = { ...view };
+      switch (button.dataset.viewToggle) {
+        case 'hidden':
+          next.showHidden = !view.showHidden;
+          break;
+        case 'excludes':
+          if (!canToggleExcludes()) return;
+          next.showExcludes = !view.showExcludes;
+          break;
+        case 'filter':
+          next.filterExt = !view.filterExt;
+          break;
+        default:
+          return;
       }
-      const scope = VALID_SCOPES.has(button.dataset.scope)
-        ? button.dataset.scope
-        : defaultScope();
-      if (scope === currentScope()) {
-        return;
-      }
-      navigate(withScope(location.href, scope));
-    });
+      panel.hidden = true;
+      toggle.setAttribute('aria-expanded', 'false');
+      navigate(withView(location.href, next));
+    };
   }
+
+  if (viewMenuBound) return;
+  viewMenuBound = true;
+
+  document.addEventListener('click', (e) => {
+    const currentToggle = document.getElementById('ghrm-view-menu-toggle');
+    const currentPanel = document.getElementById('ghrm-view-menu');
+    if (!currentToggle || !currentPanel) return;
+    if (currentToggle.contains(e.target) || currentPanel.contains(e.target)) {
+      return;
+    }
+    currentPanel.hidden = true;
+    currentToggle.setAttribute('aria-expanded', 'false');
+  });
+
+  window.addEventListener('resize', () => {
+    const currentToggle = document.getElementById('ghrm-view-menu-toggle');
+    const currentPanel = document.getElementById('ghrm-view-menu');
+    if (!currentToggle || !currentPanel || currentPanel.hidden) return;
+    positionFloatingPanel(currentPanel, currentToggle);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const currentToggle = document.getElementById('ghrm-view-menu-toggle');
+    const currentPanel = document.getElementById('ghrm-view-menu');
+    if (!currentToggle || !currentPanel || currentPanel.hidden) return;
+    currentPanel.hidden = true;
+    currentToggle.setAttribute('aria-expanded', 'false');
+    currentToggle.focus();
+  });
 }
 
 function setupThemeToggle() {
@@ -374,13 +486,14 @@ function setupFileViews() {
 }
 
 async function scopedTree() {
-  const scope = currentScope();
-  if (treeCache.has(scope)) return treeCache.get(scope);
-  const res = await fetch(withScope('/_ghrm/tree', scope)).catch(() => null);
+  const view = currentView();
+  const key = viewKey(view);
+  if (treeCache.has(key)) return treeCache.get(key);
+  const res = await fetch(withView('/_ghrm/tree', view)).catch(() => null);
   if (!res || !res.ok) return null;
   const tree = await res.json().catch(() => null);
   if (!tree?.dirs) return null;
-  treeCache.set(scope, tree);
+  treeCache.set(key, tree);
   return tree;
 }
 
@@ -453,7 +566,7 @@ function renderSearchRows(tbody, results, query) {
 
     const link = row.querySelector('.ghrm-search-path');
     const date = row.querySelector('.ghrm-nav-date');
-    link.href = withScope(entry.href);
+    link.href = withView(entry.href);
     link.innerHTML = highlightMatch(entry.display, query);
     if (entry.modified) {
       date.dataset.ts = String(entry.modified);
@@ -615,7 +728,7 @@ function setupSpaNav() {
     if (!pathname.endsWith('/') && !pathname.endsWith('.md')) return;
 
     e.preventDefault();
-    navigate(withScope(a.href));
+    navigate(withView(a.href));
   });
 
   window.addEventListener('popstate', () => {
@@ -656,9 +769,8 @@ async function navigate(path, push = true) {
   setupFileViews();
   setupPathSearch();
   setupNavExternalLinks();
-  setupScopeSwitch();
-  syncScopeSwitch();
-  syncScopeVisibility();
+  setupViewMenu();
+  syncViewMenu();
   applyDocChromePref();
   populateDates();
   buildToc();
@@ -767,14 +879,7 @@ function buildToc() {
 }
 
 function positionToc(panel, btn) {
-  const rect = btn.getBoundingClientRect();
-  const width = panel.offsetWidth || 248;
-  const left = Math.max(
-    16,
-    Math.min(rect.right - width, window.innerWidth - width - 16),
-  );
-  panel.style.top = `${Math.round(rect.bottom + 8)}px`;
-  panel.style.left = `${Math.round(left)}px`;
+  positionFloatingPanel(panel, btn, 248);
 }
 
 function setupToc() {
@@ -853,8 +958,8 @@ function setupNavExternalLinks() {
 document.addEventListener('DOMContentLoaded', () => {
   setupFileViews();
   setupPathSearch();
-  setupScopeSwitch();
-  syncScopeVisibility();
+  setupViewMenu();
+  syncViewMenu();
   setupDocChromeToggle();
   populateDates();
   setupToc();

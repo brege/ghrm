@@ -7,8 +7,10 @@ pub struct PageShell<'a> {
     pub title: &'a str,
     pub body: &'a str,
     pub source: &'a str,
-    pub default_scope: &'a str,
-    pub has_ext_filter: bool,
+    pub default_show_hidden: bool,
+    pub default_show_excludes: bool,
+    pub default_filter_ext: bool,
+    pub can_toggle_excludes: bool,
     pub has_mermaid: bool,
     pub has_math: bool,
     pub has_map: bool,
@@ -28,6 +30,8 @@ pub struct ExplorerCtx<'a> {
     pub current_path: &'a str,
     pub has_parent: bool,
     pub parent_href: &'a str,
+    pub show_excludes: bool,
+    pub filter_label: &'a str,
     pub entries: &'a [ExplorerEntry],
     pub readme: Option<ExplorerReadme<'a>>,
 }
@@ -58,13 +62,23 @@ pub fn base(p: PageShell) -> Result<String> {
     replace(&mut out, "{{ body }}", p.body);
     replace(
         &mut out,
-        "{{ default_scope }}",
-        &html_escape::encode_double_quoted_attribute(p.default_scope),
+        "{{ default_show_hidden }}",
+        if p.default_show_hidden { "1" } else { "0" },
     );
     replace(
         &mut out,
-        "{{ has_ext_filter }}",
-        if p.has_ext_filter { "1" } else { "0" },
+        "{{ default_show_excludes }}",
+        if p.default_show_excludes { "1" } else { "0" },
+    );
+    replace(
+        &mut out,
+        "{{ can_toggle_excludes }}",
+        if p.can_toggle_excludes { "1" } else { "0" },
+    );
+    replace(
+        &mut out,
+        "{{ default_filter_ext }}",
+        if p.default_filter_ext { "1" } else { "0" },
     );
     replace(
         &mut out,
@@ -203,6 +217,16 @@ pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
 
     let mut title_block = title_block_tmpl;
     replace(&mut title_block, "{{ crumbs }}", ctx.crumbs);
+    replace(
+        &mut title_block,
+        "{{ excludes_hidden }}",
+        if ctx.show_excludes { "" } else { " hidden" },
+    );
+    replace(
+        &mut title_block,
+        "{{ filter_label }}",
+        &html_escape::encode_text(ctx.filter_label),
+    );
 
     let mut out = explorer_tmpl;
     replace(

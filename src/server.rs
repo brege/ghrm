@@ -1,7 +1,7 @@
 use crate::render::{self, Rendered};
 use crate::repo::{Forge, RepoSet, SourceState};
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
-use crate::walk::{self, NavSet, Scope};
+use crate::walk::{self, NavSet, ViewOpts};
 use crate::watch;
 
 use anyhow::Result;
@@ -31,8 +31,11 @@ pub struct AppState {
     pub nav: Arc<RwLock<NavSet>>,
     pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
-    pub default_scope: Scope,
-    pub has_ext_filter: bool,
+    pub default_view: ViewOpts,
+    pub can_toggle_excludes: bool,
+    pub filter_exts: Vec<String>,
+    pub filter_label: String,
+    pub exclude_names: Vec<String>,
     pub home: Option<PathBuf>,
 }
 
@@ -48,7 +51,8 @@ pub struct Options {
     pub open: bool,
     pub target: PathBuf,
     pub use_ignore: bool,
-    pub default_scope: Scope,
+    pub default_hidden: bool,
+    pub default_filter_ext: bool,
     pub extensions: Vec<String>,
     pub exclude_names: Vec<String>,
     pub no_excludes: bool,
@@ -86,7 +90,8 @@ pub async fn run(options: Options) -> Result<()> {
         open,
         target,
         use_ignore,
-        default_scope,
+        default_hidden,
+        default_filter_ext,
         extensions,
         exclude_names,
         no_excludes,
@@ -97,7 +102,16 @@ pub async fn run(options: Options) -> Result<()> {
 
     let (reload_tx, _) = broadcast::channel::<()>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
-    let has_ext_filter = !extensions.is_empty();
+    let default_view = ViewOpts {
+        show_hidden: default_hidden,
+        show_excludes: no_excludes,
+        filter_ext: default_filter_ext,
+    };
+    let filter_label = extensions
+        .iter()
+        .map(|ext| format!(".{ext}"))
+        .collect::<Vec<_>>()
+        .join(", ");
     let repo_root_buf = if mode == Mode::Dir {
         target.clone()
     } else {
@@ -137,7 +151,8 @@ pub async fn run(options: Options) -> Result<()> {
         }
         Mode::File => {
             watch::spawn_file(target.clone(), reload_tx.clone())?;
-            tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root_buf, &exclude_names))
+            let repo_excludes = exclude_names.clone();
+            tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root_buf, &repo_excludes))
                 .await?
         }
     };
@@ -148,8 +163,11 @@ pub async fn run(options: Options) -> Result<()> {
         nav,
         repos,
         reload: reload_tx,
-        default_scope,
-        has_ext_filter,
+        default_view,
+        can_toggle_excludes: no_excludes,
+        filter_exts: extensions,
+        filter_label,
+        exclude_names,
         home: std::env::var_os("HOME").map(PathBuf::from),
     };
 
@@ -201,32 +219,112 @@ fn open_browser(addr: &SocketAddr) {
 }
 
 #[derive(Default, Deserialize)]
-struct ScopeQuery {
-    scope: Option<String>,
+struct ViewQuery {
+    hidden: Option<String>,
+    excludes: Option<String>,
+    filter: Option<String>,
 }
 
-fn scope_from_query(q: &ScopeQuery, default_scope: Scope, has_ext_filter: bool) -> Scope {
-    let scope = q
-        .scope
-        .as_deref()
-        .and_then(Scope::parse)
-        .unwrap_or(default_scope);
-    if scope == Scope::Filtered && !has_ext_filter {
-        default_scope
-    } else {
-        scope
+fn view_from_query(q: &ViewQuery, default_view: ViewOpts, can_toggle_excludes: bool) -> ViewOpts {
+    ViewOpts {
+        show_hidden: q
+            .hidden
+            .as_deref()
+            .and_then(parse_bool_param)
+            .unwrap_or(default_view.show_hidden),
+        show_excludes: if can_toggle_excludes {
+            q.excludes
+                .as_deref()
+                .and_then(parse_bool_param)
+                .unwrap_or(default_view.show_excludes)
+        } else {
+            false
+        },
+        filter_ext: q
+            .filter
+            .as_deref()
+            .and_then(parse_bool_param)
+            .unwrap_or(default_view.filter_ext),
     }
 }
 
-fn with_scope(href: &str, scope: Scope, default_scope: Scope) -> String {
-    if scope == default_scope {
-        return href.to_string();
+fn parse_bool_param(raw: &str) -> Option<bool> {
+    match raw {
+        "1" | "true" => Some(true),
+        "0" | "false" => Some(false),
+        _ => None,
     }
-    let scope = scope_name(scope);
-    if href.contains('?') {
-        format!("{href}&scope={scope}")
+}
+
+fn with_view(
+    href: &str,
+    view: ViewOpts,
+    default_view: ViewOpts,
+    can_toggle_excludes: bool,
+) -> String {
+    let (base, fragment) = href.split_once('#').map_or((href, ""), |(a, b)| (a, b));
+    let (path, query) = base.split_once('?').map_or((base, ""), |(a, b)| (a, b));
+    let mut pairs = parse_query_pairs(query);
+    set_bool_param(
+        &mut pairs,
+        "hidden",
+        view.show_hidden,
+        default_view.show_hidden,
+    );
+    if can_toggle_excludes {
+        set_bool_param(
+            &mut pairs,
+            "excludes",
+            view.show_excludes,
+            default_view.show_excludes,
+        );
     } else {
-        format!("{href}?scope={scope}")
+        pairs.retain(|(key, _)| key != "excludes");
+    }
+    set_bool_param(
+        &mut pairs,
+        "filter",
+        view.filter_ext,
+        default_view.filter_ext,
+    );
+
+    let mut out = path.to_string();
+    if !pairs.is_empty() {
+        out.push('?');
+        out.push_str(
+            &pairs
+                .iter()
+                .map(|(key, value)| format!("{key}={value}"))
+                .collect::<Vec<_>>()
+                .join("&"),
+        );
+    }
+    if !fragment.is_empty() {
+        out.push('#');
+        out.push_str(fragment);
+    }
+    out
+}
+
+fn parse_query_pairs(query: &str) -> Vec<(String, String)> {
+    if query.is_empty() {
+        return Vec::new();
+    }
+    query
+        .split('&')
+        .filter(|pair| !pair.is_empty())
+        .map(|pair| {
+            pair.split_once('=')
+                .map_or((pair, ""), |(key, value)| (key, value))
+        })
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect()
+}
+
+fn set_bool_param(pairs: &mut Vec<(String, String)>, key: &str, value: bool, default_value: bool) {
+    pairs.retain(|(current, _)| current != key);
+    if value != default_value {
+        pairs.push((key.to_string(), if value { "1" } else { "0" }.to_string()));
     }
 }
 
@@ -234,8 +332,9 @@ fn breadcrumb_html(
     target: &Path,
     home: Option<&Path>,
     rel: &str,
-    scope: Scope,
-    default_scope: Scope,
+    view: ViewOpts,
+    default_view: ViewOpts,
+    can_toggle_excludes: bool,
 ) -> String {
     let display_root = home
         .and_then(|home| target.strip_prefix(home).ok())
@@ -294,10 +393,11 @@ fn breadcrumb_html(
             format!("/{}/", rel_parts[..depth].join("/"))
         };
         out.push_str(r#"<a class="ghrm-crumb ghrm-crumb-link" href=""#);
-        out.push_str(&html_escape::encode_double_quoted_attribute(&with_scope(
+        out.push_str(&html_escape::encode_double_quoted_attribute(&with_view(
             &href,
-            scope,
-            default_scope,
+            view,
+            default_view,
+            can_toggle_excludes,
         )));
         out.push_str(r#"">"#);
         out.push_str(&label);
@@ -307,22 +407,22 @@ fn breadcrumb_html(
     out
 }
 
-async fn root(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
-    let scope = scope_from_query(&q, s.default_scope, s.has_ext_filter);
+async fn root(State(s): State<AppState>, Query(q): Query<ViewQuery>) -> Response {
+    let view = view_from_query(&q, s.default_view, s.can_toggle_excludes);
     match s.mode {
-        Mode::File => render_target(&s, &s.target, None, scope).await,
-        Mode::Dir => render_explorer(&s, "", scope).await,
+        Mode::File => render_target(&s, &s.target, None, view).await,
+        Mode::Dir => render_explorer(&s, "", view).await,
     }
 }
 
 async fn any_path(
     State(s): State<AppState>,
     AxPath(path): AxPath<String>,
-    Query(q): Query<ScopeQuery>,
+    Query(q): Query<ViewQuery>,
 ) -> Response {
-    let scope = scope_from_query(&q, s.default_scope, s.has_ext_filter);
+    let view = view_from_query(&q, s.default_view, s.can_toggle_excludes);
     if s.mode == Mode::File {
-        return serve_file_mode(&s, &path, scope).await;
+        return serve_file_mode(&s, &path, view).await;
     }
     let had_trailing = path.ends_with('/');
     let clean = path.trim_matches('/').to_string();
@@ -337,28 +437,33 @@ async fn any_path(
     };
     if meta.is_dir() {
         if !had_trailing {
-            let loc = with_scope(&format!("/{}/", clean), scope, s.default_scope);
+            let loc = with_view(
+                &format!("/{}/", clean),
+                view,
+                s.default_view,
+                s.can_toggle_excludes,
+            );
             return Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
                 .header(header::LOCATION, loc)
                 .body(Body::empty())
                 .unwrap();
         }
-        return render_explorer(&s, &clean, scope).await;
+        return render_explorer(&s, &clean, view).await;
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&s, &joined, Some(s.target.as_path()), scope).await;
+        return render_file(&s, &joined, Some(s.target.as_path()), view).await;
     }
-    dispatch_file(&s, &joined, &s.target, &clean, scope).await
+    dispatch_file(&s, &joined, &s.target, &clean, view).await
 }
 
-async fn serve_file_mode(s: &AppState, path: &str, scope: Scope) -> Response {
+async fn serve_file_mode(s: &AppState, path: &str, view: ViewOpts) -> Response {
     let Some(root) = s.target.parent() else {
         return not_found();
     };
     let clean = path.trim_matches('/');
     if clean.is_empty() {
-        return render_target(s, &s.target, None, scope).await;
+        return render_target(s, &s.target, None, view).await;
     }
     let joined = root.join(clean);
     let meta = match tokio::fs::metadata(&joined).await {
@@ -368,12 +473,12 @@ async fn serve_file_mode(s: &AppState, path: &str, scope: Scope) -> Response {
     if meta.is_dir() {
         return not_found();
     }
-    render_target(s, &joined, None, scope).await
+    render_target(s, &joined, None, view).await
 }
 
-async fn render_target(s: &AppState, path: &Path, root: Option<&Path>, scope: Scope) -> Response {
+async fn render_target(s: &AppState, path: &Path, root: Option<&Path>, view: ViewOpts) -> Response {
     if path.extension().and_then(|s| s.to_str()) == Some("md") {
-        render_file(s, path, root, scope).await
+        render_file(s, path, root, view).await
     } else {
         let Some(base) = root.or_else(|| path.parent()) else {
             return not_found();
@@ -384,11 +489,11 @@ async fn render_target(s: &AppState, path: &Path, root: Option<&Path>, scope: Sc
             .map(|p| p.to_string_lossy().into_owned())
             .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_default();
-        dispatch_file(s, path, base, &rel, scope).await
+        dispatch_file(s, path, base, &rel, view).await
     }
 }
 
-async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scope) -> Response {
+async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewOpts) -> Response {
     let md = match tokio::fs::read_to_string(path).await {
         Ok(m) => m,
         Err(_) => return not_found(),
@@ -403,7 +508,14 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
         .map(|p| p.to_string_lossy().into_owned())
         .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_default();
-    let crumbs = breadcrumb_html(root, s.home.as_deref(), &rel, scope, s.default_scope);
+    let crumbs = breadcrumb_html(
+        root,
+        s.home.as_deref(),
+        &rel,
+        view,
+        s.default_view,
+        s.can_toggle_excludes,
+    );
     let raw_html = raw_blob_html(&md, Some("markdown"));
     let view = FileView::markdown();
     let view_attrs = file_view_attrs(&rel, view);
@@ -421,28 +533,38 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
             return not_found();
         }
     };
-    respond_html_with_scope(
+    respond_html(
         &rendered,
         &body,
         s.repos.source_for(path),
-        s.default_scope,
-        s.has_ext_filter,
+        s.default_view,
+        s.can_toggle_excludes,
     )
 }
 
-async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
+async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
     let dir_opt = {
         let guard = s.nav.read().unwrap();
-        guard.get(scope).dirs.get(rel).cloned()
+        guard.get(view).dirs.get(rel).cloned()
     };
 
-    let show_hidden = scope == Scope::All;
     let dir = match dir_opt {
-        Some(d) if d.entries.is_empty() => {
-            walk::list_dir(&s.target, Path::new(rel), show_hidden).unwrap_or(d)
-        }
+        Some(d) if d.entries.is_empty() => walk::list_dir(
+            &s.target,
+            Path::new(rel),
+            &s.exclude_names,
+            &s.filter_exts,
+            view,
+        )
+        .unwrap_or(d),
         Some(d) => d,
-        None => match walk::list_dir(&s.target, Path::new(rel), show_hidden) {
+        None => match walk::list_dir(
+            &s.target,
+            Path::new(rel),
+            &s.exclude_names,
+            &s.filter_exts,
+            view,
+        ) {
             Some(d) => d,
             None => return not_found(),
         },
@@ -461,14 +583,14 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         "/".to_string()
     };
     let has_parent = !rel.is_empty();
-    let parent_href = with_scope(&parent_href, scope, s.default_scope);
+    let parent_href = with_view(&parent_href, view, s.default_view, s.can_toggle_excludes);
 
     let entries: Vec<ExplorerEntry> = dir
         .entries
         .iter()
         .map(|e| ExplorerEntry {
             name: e.name.clone(),
-            href: with_scope(&e.href, scope, s.default_scope),
+            href: with_view(&e.href, view, s.default_view, s.can_toggle_excludes),
             is_dir: e.is_dir,
             modified: e.modified,
         })
@@ -507,13 +629,22 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         name: &readme_name,
         html: &r.html,
     });
-    let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, scope, s.default_scope);
+    let crumbs = breadcrumb_html(
+        &s.target,
+        s.home.as_deref(),
+        rel,
+        view,
+        s.default_view,
+        s.can_toggle_excludes,
+    );
 
     let body = match tmpl::explorer(ExplorerCtx {
         crumbs: &crumbs,
         current_path: rel,
         has_parent,
         parent_href: &parent_href,
+        show_excludes: s.can_toggle_excludes,
+        filter_label: &s.filter_label,
         entries: &entries,
         readme: readme_tmpl,
     }) {
@@ -541,21 +672,21 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
     } else {
         s.target.join(rel)
     };
-    respond_html_with_scope(
+    respond_html(
         &combined,
         &body,
         s.repos.source_for(&current),
-        s.default_scope,
-        s.has_ext_filter,
+        s.default_view,
+        s.can_toggle_excludes,
     )
 }
 
-fn respond_html_with_scope(
+fn respond_html(
     r: &Rendered,
     body: &str,
     source: SourceState,
-    default_scope: Scope,
-    has_ext_filter: bool,
+    default_view: ViewOpts,
+    can_toggle_excludes: bool,
 ) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
@@ -567,8 +698,10 @@ fn respond_html_with_scope(
         title,
         body,
         source: &source,
-        default_scope: scope_name(default_scope),
-        has_ext_filter,
+        default_show_hidden: default_view.show_hidden,
+        default_show_excludes: default_view.show_excludes,
+        default_filter_ext: default_view.filter_ext,
+        can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,
         has_map: r.has_map,
@@ -580,14 +713,6 @@ fn respond_html_with_scope(
         }
     };
     Html(html).into_response()
-}
-
-fn scope_name(scope: Scope) -> &'static str {
-    match scope {
-        Scope::Filtered => "filter",
-        Scope::Files => "files",
-        Scope::All => "all",
-    }
 }
 
 fn source_html(source: &SourceState) -> String {
@@ -668,10 +793,10 @@ struct TreeResponse {
     dirs: BTreeMap<String, crate::walk::NavDir>,
 }
 
-async fn api_tree(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
+async fn api_tree(State(s): State<AppState>, Query(q): Query<ViewQuery>) -> Response {
     let nav = s.nav.read().unwrap();
-    let scope = scope_from_query(&q, s.default_scope, s.has_ext_filter);
-    let tree = nav.get(scope);
+    let view = view_from_query(&q, s.default_view, s.can_toggle_excludes);
+    let tree = nav.get(view);
     let root = s
         .target
         .file_name()
@@ -847,7 +972,7 @@ async fn dispatch_file(
     path: &Path,
     root: &Path,
     rel: &str,
-    scope: Scope,
+    view: ViewOpts,
 ) -> Response {
     if path
         .extension()
@@ -874,7 +999,14 @@ async fn dispatch_file(
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
     let rendered = render::render_text(filename, &text);
-    let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, scope, s.default_scope);
+    let crumbs = breadcrumb_html(
+        root,
+        s.home.as_deref(),
+        rel,
+        view,
+        s.default_view,
+        s.can_toggle_excludes,
+    );
     let raw_html = raw_blob_html(
         &text,
         path.extension()
@@ -897,12 +1029,12 @@ async fn dispatch_file(
             return not_found();
         }
     };
-    respond_html_with_scope(
+    respond_html(
         &rendered,
         &body,
         s.repos.source_for(path),
-        s.default_scope,
-        s.has_ext_filter,
+        s.default_view,
+        s.can_toggle_excludes,
     )
 }
 
@@ -1111,24 +1243,52 @@ mod tests {
     }
 
     #[test]
-    fn scope_from_query_uses_default_when_missing() {
-        let q = ScopeQuery::default();
-        assert_eq!(scope_from_query(&q, Scope::All, false), Scope::All);
-        assert_eq!(scope_from_query(&q, Scope::Filtered, true), Scope::Filtered);
+    fn view_from_query_uses_default_when_missing() {
+        let q = ViewQuery::default();
+        let default_view = ViewOpts {
+            show_hidden: true,
+            show_excludes: true,
+            filter_ext: false,
+        };
+        assert_eq!(view_from_query(&q, default_view, true), default_view);
     }
 
     #[test]
-    fn with_scope_omits_default_scope() {
-        assert_eq!(with_scope("/", Scope::All, Scope::All), "/");
-        assert_eq!(with_scope("/", Scope::Filtered, Scope::Filtered), "/");
+    fn view_from_query_disables_excludes_when_unavailable() {
+        let q = ViewQuery {
+            hidden: None,
+            excludes: Some("1".to_string()),
+            filter: None,
+        };
+        let view = view_from_query(&q, ViewOpts::default(), false);
+        assert!(!view.show_excludes);
     }
 
     #[test]
-    fn with_scope_preserves_non_default_scope() {
-        assert_eq!(with_scope("/", Scope::All, Scope::Filtered), "/?scope=all");
+    fn with_view_omits_default_flags() {
+        let default_view = ViewOpts {
+            show_hidden: false,
+            show_excludes: true,
+            filter_ext: false,
+        };
+        assert_eq!(with_view("/", default_view, default_view, true), "/");
+    }
+
+    #[test]
+    fn with_view_preserves_non_default_flags() {
+        let default_view = ViewOpts {
+            show_hidden: false,
+            show_excludes: true,
+            filter_ext: false,
+        };
+        let view = ViewOpts {
+            show_hidden: true,
+            show_excludes: false,
+            filter_ext: true,
+        };
         assert_eq!(
-            with_scope("/docs/", Scope::Filtered, Scope::All),
-            "/docs/?scope=filter"
+            with_view("/docs/", view, default_view, true),
+            "/docs/?hidden=1&excludes=0&filter=1"
         );
     }
 }
