@@ -1,8 +1,14 @@
-use serde::{Deserialize, Serialize};
+use grep_matcher::Matcher;
+use grep_regex::RegexMatcher;
+use grep_searcher::sinks::UTF8;
+use grep_searcher::{BinaryDetection, SearcherBuilder};
+use ignore::WalkBuilder;
+use serde::Serialize;
 use std::path::Path;
-use std::process::Command;
+use std::sync::Mutex;
 
 const MAX_RESULTS: usize = 100;
+const MAX_LINE_LEN: usize = 500;
 
 #[derive(Debug, Serialize)]
 pub struct SearchResult {
@@ -27,31 +33,8 @@ pub struct SearchOpts<'a> {
 }
 
 pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
-    let mut cmd = Command::new("rg");
-    cmd.arg("--json")
-        .arg("--max-count=5")
-        .arg("--max-columns=500")
-        .arg("--max-columns-preview");
-
-    if opts.hidden {
-        cmd.arg("--hidden");
-    }
-
-    for name in opts.exclude_names {
-        cmd.arg("--glob").arg(format!("!{name}"));
-        cmd.arg("--glob").arg(format!("!**/{name}"));
-    }
-
-    if let Some(exts) = opts.filter_exts {
-        for ext in exts {
-            cmd.arg("--glob").arg(format!("*.{ext}"));
-        }
-    }
-
-    cmd.arg("--").arg(opts.query).arg(opts.root);
-
-    let output = match cmd.output() {
-        Ok(o) => o,
+    let matcher = match RegexMatcher::new(opts.query) {
+        Ok(m) => m,
         Err(_) => {
             return SearchResponse {
                 results: vec![],
@@ -60,78 +43,117 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
         }
     };
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut results = Vec::new();
-    let mut truncated = false;
+    let results: Mutex<Vec<SearchResult>> = Mutex::new(Vec::new());
+    let truncated = Mutex::new(false);
 
-    for line in stdout.lines() {
-        if results.len() >= MAX_RESULTS {
-            truncated = true;
-            break;
-        }
-        if let Ok(msg) = serde_json::from_str::<RgMessage>(line) {
-            if msg.typ == "match" {
-                if let Some(r) = parse_match(&msg, opts.root) {
-                    results.push(r);
+    let mut walk = WalkBuilder::new(opts.root);
+    walk.hidden(!opts.hidden).git_ignore(true).git_global(true);
+
+    let filter_exts = opts.filter_exts;
+    let exclude_names = opts.exclude_names;
+
+    walk.build_parallel().run(|| {
+        let matcher = matcher.clone();
+        let results = &results;
+        let truncated = &truncated;
+
+        let mut searcher = SearcherBuilder::new()
+            .binary_detection(BinaryDetection::quit(0))
+            .line_number(true)
+            .build();
+
+        Box::new(move |entry| {
+            if *truncated.lock().unwrap() {
+                return ignore::WalkState::Quit;
+            }
+
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => return ignore::WalkState::Continue,
+            };
+
+            if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                return ignore::WalkState::Continue;
+            }
+
+            let path = entry.path();
+
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if exclude_names.iter().any(|ex| name == ex) {
+                    return ignore::WalkState::Continue;
                 }
             }
-        }
-    }
+
+            if let Some(exts) = filter_exts {
+                let has_ext = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| exts.iter().any(|x| x == e))
+                    .unwrap_or(false);
+                if !has_ext {
+                    return ignore::WalkState::Continue;
+                }
+            }
+
+            let rel = match path.strip_prefix(opts.root) {
+                Ok(r) => r.to_string_lossy().into_owned(),
+                Err(_) => return ignore::WalkState::Continue,
+            };
+
+            let mut file_matches: Vec<SearchResult> = Vec::new();
+            let search_result = searcher.search_path(
+                &matcher,
+                path,
+                UTF8(|line_num, line| {
+                    if file_matches.len() >= 5 {
+                        return Ok(true);
+                    }
+
+                    let text = if line.len() > MAX_LINE_LEN {
+                        format!("{}...", &line[..MAX_LINE_LEN])
+                    } else {
+                        line.trim_end().to_string()
+                    };
+
+                    let ranges = find_matches(&matcher, &text);
+
+                    file_matches.push(SearchResult {
+                        path: rel.clone(),
+                        line: line_num,
+                        text,
+                        ranges,
+                    });
+
+                    Ok(true)
+                }),
+            );
+
+            if search_result.is_ok() && !file_matches.is_empty() {
+                let mut guard = results.lock().unwrap();
+                for m in file_matches {
+                    if guard.len() >= MAX_RESULTS {
+                        *truncated.lock().unwrap() = true;
+                        return ignore::WalkState::Quit;
+                    }
+                    guard.push(m);
+                }
+            }
+
+            ignore::WalkState::Continue
+        })
+    });
+
+    let results = results.into_inner().unwrap();
+    let truncated = *truncated.lock().unwrap();
 
     SearchResponse { results, truncated }
 }
 
-#[derive(Deserialize)]
-struct RgMessage {
-    #[serde(rename = "type")]
-    typ: String,
-    data: Option<RgData>,
-}
-
-#[derive(Deserialize)]
-struct RgData {
-    path: Option<RgPath>,
-    line_number: Option<u64>,
-    lines: Option<RgLines>,
-    submatches: Option<Vec<RgSubmatch>>,
-}
-
-#[derive(Deserialize)]
-struct RgPath {
-    text: String,
-}
-
-#[derive(Deserialize)]
-struct RgLines {
-    text: String,
-}
-
-#[derive(Deserialize)]
-struct RgSubmatch {
-    start: usize,
-    end: usize,
-}
-
-fn parse_match(msg: &RgMessage, root: &Path) -> Option<SearchResult> {
-    let data = msg.data.as_ref()?;
-    let abs_path = &data.path.as_ref()?.text;
-    let path = Path::new(abs_path)
-        .strip_prefix(root)
-        .ok()?
-        .to_string_lossy()
-        .into_owned();
-    let line = data.line_number?;
-    let text = data.lines.as_ref()?.text.trim_end().to_string();
-    let ranges = data
-        .submatches
-        .as_ref()
-        .map(|subs| subs.iter().map(|s| (s.start, s.end)).collect())
-        .unwrap_or_default();
-
-    Some(SearchResult {
-        path,
-        line,
-        text,
-        ranges,
-    })
+fn find_matches(matcher: &RegexMatcher, text: &str) -> Vec<(usize, usize)> {
+    let mut ranges = Vec::new();
+    let _ = matcher.find_iter(text.as_bytes(), |m| {
+        ranges.push((m.start(), m.end()));
+        true
+    });
+    ranges
 }

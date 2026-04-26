@@ -647,6 +647,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
     let combined = Rendered {
         html: String::new(),
         title,
+        lang: None,
         has_mermaid,
         has_math,
         has_map,
@@ -1030,12 +1031,7 @@ async fn dispatch_file(
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
     let rendered = render::render_text(filename, &text);
     let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, view, s.view_cfg);
-    let raw_html = raw_blob_html(
-        &text,
-        path.extension()
-            .and_then(|s| s.to_str())
-            .filter(|s| !s.is_empty()),
-    );
+    let raw_html = raw_blob_html(&text, rendered.lang.as_deref());
     let view = FileView::raw();
     let view_attrs = file_view_attrs(rel, view);
     let body = match tmpl::page(tmpl::PageCtx {

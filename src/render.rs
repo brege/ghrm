@@ -23,6 +23,7 @@ static MATH_ADAPTER: GhrmMathAdapter = GhrmMathAdapter;
 pub struct Rendered {
     pub html: String,
     pub title: String,
+    pub lang: Option<String>,
     pub has_mermaid: bool,
     pub has_math: bool,
     pub has_map: bool,
@@ -37,6 +38,7 @@ pub fn render_text(filename: &str, text: &str) -> Rendered {
     Rendered {
         title: filename.to_string(),
         html: code_block_html(lang, &escaped),
+        lang: lang.map(String::from),
         has_mermaid: false,
         has_math: false,
         has_map: false,
@@ -156,6 +158,7 @@ pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     Rendered {
         html,
         title,
+        lang: None,
         has_mermaid: flags.mermaid,
         has_math: flags.math,
         has_map: flags.map,
