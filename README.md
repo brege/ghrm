@@ -1,10 +1,26 @@
 # ghrm
 
-Preview GitHub-flavored Markdown locally, offline, and in your browser. It renders admonitions, Mermaid diagrams, KaTeX math, GeoJSON/TopoJSON maps, and light/dark theme toggling all whilst matching GitHub's README and File Explorer style.
+Explore your filesystem and render Markdown as if it were on GitHub.
+
+Ghrm supports all **G**it**H**ub-flavored Markdown features, **R**ead**m**e and source code viewing, detects repositories, has instant file retrieval, and works 100% **offline**. It makes file browsing and file reading feel more continuous.
+
+## Supported Features
+
+- **Works offline**
+- File explorer with [fd](https://github.com/sharkdp/fd) semantics
+- Syntax highlighting
+- Focus filters for Markdown, source, and hidden files
+- Admonitions `[!NOTE]`
+- Mermaid diagrams
+- KaTeX math
+- GeoJSON and TopoJSON maps
+- Light/dark theme toggle
 
 ## Ethos
 
-People who lose internet and power often: this tool is for you. It renders Markdown and file trees the exact same way as GitHub would. If you are offline and still need to make meaningful contributions to your projects, focusing on documentation and organization activity hold you over until resources become unavailable.
+I made Ghrm because when I lose internet/power, I often turn toward documentation and repo-gardening to stay occupied while online resources are unavailable. It locally downloads the JavaScript libraries on first install and never touches the internet again, except for URL sources that may already be in your Markdown.  It renders Markdown and file trees the exact same way as GitHub would so there's zero mystery how your documentation is going to look like on GitHub.
+
+Ghrm is not meant to be a general git repository manager.
 
 ## Install
 
@@ -14,12 +30,14 @@ cargo install --git https://github.com/brege/ghrm ghrm
 
 ## Usage
 
+One file.
 ```bash
-# one file
 ghrm README.md
+```
 
-# multiple files, recursively
-ghrm .
+Multiple files, recursively.
+```bash
+ghrm .       # ~, ~/Documents, ~/.config, etc
 ```
 
 Opens a live-reloading preview in your browser. Edits to the file in your editor are reflected automatically on save.
@@ -29,23 +47,10 @@ Opens a live-reloading preview in your browser. Edits to the file in your editor
 Add to your lazy.nvim config:
 
 ```lua
-{ "brege/ghrm", ft = "markdown", config = function() require("ghrm").setup() end }
+{ "brege/ghrm" end }
 ```
 
 Commands: `:Ghrm` to start, `:GhrmStop` to stop, or just exit nvim.
-
-## Supported Features
-
-- **Works offline**
-- File explorer with [fd](https://github.com/sharkdp/fd)-like semantics
-- Syntax highlighting
-- Focus filters for Markdown, source, and hidden files
-- GitHub alert admonitions (`[!NOTE]`, `[!TIP]`, `[!WARNING]`, etc.)
-- Collapsible `<details>` sections and normal Markdown formatting and highlighting
-- Mermaid diagrams
-- KaTeX math (inline, display, and fenced `math` blocks)
-- GeoJSON and TopoJSON maps
-- Light/dark theme toggle
 
 ### Examples
 
@@ -64,13 +69,13 @@ ghrm .
 
 ```bash
 cargo uninstall ghrm
-rm --recursive ~/.cache/ghrm
+rm -r ~/.cache/ghrm
 ```
 
 ## Roadmap
 
 - detect languages via shebang
-- add toggle for gitignore'd items in UI
+- support content search (ripgrep)
 
 ## License
 

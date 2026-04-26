@@ -17,7 +17,7 @@ function M.setup()
     })
     jobs[file] = job_id
     vim.notify("Started ghrm for: " .. file, vim.log.levels.INFO)
-  end, { desc = "Start GitHub README preview" })
+  end, { desc = "Start ghrm preview for the current file" })
 
   vim.api.nvim_create_user_command("GhrmStop", function()
     local file = vim.fn.expand("%:p")
@@ -29,7 +29,7 @@ function M.setup()
     else
       vim.notify("No ghrm running for this file", vim.log.levels.WARN)
     end
-  end, { desc = "Stop GitHub README preview" })
+  end, { desc = "Stop ghrm preview for the current file" })
 end
 
 return M
