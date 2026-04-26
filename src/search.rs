@@ -7,7 +7,6 @@ use serde::Serialize;
 use std::path::Path;
 use std::sync::Mutex;
 
-const MAX_RESULTS: usize = 100;
 const MAX_LINE_LEN: usize = 500;
 
 #[derive(Debug, Serialize)]
@@ -22,6 +21,7 @@ pub struct SearchResult {
 pub struct SearchResponse {
     pub results: Vec<SearchResult>,
     pub truncated: bool,
+    pub max_rows: usize,
 }
 
 pub struct SearchOpts<'a> {
@@ -30,6 +30,7 @@ pub struct SearchOpts<'a> {
     pub hidden: bool,
     pub exclude_names: &'a [String],
     pub filter_exts: Option<&'a [String]>,
+    pub max_rows: usize,
 }
 
 pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
@@ -39,6 +40,7 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
             return SearchResponse {
                 results: vec![],
                 truncated: false,
+                max_rows: opts.max_rows,
             };
         }
     };
@@ -131,7 +133,7 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
             if search_result.is_ok() && !file_matches.is_empty() {
                 let mut guard = results.lock().unwrap();
                 for m in file_matches {
-                    if guard.len() >= MAX_RESULTS {
+                    if guard.len() >= opts.max_rows {
                         *truncated.lock().unwrap() = true;
                         return ignore::WalkState::Quit;
                     }
@@ -146,7 +148,11 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
     let results = results.into_inner().unwrap();
     let truncated = *truncated.lock().unwrap();
 
-    SearchResponse { results, truncated }
+    SearchResponse {
+        results,
+        truncated,
+        max_rows: opts.max_rows,
+    }
 }
 
 fn find_matches(matcher: &RegexMatcher, text: &str) -> Vec<(usize, usize)> {

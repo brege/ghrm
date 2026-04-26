@@ -12,6 +12,8 @@ pub struct Config {
     pub open: Option<bool>,
     #[serde(default)]
     pub walk: WalkConfig,
+    #[serde(default)]
+    pub search: SearchConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -21,6 +23,11 @@ pub struct WalkConfig {
     pub no_excludes: Option<bool>,
     pub extensions: Option<Vec<String>>,
     pub exclude_names: Option<Vec<String>>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct SearchConfig {
+    pub max_rows: Option<usize>,
 }
 
 pub fn default_exclude_names() -> Vec<String> {

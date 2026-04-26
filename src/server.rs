@@ -36,6 +36,7 @@ pub struct AppState {
     pub filter_exts: Vec<String>,
     pub filter_label: String,
     pub exclude_names: Vec<String>,
+    pub search_max_rows: usize,
     pub home: Option<PathBuf>,
 }
 
@@ -56,6 +57,7 @@ pub struct Options {
     pub extensions: Vec<String>,
     pub exclude_names: Vec<String>,
     pub no_excludes: bool,
+    pub search_max_rows: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -101,6 +103,7 @@ pub async fn run(options: Options) -> Result<()> {
         extensions,
         exclude_names,
         no_excludes,
+        search_max_rows,
     } = options;
 
     let meta = std::fs::metadata(&target)?;
@@ -186,6 +189,7 @@ pub async fn run(options: Options) -> Result<()> {
         filter_exts: extensions,
         filter_label,
         exclude_names,
+        search_max_rows,
         home: std::env::var_os("HOME").map(PathBuf::from),
     };
 
@@ -193,6 +197,7 @@ pub async fn run(options: Options) -> Result<()> {
         .route("/", get(root))
         .route("/_ghrm/ws", get(ws_handler))
         .route("/_ghrm/tree", get(api_tree))
+        .route("/_ghrm/path-search", get(api_path_search))
         .route("/_ghrm/search", get(api_search))
         .route("/_ghrm/render", get(api_render))
         .route("/_ghrm/raw/{*path}", get(raw_file))
@@ -836,6 +841,7 @@ async fn api_search(State(s): State<AppState>, Query(q): Query<SearchQuery>) -> 
         hidden,
         exclude_names,
         filter_exts,
+        max_rows: s.search_max_rows,
     });
 
     match serde_json::to_string(&resp) {
@@ -848,6 +854,142 @@ async fn api_search(State(s): State<AppState>, Query(q): Query<SearchQuery>) -> 
             warn!("api_search error: {}", e);
             not_found()
         }
+    }
+}
+
+#[derive(Serialize)]
+struct PathSearchResult {
+    href: String,
+    display: String,
+    is_dir: bool,
+    modified: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct PathSearchResponse {
+    results: Vec<PathSearchResult>,
+    truncated: bool,
+    max_rows: usize,
+}
+
+#[derive(Default, Deserialize)]
+struct PathSearchQuery {
+    q: Option<String>,
+    path: Option<String>,
+    #[serde(flatten)]
+    view: ViewQuery,
+}
+
+async fn api_path_search(State(s): State<AppState>, Query(q): Query<PathSearchQuery>) -> Response {
+    let query = match q.q.as_deref() {
+        Some(q) if !q.is_empty() => q,
+        _ => {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"error":"missing query"}"#))
+                .unwrap();
+        }
+    };
+
+    let view = view_from_query(&q.view, s.view_cfg);
+    let current_path = q.path.as_deref().unwrap_or("").trim_matches('/');
+    let nav = s.nav.read().unwrap();
+    let tree = nav.get(view);
+    let resp = path_search(tree, current_path, query, s.search_max_rows);
+
+    match serde_json::to_string(&resp) {
+        Ok(json) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json))
+            .unwrap(),
+        Err(e) => {
+            warn!("api_path_search error: {}", e);
+            not_found()
+        }
+    }
+}
+
+fn path_search(
+    tree: &walk::NavTree,
+    current_path: &str,
+    query: &str,
+    max_rows: usize,
+) -> PathSearchResponse {
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() {
+        return PathSearchResponse {
+            results: Vec::new(),
+            truncated: false,
+            max_rows,
+        };
+    }
+
+    let prefix = (!current_path.is_empty()).then(|| format!("{current_path}/"));
+    let mut rows: Vec<PathSearchResult> = Vec::new();
+
+    for (dir, nav_dir) in &tree.dirs {
+        if let Some(prefix) = &prefix {
+            if dir != current_path && !dir.starts_with(prefix) {
+                continue;
+            }
+        }
+
+        let rel_dir = if dir == current_path {
+            ""
+        } else if let Some(prefix) = &prefix {
+            dir.strip_prefix(prefix).unwrap_or(dir.as_str())
+        } else {
+            dir.as_str()
+        };
+
+        for entry in &nav_dir.entries {
+            let rel_path = if rel_dir.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{rel_dir}/{}", entry.name)
+            };
+            if !rel_path.to_lowercase().contains(&needle) {
+                continue;
+            }
+            rows.push(PathSearchResult {
+                href: entry.href.clone(),
+                display: if entry.is_dir {
+                    format!("{rel_path}/")
+                } else {
+                    rel_path
+                },
+                is_dir: entry.is_dir,
+                modified: entry.modified,
+            });
+        }
+    }
+
+    rows.sort_by(|a, b| {
+        let a_name = a.display.to_lowercase();
+        let b_name = b.display.to_lowercase();
+        let a_base = a_name
+            .rsplit('/')
+            .next()
+            .is_some_and(|name| name.contains(&needle)) as u8;
+        let b_base = b_name
+            .rsplit('/')
+            .next()
+            .is_some_and(|name| name.contains(&needle)) as u8;
+        b_base
+            .cmp(&a_base)
+            .then_with(|| a_name.len().cmp(&b_name.len()))
+            .then_with(|| a_name.cmp(&b_name))
+    });
+
+    let truncated = rows.len() > max_rows;
+    rows.truncate(max_rows);
+
+    PathSearchResponse {
+        results: rows,
+        truncated,
+        max_rows,
     }
 }
 

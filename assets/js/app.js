@@ -1,6 +1,5 @@
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
 
-const treeCache = new Map();
 let viewMenuBound = false;
 let searchMode = 'path';
 
@@ -61,14 +60,6 @@ function currentView() {
       : false,
     filterExt: parseQueryBool(params.get('filter')) ?? defaultFilterExt(),
   };
-}
-
-function viewKey(view = currentView()) {
-  return [
-    view.showHidden ? '1' : '0',
-    view.showExcludes ? '1' : '0',
-    view.filterExt ? '1' : '0',
-  ].join('');
 }
 
 function setQueryBool(params, key, value, defaultValue) {
@@ -247,15 +238,6 @@ function setupThemeToggle() {
 
 function icon(name) {
   return `<svg aria-hidden="true" height="16" width="16" class="ghrm-file-icon"><use href="#ghrm-icon-${name}"></use></svg>`;
-}
-
-function pathJoin(parent, name) {
-  return parent ? `${parent}/${name}` : name;
-}
-
-function pathFromHref(href) {
-  const url = new URL(href, location.origin);
-  return decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g, '');
 }
 
 function escapeHtml(value) {
@@ -486,58 +468,6 @@ function setupFileViews() {
   }
 }
 
-async function scopedTree() {
-  const view = currentView();
-  const key = viewKey(view);
-  if (treeCache.has(key)) return treeCache.get(key);
-  const res = await fetch(withView('/_ghrm/tree', view)).catch(() => null);
-  if (!res || !res.ok) return null;
-  const tree = await res.json().catch(() => null);
-  if (!tree?.dirs) return null;
-  treeCache.set(key, tree);
-  return tree;
-}
-
-function searchEntries(tree, currentPath, rawQuery) {
-  const query = rawQuery.trim().toLowerCase();
-  if (!query) return [];
-
-  const prefix = currentPath ? `${currentPath}/` : '';
-  const results = [];
-  for (const [dir, navDir] of Object.entries(tree.dirs)) {
-    if (currentPath && dir !== currentPath && !dir.startsWith(prefix)) {
-      continue;
-    }
-    const relDir = dir === currentPath ? '' : dir.slice(prefix.length);
-    for (const entry of navDir.entries ?? []) {
-      const fullPath = pathFromHref(entry.href);
-      if (currentPath && !fullPath.startsWith(prefix)) continue;
-      const relPath = relDir
-        ? pathJoin(relDir, entry.name)
-        : pathJoin('', entry.name);
-      if (!relPath.toLowerCase().includes(query)) continue;
-      results.push({
-        ...entry,
-        display: entry.is_dir ? `${relPath}/` : relPath,
-      });
-    }
-  }
-
-  return results
-    .sort((a, b) => {
-      const aName = a.display.toLowerCase();
-      const bName = b.display.toLowerCase();
-      const aBase = a.name.toLowerCase().includes(query) ? 0 : 1;
-      const bBase = b.name.toLowerCase().includes(query) ? 0 : 1;
-      return (
-        aBase - bBase ||
-        aName.length - bName.length ||
-        aName.localeCompare(bName)
-      );
-    })
-    .slice(0, 100);
-}
-
 function ensureNavTable(article) {
   const table = article.querySelector('.ghrm-nav-table');
   if (table) return table;
@@ -576,6 +506,23 @@ function renderSearchRows(tbody, results, query) {
   }
 }
 
+async function pathSearch(query, currentPath) {
+  const view = currentView();
+  const params = new URLSearchParams();
+  params.set('q', query);
+  if (currentPath) {
+    params.set('path', currentPath);
+  }
+  params.set('hidden', view.showHidden ? '1' : '0');
+  params.set('excludes', view.showExcludes ? '1' : '0');
+  params.set('filter', view.filterExt ? '1' : '0');
+  const res = await fetch(`/_ghrm/path-search?${params}`).catch(() => null);
+  if (!res || !res.ok) return { results: [], truncated: false, max_rows: 0 };
+  return res
+    .json()
+    .catch(() => ({ results: [], truncated: false, max_rows: 0 }));
+}
+
 async function contentSearch(query) {
   const view = currentView();
   const params = new URLSearchParams();
@@ -584,8 +531,10 @@ async function contentSearch(query) {
   params.set('excludes', view.showExcludes ? '1' : '0');
   params.set('filter', view.filterExt ? '1' : '0');
   const res = await fetch(`/_ghrm/search?${params}`).catch(() => null);
-  if (!res || !res.ok) return { results: [], truncated: false };
-  return res.json().catch(() => ({ results: [], truncated: false }));
+  if (!res || !res.ok) return { results: [], truncated: false, max_rows: 0 };
+  return res
+    .json()
+    .catch(() => ({ results: [], truncated: false, max_rows: 0 }));
 }
 
 const CONTENT_SNIPPET_MAX = 88;
@@ -640,7 +589,7 @@ function formatContentSnippet(text, ranges) {
   return html;
 }
 
-function renderContentRows(tbody, results, truncated) {
+function renderContentRows(tbody, results, truncated, maxRows) {
   if (results.length === 0) {
     tbody.innerHTML =
       '<tr class="ghrm-search-empty"><td colspan="3">No matches found.</td></tr>';
@@ -657,17 +606,22 @@ function renderContentRows(tbody, results, truncated) {
     const textEl = row.querySelector('.ghrm-content-text');
 
     link.href = withView(`/${match.path}`);
-    link.innerHTML = `<strong>${escapeHtml(match.path)}</strong>:${match.line}`;
+    link.innerHTML =
+      `<strong>${escapeHtml(match.path)}</strong>` +
+      `<span class="ghrm-content-line">:${match.line}</span>`;
     textEl.innerHTML = formatContentSnippet(match.text, match.ranges);
     tbody.append(row);
   }
 
-  if (truncated) {
-    const note = document.createElement('tr');
-    note.className = 'ghrm-search-truncated';
-    note.innerHTML = '<td colspan="3">Results truncated...</td>';
-    tbody.append(note);
-  }
+  const note = document.createElement('tr');
+  note.className = truncated ? 'ghrm-search-truncated' : 'ghrm-search-summary';
+  note.innerHTML =
+    '<td class="ghrm-nav-icon"></td>' +
+    `<td class="ghrm-search-summary-cell" colspan="2">` +
+    `<span>${truncated ? 'Results truncated' : ''}</span>` +
+    `<span class="ghrm-search-summary-count">${results.length}/${maxRows}</span>` +
+    '</td>';
+  tbody.append(note);
 }
 
 function highlightRanges(text, ranges) {
@@ -791,20 +745,23 @@ function setupPathSearch() {
       if (seq !== searchSeq) return;
       if (empty) empty.hidden = true;
       table.hidden = false;
-      renderContentRows(tbody, resp.results, resp.truncated);
+      renderContentRows(tbody, resp.results, resp.truncated, resp.max_rows);
       const count = resp.results.length;
       const suffix = resp.truncated ? '+' : '';
       status.textContent =
         count === 1 ? '1 match' : `${count}${suffix} matches`;
     } else {
-      const tree = await scopedTree();
+      const resp = await pathSearch(query, currentPath);
       if (seq !== searchSeq) return;
-      const results = tree ? searchEntries(tree, currentPath, query) : [];
+      const results = resp.results ?? [];
       if (empty) empty.hidden = true;
       table.hidden = false;
       renderSearchRows(tbody, results, query);
+      const suffix = resp.truncated ? '+' : '';
       status.textContent =
-        results.length === 1 ? '1 path' : `${results.length} paths`;
+        results.length === 1
+          ? `1${suffix} path`
+          : `${results.length}${suffix} paths`;
       populateDates();
       setupNavExternalLinks();
     }
