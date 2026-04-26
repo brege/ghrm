@@ -31,8 +31,7 @@ pub struct AppState {
     pub nav: Arc<RwLock<NavSet>>,
     pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
-    pub default_view: ViewOpts,
-    pub can_toggle_excludes: bool,
+    pub view_cfg: ViewConfig,
     pub filter_exts: Vec<String>,
     pub filter_label: String,
     pub exclude_names: Vec<String>,
@@ -83,6 +82,12 @@ impl FileView {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct ViewConfig {
+    default: ViewOpts,
+    can_toggle_excludes: bool,
+}
+
 pub async fn run(options: Options) -> Result<()> {
     let Options {
         bind,
@@ -102,10 +107,13 @@ pub async fn run(options: Options) -> Result<()> {
 
     let (reload_tx, _) = broadcast::channel::<()>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
-    let default_view = ViewOpts {
-        show_hidden: default_hidden,
-        show_excludes: no_excludes,
-        filter_ext: default_filter_ext,
+    let view_cfg = ViewConfig {
+        default: ViewOpts {
+            show_hidden: default_hidden,
+            show_excludes: no_excludes,
+            filter_ext: default_filter_ext,
+        },
+        can_toggle_excludes: no_excludes,
     };
     let filter_label = extensions
         .iter()
@@ -163,8 +171,7 @@ pub async fn run(options: Options) -> Result<()> {
         nav,
         repos,
         reload: reload_tx,
-        default_view,
-        can_toggle_excludes: no_excludes,
+        view_cfg,
         filter_exts: extensions,
         filter_label,
         exclude_names,
@@ -225,18 +232,18 @@ struct ViewQuery {
     filter: Option<String>,
 }
 
-fn view_from_query(q: &ViewQuery, default_view: ViewOpts, can_toggle_excludes: bool) -> ViewOpts {
+fn view_from_query(q: &ViewQuery, cfg: ViewConfig) -> ViewOpts {
     ViewOpts {
         show_hidden: q
             .hidden
             .as_deref()
             .and_then(parse_bool_param)
-            .unwrap_or(default_view.show_hidden),
-        show_excludes: if can_toggle_excludes {
+            .unwrap_or(cfg.default.show_hidden),
+        show_excludes: if cfg.can_toggle_excludes {
             q.excludes
                 .as_deref()
                 .and_then(parse_bool_param)
-                .unwrap_or(default_view.show_excludes)
+                .unwrap_or(cfg.default.show_excludes)
         } else {
             false
         },
@@ -244,7 +251,7 @@ fn view_from_query(q: &ViewQuery, default_view: ViewOpts, can_toggle_excludes: b
             .filter
             .as_deref()
             .and_then(parse_bool_param)
-            .unwrap_or(default_view.filter_ext),
+            .unwrap_or(cfg.default.filter_ext),
     }
 }
 
@@ -256,12 +263,7 @@ fn parse_bool_param(raw: &str) -> Option<bool> {
     }
 }
 
-fn with_view(
-    href: &str,
-    view: ViewOpts,
-    default_view: ViewOpts,
-    can_toggle_excludes: bool,
-) -> String {
+fn with_view(href: &str, view: ViewOpts, cfg: ViewConfig) -> String {
     let (base, fragment) = href.split_once('#').map_or((href, ""), |(a, b)| (a, b));
     let (path, query) = base.split_once('?').map_or((base, ""), |(a, b)| (a, b));
     let mut pairs = parse_query_pairs(query);
@@ -269,14 +271,14 @@ fn with_view(
         &mut pairs,
         "hidden",
         view.show_hidden,
-        default_view.show_hidden,
+        cfg.default.show_hidden,
     );
-    if can_toggle_excludes {
+    if cfg.can_toggle_excludes {
         set_bool_param(
             &mut pairs,
             "excludes",
             view.show_excludes,
-            default_view.show_excludes,
+            cfg.default.show_excludes,
         );
     } else {
         pairs.retain(|(key, _)| key != "excludes");
@@ -285,7 +287,7 @@ fn with_view(
         &mut pairs,
         "filter",
         view.filter_ext,
-        default_view.filter_ext,
+        cfg.default.filter_ext,
     );
 
     let mut out = path.to_string();
@@ -333,8 +335,7 @@ fn breadcrumb_html(
     home: Option<&Path>,
     rel: &str,
     view: ViewOpts,
-    default_view: ViewOpts,
-    can_toggle_excludes: bool,
+    cfg: ViewConfig,
 ) -> String {
     let display_root = home
         .and_then(|home| target.strip_prefix(home).ok())
@@ -394,10 +395,7 @@ fn breadcrumb_html(
         };
         out.push_str(r#"<a class="ghrm-crumb ghrm-crumb-link" href=""#);
         out.push_str(&html_escape::encode_double_quoted_attribute(&with_view(
-            &href,
-            view,
-            default_view,
-            can_toggle_excludes,
+            &href, view, cfg,
         )));
         out.push_str(r#"">"#);
         out.push_str(&label);
@@ -408,7 +406,7 @@ fn breadcrumb_html(
 }
 
 async fn root(State(s): State<AppState>, Query(q): Query<ViewQuery>) -> Response {
-    let view = view_from_query(&q, s.default_view, s.can_toggle_excludes);
+    let view = view_from_query(&q, s.view_cfg);
     match s.mode {
         Mode::File => render_target(&s, &s.target, None, view).await,
         Mode::Dir => render_explorer(&s, "", view).await,
@@ -420,7 +418,7 @@ async fn any_path(
     AxPath(path): AxPath<String>,
     Query(q): Query<ViewQuery>,
 ) -> Response {
-    let view = view_from_query(&q, s.default_view, s.can_toggle_excludes);
+    let view = view_from_query(&q, s.view_cfg);
     if s.mode == Mode::File {
         return serve_file_mode(&s, &path, view).await;
     }
@@ -437,12 +435,7 @@ async fn any_path(
     };
     if meta.is_dir() {
         if !had_trailing {
-            let loc = with_view(
-                &format!("/{}/", clean),
-                view,
-                s.default_view,
-                s.can_toggle_excludes,
-            );
+            let loc = with_view(&format!("/{}/", clean), view, s.view_cfg);
             return Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
                 .header(header::LOCATION, loc)
@@ -508,14 +501,7 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewO
         .map(|p| p.to_string_lossy().into_owned())
         .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_default();
-    let crumbs = breadcrumb_html(
-        root,
-        s.home.as_deref(),
-        &rel,
-        view,
-        s.default_view,
-        s.can_toggle_excludes,
-    );
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), &rel, view, s.view_cfg);
     let raw_html = raw_blob_html(&md, Some("markdown"));
     let view = FileView::markdown();
     let view_attrs = file_view_attrs(&rel, view);
@@ -533,13 +519,7 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewO
             return not_found();
         }
     };
-    respond_html(
-        &rendered,
-        &body,
-        s.repos.source_for(path),
-        s.default_view,
-        s.can_toggle_excludes,
-    )
+    respond_html(&rendered, &body, s.repos.source_for(path), s.view_cfg)
 }
 
 async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
@@ -583,14 +563,14 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
         "/".to_string()
     };
     let has_parent = !rel.is_empty();
-    let parent_href = with_view(&parent_href, view, s.default_view, s.can_toggle_excludes);
+    let parent_href = with_view(&parent_href, view, s.view_cfg);
 
     let entries: Vec<ExplorerEntry> = dir
         .entries
         .iter()
         .map(|e| ExplorerEntry {
             name: e.name.clone(),
-            href: with_view(&e.href, view, s.default_view, s.can_toggle_excludes),
+            href: with_view(&e.href, view, s.view_cfg),
             is_dir: e.is_dir,
             modified: e.modified,
         })
@@ -629,21 +609,14 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
         name: &readme_name,
         html: &r.html,
     });
-    let crumbs = breadcrumb_html(
-        &s.target,
-        s.home.as_deref(),
-        rel,
-        view,
-        s.default_view,
-        s.can_toggle_excludes,
-    );
+    let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, view, s.view_cfg);
 
     let body = match tmpl::explorer(ExplorerCtx {
         crumbs: &crumbs,
         current_path: rel,
         has_parent,
         parent_href: &parent_href,
-        show_excludes: s.can_toggle_excludes,
+        show_excludes: s.view_cfg.can_toggle_excludes,
         filter_label: &s.filter_label,
         entries: &entries,
         readme: readme_tmpl,
@@ -672,22 +645,10 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
     } else {
         s.target.join(rel)
     };
-    respond_html(
-        &combined,
-        &body,
-        s.repos.source_for(&current),
-        s.default_view,
-        s.can_toggle_excludes,
-    )
+    respond_html(&combined, &body, s.repos.source_for(&current), s.view_cfg)
 }
 
-fn respond_html(
-    r: &Rendered,
-    body: &str,
-    source: SourceState,
-    default_view: ViewOpts,
-    can_toggle_excludes: bool,
-) -> Response {
+fn respond_html(r: &Rendered, body: &str, source: SourceState, cfg: ViewConfig) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
     } else {
@@ -698,10 +659,10 @@ fn respond_html(
         title,
         body,
         source: &source,
-        default_show_hidden: default_view.show_hidden,
-        default_show_excludes: default_view.show_excludes,
-        default_filter_ext: default_view.filter_ext,
-        can_toggle_excludes,
+        default_show_hidden: cfg.default.show_hidden,
+        default_show_excludes: cfg.default.show_excludes,
+        default_filter_ext: cfg.default.filter_ext,
+        can_toggle_excludes: cfg.can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,
         has_map: r.has_map,
@@ -795,7 +756,7 @@ struct TreeResponse {
 
 async fn api_tree(State(s): State<AppState>, Query(q): Query<ViewQuery>) -> Response {
     let nav = s.nav.read().unwrap();
-    let view = view_from_query(&q, s.default_view, s.can_toggle_excludes);
+    let view = view_from_query(&q, s.view_cfg);
     let tree = nav.get(view);
     let root = s
         .target
@@ -999,14 +960,7 @@ async fn dispatch_file(
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
     let rendered = render::render_text(filename, &text);
-    let crumbs = breadcrumb_html(
-        root,
-        s.home.as_deref(),
-        rel,
-        view,
-        s.default_view,
-        s.can_toggle_excludes,
-    );
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, view, s.view_cfg);
     let raw_html = raw_blob_html(
         &text,
         path.extension()
@@ -1029,13 +983,7 @@ async fn dispatch_file(
             return not_found();
         }
     };
-    respond_html(
-        &rendered,
-        &body,
-        s.repos.source_for(path),
-        s.default_view,
-        s.can_toggle_excludes,
-    )
+    respond_html(&rendered, &body, s.repos.source_for(path), s.view_cfg)
 }
 
 fn mime_guess(path: &Path) -> &'static str {
@@ -1245,12 +1193,15 @@ mod tests {
     #[test]
     fn view_from_query_uses_default_when_missing() {
         let q = ViewQuery::default();
-        let default_view = ViewOpts {
-            show_hidden: true,
-            show_excludes: true,
-            filter_ext: false,
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: true,
+                show_excludes: true,
+                filter_ext: false,
+            },
+            can_toggle_excludes: true,
         };
-        assert_eq!(view_from_query(&q, default_view, true), default_view);
+        assert_eq!(view_from_query(&q, cfg), cfg.default);
     }
 
     #[test]
@@ -1260,26 +1211,36 @@ mod tests {
             excludes: Some("1".to_string()),
             filter: None,
         };
-        let view = view_from_query(&q, ViewOpts::default(), false);
+        let cfg = ViewConfig {
+            default: ViewOpts::default(),
+            can_toggle_excludes: false,
+        };
+        let view = view_from_query(&q, cfg);
         assert!(!view.show_excludes);
     }
 
     #[test]
     fn with_view_omits_default_flags() {
-        let default_view = ViewOpts {
-            show_hidden: false,
-            show_excludes: true,
-            filter_ext: false,
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: true,
+                filter_ext: false,
+            },
+            can_toggle_excludes: true,
         };
-        assert_eq!(with_view("/", default_view, default_view, true), "/");
+        assert_eq!(with_view("/", cfg.default, cfg), "/");
     }
 
     #[test]
     fn with_view_preserves_non_default_flags() {
-        let default_view = ViewOpts {
-            show_hidden: false,
-            show_excludes: true,
-            filter_ext: false,
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: true,
+                filter_ext: false,
+            },
+            can_toggle_excludes: true,
         };
         let view = ViewOpts {
             show_hidden: true,
@@ -1287,7 +1248,7 @@ mod tests {
             filter_ext: true,
         };
         assert_eq!(
-            with_view("/docs/", view, default_view, true),
+            with_view("/docs/", view, cfg),
             "/docs/?hidden=1&excludes=0&filter=1"
         );
     }

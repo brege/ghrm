@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
 
+const VIEW_COMBINATIONS: usize = 8;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ViewOpts {
     pub show_hidden: bool,
@@ -33,15 +35,12 @@ pub struct NavTree {
 
 #[derive(Clone, Debug, Default)]
 pub struct NavSet {
-    trees: BTreeMap<u8, NavTree>,
+    trees: [NavTree; VIEW_COMBINATIONS],
 }
 
 impl NavSet {
     pub fn get(&self, opts: ViewOpts) -> &NavTree {
-        self.trees
-            .get(&view_key(opts))
-            .or_else(|| self.trees.get(&view_key(ViewOpts::default())))
-            .expect("missing default nav tree")
+        &self.trees[view_key(opts) as usize]
     }
 }
 
@@ -61,7 +60,7 @@ pub fn build_all(
     no_excludes: bool,
 ) -> NavSet {
     let snap = scan(root, use_ignore, exclude_names, no_excludes);
-    let mut trees = BTreeMap::new();
+    let mut trees: [NavTree; VIEW_COMBINATIONS] = Default::default();
     for show_hidden in [false, true] {
         for show_excludes in [false, true] {
             for filter_ext in [false, true] {
@@ -70,10 +69,7 @@ pub fn build_all(
                     show_excludes,
                     filter_ext,
                 };
-                trees.insert(
-                    view_key(opts),
-                    build_tree(&snap, exclude_names, extensions, opts),
-                );
+                trees[view_key(opts) as usize] = build_tree(&snap, exclude_names, extensions, opts);
             }
         }
     }
