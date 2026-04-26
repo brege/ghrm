@@ -34,10 +34,15 @@ pub fn ensure() -> Result<()> {
 fn install(dest: &std::path::Path) -> Result<()> {
     fs::create_dir_all(dest)?;
     EMBEDDED.extract(dest)?;
-    // Vendor files are managed separately by vendor.rs; remove from theme dir
+    // Vendor files are managed separately by vendor.rs
     let vendor_dir = dest.join("vendor");
     if vendor_dir.is_dir() {
         fs::remove_dir_all(&vendor_dir)?;
+    }
+    // Templates are compiled in via askama; runtime copies are unused
+    let templates_dir = dest.join("templates");
+    if templates_dir.is_dir() {
+        fs::remove_dir_all(&templates_dir)?;
     }
     fs::write(dest.join("VERSION"), THEME_VERSION)?;
     Ok(())

@@ -655,10 +655,11 @@ fn respond_html(r: &Rendered, body: &str, source: SourceState, cfg: ViewConfig) 
         &r.title
     };
     let source = source_html(&source);
-    let html = match tmpl::base(PageShell {
+    let shell = PageShell {
         title,
         body,
         source: &source,
+        favicon: tmpl::FAVICON_SVG_URL,
         default_show_hidden: cfg.default.show_hidden,
         default_show_excludes: cfg.default.show_excludes,
         default_filter_ext: cfg.default.filter_ext,
@@ -666,7 +667,8 @@ fn respond_html(r: &Rendered, body: &str, source: SourceState, cfg: ViewConfig) 
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,
         has_map: r.has_map,
-    }) {
+    };
+    let html = match tmpl::base(shell) {
         Ok(h) => h,
         Err(e) => {
             warn!("template error: {}", e);

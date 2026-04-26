@@ -19,15 +19,17 @@
   <link rel="stylesheet" href="/_ghrm/assets/css/admonitions.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/page.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/features.css">
-{{ css_math }}{{ css_map }}</head>
+{% if has_math %}  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
+{% endif %}{% if has_map %}  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+{% endif %}</head>
 <body
-  data-default-show-hidden="{{ default_show_hidden }}"
-  data-default-show-excludes="{{ default_show_excludes }}"
-  data-default-filter-ext="{{ default_filter_ext }}"
-  data-can-toggle-excludes="{{ can_toggle_excludes }}">
-{{ icons }}  <header class="ghrm-topbar">
+  data-default-show-hidden="{% if default_show_hidden %}1{% else %}0{% endif %}"
+  data-default-show-excludes="{% if default_show_excludes %}1{% else %}0{% endif %}"
+  data-default-filter-ext="{% if default_filter_ext %}1{% else %}0{% endif %}"
+  data-can-toggle-excludes="{% if can_toggle_excludes %}1{% else %}0{% endif %}">
+{% include "fragments/icons.html" %}  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">
-{{ source }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
+{{ source|safe }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
         <input id="ghrm-path-search-input" class="ghrm-path-search-input" type="search" placeholder="Search paths" aria-label="Search paths">
         <button id="ghrm-path-search-toggle" type="button" aria-expanded="false" aria-label="Search paths" title="Search paths">
           <svg aria-hidden="true" focusable="false">
@@ -55,9 +57,12 @@
     </div>
   </header>
   <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
-{{ body }}{{ vendor_mermaid }}
-{{ vendor_math }}
-{{ vendor_map }}
+{{ body|safe }}{% if has_mermaid %}  <script defer src="/vendor/mermaid.js"></script>
+  <script defer src="/vendor/svg-pan-zoom.min.js"></script>{% endif %}
+{% if has_math %}<script defer src="/vendor/katex/katex.min.js"></script>
+  <script defer src="/vendor/katex/auto-render.min.js"></script>{% endif %}
+{% if has_map %}<script defer src="/vendor/leaflet/leaflet.js"></script>
+  <script defer src="/vendor/topojson-client.min.js"></script>{% endif %}
   <script defer src="/vendor/highlightjs/highlight.min.js"></script>
   <script type="module" src="/_ghrm/assets/js/preview.js"></script>
   <script type="module" src="/_ghrm/assets/js/app.js"></script>

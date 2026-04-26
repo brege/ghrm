@@ -1,5 +1,5 @@
   <div class="ghrm-explorer-header">
-    <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs }}</nav>
+    <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs|safe }}</nav>
     <div class="ghrm-header-actions">
       <div class="ghrm-view-menu-shell">
         <button id="ghrm-view-menu-toggle" class="ghrm-view-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Explorer options" title="Explorer options">
@@ -14,7 +14,7 @@
             </svg>
             <span class="ghrm-view-option-label">Show hidden</span>
           </button>
-          <button class="ghrm-view-option" type="button" data-view-toggle="excludes" role="menuitemcheckbox" aria-checked="false" title="Set by -E"{{ excludes_hidden }}>
+          <button class="ghrm-view-option" type="button" data-view-toggle="excludes" role="menuitemcheckbox" aria-checked="false" title="Set by -E"{% if !show_excludes %} hidden{% endif %}>
             <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
               <use href="#ghrm-icon-check"></use>
             </svg>

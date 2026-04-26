@@ -1,7 +1,7 @@
 <article class="markdown-body">
-  <section class="ghrm-page-shell" {{ view_attrs }}>
+  <section class="ghrm-page-shell" {{ view_attrs|safe }}>
     <div class="ghrm-explorer-header">
-      <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs }}</nav>
+      <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs|safe }}</nav>
       <div class="ghrm-header-actions">
         <button type="button" class="ghrm-toc-btn" data-ghrm-toc-btn="page" hidden title="Table of contents" aria-label="Table of contents">
           <svg aria-hidden="true" focusable="false">
@@ -11,11 +11,11 @@
       </div>
     </div>
     <div class="ghrm-page-content">
-      <div class="ghrm-file-pane" data-ghrm-preview-pane{{ preview_hidden }}>
-{{ preview_html }}
+      <div class="ghrm-file-pane" data-ghrm-preview-pane{% if preview_hidden %} hidden{% endif %}>
+{{ preview_html|safe }}
       </div>
-      <div class="ghrm-file-pane ghrm-raw-pane" data-ghrm-raw-pane{{ raw_hidden }}>
-{{ raw_html }}
+      <div class="ghrm-file-pane ghrm-raw-pane" data-ghrm-raw-pane{% if raw_hidden %} hidden{% endif %}>
+{{ raw_html|safe }}
       </div>
     </div>
   </section>
