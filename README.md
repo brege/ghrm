@@ -74,7 +74,6 @@ rm -r ~/.cache/ghrm
 
 ## Roadmap
 
-- detect languages via shebang
 - support content search (ripgrep)
 - add password protection
 - support multiple preset filter creation
