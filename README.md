@@ -74,9 +74,9 @@ rm -r ~/.cache/ghrm
 
 ## Roadmap
 
-- support content search (ripgrep)
 - add password protection
 - support multiple preset filter creation
+- refactor js/css into components
 
 ## License
 

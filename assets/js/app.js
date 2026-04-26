@@ -2,6 +2,7 @@ import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
 
 const treeCache = new Map();
 let viewMenuBound = false;
+let searchMode = 'path';
 
 function defaultShowHidden() {
   return document.body?.dataset.defaultShowHidden === '1';
@@ -575,11 +576,125 @@ function renderSearchRows(tbody, results, query) {
   }
 }
 
+async function contentSearch(query) {
+  const view = currentView();
+  const params = new URLSearchParams();
+  params.set('q', query);
+  params.set('hidden', view.showHidden ? '1' : '0');
+  params.set('excludes', view.showExcludes ? '1' : '0');
+  params.set('filter', view.filterExt ? '1' : '0');
+  const res = await fetch(`/_ghrm/search?${params}`).catch(() => null);
+  if (!res || !res.ok) return { results: [], truncated: false };
+  return res.json().catch(() => ({ results: [], truncated: false }));
+}
+
+const CONTENT_SNIPPET_MAX = 88;
+
+function clampMatchWindow(text, ranges, max = CONTENT_SNIPPET_MAX) {
+  if (!text) return { text: '', ranges: [], prefix: false, suffix: false };
+  if (!ranges || ranges.length === 0) {
+    if (text.length <= max) {
+      return { text, ranges: [], prefix: false, suffix: false };
+    }
+    return {
+      text: text.slice(0, max),
+      ranges: [],
+      prefix: false,
+      suffix: true,
+    };
+  }
+
+  const [firstStart, firstEnd] = ranges[0];
+  let start = 0;
+  if (firstEnd > max) {
+    const center = Math.floor((firstStart + firstEnd) / 2);
+    start = Math.max(0, center - Math.floor(max / 2));
+  }
+  const end = Math.min(text.length, start + max);
+  if (end - start < max && end === text.length) {
+    start = Math.max(0, end - max);
+  }
+
+  const clipped = [];
+  for (const [rangeStart, rangeEnd] of ranges) {
+    if (rangeEnd <= start || rangeStart >= end) continue;
+    clipped.push([
+      Math.max(rangeStart, start) - start,
+      Math.min(rangeEnd, end) - start,
+    ]);
+  }
+
+  return {
+    text: text.slice(start, end),
+    ranges: clipped,
+    prefix: start > 0,
+    suffix: end < text.length,
+  };
+}
+
+function formatContentSnippet(text, ranges) {
+  const clipped = clampMatchWindow(text, ranges);
+  let html = highlightRanges(clipped.text, clipped.ranges);
+  if (clipped.prefix) html = `... ${html}`;
+  if (clipped.suffix) html = `${html} ...`;
+  return html;
+}
+
+function renderContentRows(tbody, results, truncated) {
+  if (results.length === 0) {
+    tbody.innerHTML =
+      '<tr class="ghrm-search-empty"><td colspan="3">No matches found.</td></tr>';
+    return;
+  }
+
+  tbody.replaceChildren();
+  const tmpl = document.getElementById('ghrm-content-search-row');
+  for (const match of results) {
+    const row = tmpl?.content.firstElementChild?.cloneNode(true);
+    if (!row) continue;
+
+    const link = row.querySelector('.ghrm-content-path');
+    const textEl = row.querySelector('.ghrm-content-text');
+
+    link.href = withView(`/${match.path}`);
+    link.innerHTML = `<strong>${escapeHtml(match.path)}</strong>:${match.line}`;
+    textEl.innerHTML = formatContentSnippet(match.text, match.ranges);
+    tbody.append(row);
+  }
+
+  if (truncated) {
+    const note = document.createElement('tr');
+    note.className = 'ghrm-search-truncated';
+    note.innerHTML = '<td colspan="3">Results truncated...</td>';
+    tbody.append(note);
+  }
+}
+
+function highlightRanges(text, ranges) {
+  if (!ranges || ranges.length === 0) {
+    return escapeHtml(text);
+  }
+  let result = '';
+  let pos = 0;
+  for (const [start, end] of ranges) {
+    if (start > pos) {
+      result += escapeHtml(text.slice(pos, start));
+    }
+    result += `<mark>${escapeHtml(text.slice(start, end))}</mark>`;
+    pos = end;
+  }
+  if (pos < text.length) {
+    result += escapeHtml(text.slice(pos));
+  }
+  return result;
+}
+
 function setupPathSearch() {
   const article = document.querySelector('article[data-explorer]');
   const search = document.getElementById('ghrm-path-search');
   const input = document.getElementById('ghrm-path-search-input');
   const button = document.getElementById('ghrm-path-search-toggle');
+  const modeBtn = document.getElementById('ghrm-search-mode');
   const status = document.getElementById('ghrm-path-search-status');
   const table = article ? ensureNavTable(article) : null;
   const tbody = table?.querySelector('tbody');
@@ -587,11 +702,15 @@ function setupPathSearch() {
 
   search.hidden = !article;
   search.classList.remove('is-open');
+  search.dataset.mode = searchMode;
   input.value = '';
+  input.placeholder =
+    searchMode === 'content' ? 'Search content' : 'Search paths';
   input.tabIndex = -1;
   input.oninput = null;
   input.onkeydown = null;
   button.onclick = null;
+  if (modeBtn) modeBtn.onclick = null;
   button.setAttribute('aria-expanded', 'false');
   status.textContent = '';
   if (!article || !table || !tbody) return;
@@ -612,6 +731,36 @@ function setupPathSearch() {
     populateDates();
     setupNavExternalLinks();
   };
+
+  const updateMode = () => {
+    search.dataset.mode = searchMode;
+    input.placeholder =
+      searchMode === 'content' ? 'Search content' : 'Search paths';
+    if (modeBtn) {
+      const label =
+        searchMode === 'content'
+          ? 'Switch to path search'
+          : 'Switch to content search';
+      modeBtn.title = label;
+      modeBtn.setAttribute('aria-label', label);
+    }
+  };
+
+  if (modeBtn) {
+    modeBtn.onclick = () => {
+      const query = input.value.trim();
+      searchMode = searchMode === 'path' ? 'content' : 'path';
+      updateMode();
+      if (!query) {
+        searchSeq += 1;
+        resetSearch();
+      } else {
+        input.oninput?.();
+      }
+      input.focus();
+    };
+  }
+  updateMode();
 
   button.onclick = () => {
     const open = !search.classList.contains('is-open');
@@ -636,16 +785,29 @@ function setupPathSearch() {
       return;
     }
 
-    const tree = await scopedTree();
-    if (seq !== searchSeq) return;
-    const results = tree ? searchEntries(tree, currentPath, query) : [];
-    if (empty) empty.hidden = true;
-    table.hidden = false;
-    renderSearchRows(tbody, results, query);
-    status.textContent =
-      results.length === 1 ? '1 path' : `${results.length} paths`;
-    populateDates();
-    setupNavExternalLinks();
+    if (searchMode === 'content') {
+      status.textContent = 'Searching...';
+      const resp = await contentSearch(query);
+      if (seq !== searchSeq) return;
+      if (empty) empty.hidden = true;
+      table.hidden = false;
+      renderContentRows(tbody, resp.results, resp.truncated);
+      const count = resp.results.length;
+      const suffix = resp.truncated ? '+' : '';
+      status.textContent =
+        count === 1 ? '1 match' : `${count}${suffix} matches`;
+    } else {
+      const tree = await scopedTree();
+      if (seq !== searchSeq) return;
+      const results = tree ? searchEntries(tree, currentPath, query) : [];
+      if (empty) empty.hidden = true;
+      table.hidden = false;
+      renderSearchRows(tbody, results, query);
+      status.textContent =
+        results.length === 1 ? '1 path' : `${results.length} paths`;
+      populateDates();
+      setupNavExternalLinks();
+    }
   };
 
   input.onkeydown = (e) => {

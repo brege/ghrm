@@ -30,6 +30,10 @@
 {% include "fragments/icons.html" %}  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">
 {{ source|safe }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
+        <button id="ghrm-search-mode" type="button" class="ghrm-search-mode" title="Switch search mode" aria-label="Switch search mode">
+          <svg class="icon-path" aria-hidden="true" focusable="false"><use href="#ghrm-icon-list"></use></svg>
+          <svg class="icon-content" aria-hidden="true" focusable="false"><use href="#ghrm-icon-code"></use></svg>
+        </button>
         <input id="ghrm-path-search-input" class="ghrm-path-search-input" type="search" placeholder="Search paths" aria-label="Search paths">
         <button id="ghrm-path-search-toggle" type="button" aria-expanded="false" aria-label="Search paths" title="Search paths">
           <svg aria-hidden="true" focusable="false">

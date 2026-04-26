@@ -660,7 +660,9 @@ body.ghrm-doc-flat #ghrm-source-slot {
   width: min(42vw, 420px);
   padding: 5px 10px;
   border: 1px solid var(--borderColor-default, #d0d7de);
+  border-left: 0;
   border-right: 0;
+  border-radius: 0;
   opacity: 1;
 }
 
@@ -910,6 +912,117 @@ body.ghrm-doc-flat #ghrm-source-slot {
 .ghrm-search-hit {
   color: var(--fgColor-default, #1f2328);
   font-weight: 600;
+}
+
+.ghrm-search-mode {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-right: 0;
+  border-radius: 4px 0 0 4px;
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-muted, #636c76);
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.ghrm-path-search.is-open .ghrm-search-mode {
+  display: flex;
+}
+
+.ghrm-search-mode:hover {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+.ghrm-path-search[data-mode="content"] .ghrm-search-mode {
+  color: var(--fgColor-default, #1f2328);
+}
+
+.ghrm-search-mode svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.ghrm-search-mode .icon-content,
+.ghrm-path-search[data-mode="content"] .ghrm-search-mode .icon-path {
+  display: none;
+}
+
+.ghrm-path-search[data-mode="content"] .ghrm-search-mode .icon-content {
+  display: block;
+}
+
+.ghrm-content-path {
+  display: block;
+  min-width: 0;
+  color: var(--fgColor-default, #1f2328);
+  text-decoration: none;
+  font-weight: 400;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ghrm-content-path:hover {
+  text-decoration: underline;
+}
+
+.ghrm-content-path strong {
+  font-weight: 600;
+}
+
+.ghrm-content-text {
+  display: block;
+  min-width: 0;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.ghrm-content-text mark {
+  background: transparent;
+  color: var(--fgColor-default, #1f2328);
+  font-weight: 600;
+  padding: 0;
+  border-radius: 0;
+}
+
+.ghrm-search-truncated td {
+  color: var(--fgColor-muted, #636c76);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.ghrm-content-result td {
+  vertical-align: bottom;
+}
+
+.ghrm-content-result .ghrm-nav-name {
+  display: grid;
+  grid-template-columns: clamp(150px, 22vw, 260px) minmax(0, 1fr);
+  column-gap: 16px;
+  align-items: end;
+  min-width: 0;
+}
+
+.ghrm-content-result .ghrm-nav-date {
+  display: none;
 }
 
 .ghrm-nav-date {
