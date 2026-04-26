@@ -130,23 +130,29 @@ pub async fn run(options: Options) -> Result<()> {
         Mode::Dir => {
             let repo_root2 = repo_root_buf.clone();
             let repo_excludes = exclude_names.clone();
-            let target2 = target.clone();
+            let repo_h =
+                tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes));
+
+            // Build nav tree in background - don't block startup
+            let nav_bg = nav.clone();
+            let target_bg = target.clone();
             let walk_excludes = exclude_names.clone();
             let walk_extensions = extensions.clone();
-            let walk_h = tokio::task::spawn_blocking(move || {
-                walk::build_all(
-                    &target2,
+            tokio::task::spawn_blocking(move || {
+                let fresh = walk::build_all(
+                    &target_bg,
                     use_ignore,
                     &walk_excludes,
                     &walk_extensions,
                     no_excludes,
-                )
+                );
+                if let Ok(mut guard) = nav_bg.write() {
+                    *guard = fresh;
+                }
             });
-            let repo_h =
-                tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes));
-            let (fresh, repos) = tokio::join!(walk_h, repo_h);
-            *nav.write().unwrap() = fresh?;
-            watch::spawn_dir(
+
+            // Watcher failure shouldn't kill the server
+            if let Err(e) = watch::spawn_dir(
                 target.clone(),
                 nav.clone(),
                 reload_tx.clone(),
@@ -154,11 +160,15 @@ pub async fn run(options: Options) -> Result<()> {
                 exclude_names.clone(),
                 extensions.clone(),
                 no_excludes,
-            )?;
-            repos?
+            ) {
+                warn!("file watcher disabled: {e}");
+            }
+            repo_h.await?
         }
         Mode::File => {
-            watch::spawn_file(target.clone(), reload_tx.clone())?;
+            if let Err(e) = watch::spawn_file(target.clone(), reload_tx.clone()) {
+                warn!("file watcher disabled: {e}");
+            }
             let repo_excludes = exclude_names.clone();
             tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root_buf, &repo_excludes))
                 .await?

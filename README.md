@@ -76,6 +76,8 @@ rm -r ~/.cache/ghrm
 
 - detect languages via shebang
 - support content search (ripgrep)
+- add password protection
+- support multiple preset filter creation
 
 ## License
 

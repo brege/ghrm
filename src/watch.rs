@@ -6,7 +6,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::sync::broadcast;
-use tracing::{error, info};
+use tracing::{info, warn};
 
 pub fn spawn_dir(
     root: PathBuf,
@@ -23,17 +23,12 @@ pub fn spawn_dir(
     let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel::<anyhow::Result<()>>(1);
 
     std::thread::spawn(move || {
-        let result = debouncer
-            .watch(&root, RecursiveMode::Recursive)
-            .map_err(anyhow::Error::from);
-        let failed = result.is_err();
-        if let Err(ref e) = result {
-            error!("watcher failed: {e}");
-        }
-        let _ = ready_tx.send(result);
-        if failed {
+        if let Err(e) = debouncer.watch(&root, RecursiveMode::Recursive) {
+            warn!("watcher setup failed, live reload disabled: {e}");
+            let _ = ready_tx.send(Ok(()));
             return;
         }
+        let _ = ready_tx.send(Ok(()));
         let _debouncer = debouncer;
         for res in rx {
             let events = match res {
