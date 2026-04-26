@@ -27,6 +27,7 @@ pub struct SearchResponse {
 pub struct SearchOpts<'a> {
     pub query: &'a str,
     pub root: &'a Path,
+    pub use_ignore: bool,
     pub hidden: bool,
     pub exclude_names: &'a [String],
     pub filter_exts: Option<&'a [String]>,
@@ -49,7 +50,10 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
     let truncated = Mutex::new(false);
 
     let mut walk = WalkBuilder::new(opts.root);
-    walk.hidden(!opts.hidden).git_ignore(true).git_global(true);
+    walk.hidden(!opts.hidden)
+        .git_ignore(opts.use_ignore)
+        .git_exclude(opts.use_ignore)
+        .git_global(opts.use_ignore);
 
     let filter_exts = opts.filter_exts;
     let exclude_names = opts.exclude_names;

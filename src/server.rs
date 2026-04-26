@@ -32,6 +32,7 @@ pub struct AppState {
     pub nav: Arc<RwLock<NavSet>>,
     pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
+    pub use_ignore: bool,
     pub view_cfg: ViewConfig,
     pub filter_exts: Vec<String>,
     pub filter_label: String,
@@ -185,6 +186,7 @@ pub async fn run(options: Options) -> Result<()> {
         nav,
         repos,
         reload: reload_tx,
+        use_ignore,
         view_cfg,
         filter_exts: extensions,
         filter_label,
@@ -838,6 +840,7 @@ async fn api_search(State(s): State<AppState>, Query(q): Query<SearchQuery>) -> 
     let resp = search::search(search::SearchOpts {
         query,
         root: &s.target,
+        use_ignore: s.use_ignore,
         hidden,
         exclude_names,
         filter_exts,

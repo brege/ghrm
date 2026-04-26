@@ -64,7 +64,7 @@ struct Cli {
         short = 'm',
         long = "max-rows",
         value_name = "ROWS",
-        help = "Maximum number of content search result rows"
+        help = "Maximum number of search result rows"
     )]
     max_rows: Option<usize>,
 
