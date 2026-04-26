@@ -108,48 +108,32 @@ pub async fn run(options: Options) -> Result<()> {
         Mode::Dir => {
             let repo_root2 = repo_root_buf.clone();
             let repo_excludes = exclude_names.clone();
-
-            if has_ext_filter {
-                let target2 = target.clone();
-                let walk_excludes = exclude_names.clone();
-                let walk_extensions = extensions.clone();
-                let walk_h = tokio::task::spawn_blocking(move || {
-                    walk::build_all(
-                        &target2,
-                        use_ignore,
-                        &walk_excludes,
-                        &walk_extensions,
-                        no_excludes,
-                    )
-                });
-                let repo_h = tokio::task::spawn_blocking(move || {
-                    RepoSet::discover(&repo_root2, &repo_excludes)
-                });
-                let (fresh, repos) = tokio::join!(walk_h, repo_h);
-                *nav.write().unwrap() = fresh?;
-                watch::spawn_dir(
-                    target.clone(),
-                    nav.clone(),
-                    reload_tx.clone(),
+            let target2 = target.clone();
+            let walk_excludes = exclude_names.clone();
+            let walk_extensions = extensions.clone();
+            let walk_h = tokio::task::spawn_blocking(move || {
+                walk::build_all(
+                    &target2,
                     use_ignore,
-                    exclude_names.clone(),
-                    extensions.clone(),
+                    &walk_excludes,
+                    &walk_extensions,
                     no_excludes,
-                )?;
-                repos?
-            } else {
-                watch::spawn_dir(
-                    target.clone(),
-                    nav.clone(),
-                    reload_tx.clone(),
-                    use_ignore,
-                    exclude_names.clone(),
-                    extensions.clone(),
-                    no_excludes,
-                )?;
-                tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes))
-                    .await?
-            }
+                )
+            });
+            let repo_h =
+                tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes));
+            let (fresh, repos) = tokio::join!(walk_h, repo_h);
+            *nav.write().unwrap() = fresh?;
+            watch::spawn_dir(
+                target.clone(),
+                nav.clone(),
+                reload_tx.clone(),
+                use_ignore,
+                exclude_names.clone(),
+                extensions.clone(),
+                no_excludes,
+            )?;
+            repos?
         }
         Mode::File => {
             watch::spawn_file(target.clone(), reload_tx.clone())?;
@@ -527,6 +511,7 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
 
     let body = match tmpl::explorer(ExplorerCtx {
         crumbs: &crumbs,
+        current_path: rel,
         has_parent,
         parent_href: &parent_href,
         entries: &entries,

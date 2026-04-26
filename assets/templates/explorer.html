@@ -1,4 +1,26 @@
-<article class="markdown-body" data-explorer="true">
+<article class="markdown-body" data-explorer="true" data-current-path="{{ current_path }}">
   <section class="ghrm-explorer-shell">
 {{ title_block }}{{ table_or_empty }}  </section>
+  <template id="ghrm-search-file-row">
+    <tr>
+      <td class="ghrm-nav-icon">
+        <svg aria-hidden="true" focusable="false" class="octicon">
+          <use href="#ghrm-icon-file"></use>
+        </svg>
+      </td>
+      <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
+      <td class="ghrm-nav-date"></td>
+    </tr>
+  </template>
+  <template id="ghrm-search-dir-row">
+    <tr>
+      <td class="ghrm-nav-icon">
+        <svg aria-hidden="true" focusable="false" class="octicon">
+          <use href="#ghrm-icon-dir"></use>
+        </svg>
+      </td>
+      <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
+      <td class="ghrm-nav-date"></td>
+    </tr>
+  </template>
 {{ readme_block }}</article>

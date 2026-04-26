@@ -1,6 +1,7 @@
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
 
 const VALID_SCOPES = new Set(['filter', 'files', 'all']);
+const treeCache = new Map();
 
 function defaultScope() {
   const scope = document.body?.dataset.defaultScope;
@@ -133,6 +134,49 @@ function setupThemeToggle() {
 
 function icon(name) {
   return `<svg aria-hidden="true" height="16" width="16" class="ghrm-file-icon"><use href="#ghrm-icon-${name}"></use></svg>`;
+}
+
+function pathJoin(parent, name) {
+  return parent ? `${parent}/${name}` : name;
+}
+
+function pathFromHref(href) {
+  const url = new URL(href, location.origin);
+  return decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g, '');
+}
+
+function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      default:
+        return '&#39;';
+    }
+  });
+}
+
+function highlightMatch(value, query) {
+  const lower = value.toLowerCase();
+  const needle = query.toLowerCase();
+  let start = 0;
+  let out = '';
+
+  for (;;) {
+    const idx = lower.indexOf(needle, start);
+    if (idx === -1) break;
+    out += escapeHtml(value.slice(start, idx));
+    out += `<strong class="ghrm-search-hit">${escapeHtml(value.slice(idx, idx + needle.length))}</strong>`;
+    start = idx + needle.length;
+  }
+
+  return out + escapeHtml(value.slice(start));
 }
 
 function visiblePane(selector) {
@@ -329,6 +373,180 @@ function setupFileViews() {
   }
 }
 
+async function scopedTree() {
+  const scope = currentScope();
+  if (treeCache.has(scope)) return treeCache.get(scope);
+  const res = await fetch(withScope('/_ghrm/tree', scope)).catch(() => null);
+  if (!res || !res.ok) return null;
+  const tree = await res.json().catch(() => null);
+  if (!tree?.dirs) return null;
+  treeCache.set(scope, tree);
+  return tree;
+}
+
+function searchEntries(tree, currentPath, rawQuery) {
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) return [];
+
+  const prefix = currentPath ? `${currentPath}/` : '';
+  const results = [];
+  for (const [dir, navDir] of Object.entries(tree.dirs)) {
+    if (currentPath && dir !== currentPath && !dir.startsWith(prefix)) {
+      continue;
+    }
+    const relDir = dir === currentPath ? '' : dir.slice(prefix.length);
+    for (const entry of navDir.entries ?? []) {
+      const fullPath = pathFromHref(entry.href);
+      if (currentPath && !fullPath.startsWith(prefix)) continue;
+      const relPath = relDir
+        ? pathJoin(relDir, entry.name)
+        : pathJoin('', entry.name);
+      if (!relPath.toLowerCase().includes(query)) continue;
+      results.push({
+        ...entry,
+        display: entry.is_dir ? `${relPath}/` : relPath,
+      });
+    }
+  }
+
+  return results
+    .sort((a, b) => {
+      const aName = a.display.toLowerCase();
+      const bName = b.display.toLowerCase();
+      const aBase = a.name.toLowerCase().includes(query) ? 0 : 1;
+      const bBase = b.name.toLowerCase().includes(query) ? 0 : 1;
+      return (
+        aBase - bBase ||
+        aName.length - bName.length ||
+        aName.localeCompare(bName)
+      );
+    })
+    .slice(0, 100);
+}
+
+function ensureNavTable(article) {
+  const table = article.querySelector('.ghrm-nav-table');
+  if (table) return table;
+
+  const empty = article.querySelector('.ghrm-nav-empty');
+  if (!empty) return null;
+  const next = document.createElement('table');
+  next.className = 'ghrm-nav-table';
+  next.innerHTML = '<tbody></tbody>';
+  empty.after(next);
+  return next;
+}
+
+function renderSearchRows(tbody, results, query) {
+  if (results.length === 0) {
+    tbody.innerHTML =
+      '<tr class="ghrm-search-empty"><td colspan="3">No matching paths.</td></tr>';
+    return;
+  }
+
+  tbody.replaceChildren();
+  for (const entry of results) {
+    const id = entry.is_dir ? 'ghrm-search-dir-row' : 'ghrm-search-file-row';
+    const tmpl = document.getElementById(id);
+    const row = tmpl?.content.firstElementChild?.cloneNode(true);
+    if (!row) continue;
+
+    const link = row.querySelector('.ghrm-search-path');
+    const date = row.querySelector('.ghrm-nav-date');
+    link.href = withScope(entry.href);
+    link.innerHTML = highlightMatch(entry.display, query);
+    if (entry.modified) {
+      date.dataset.ts = String(entry.modified);
+    }
+    tbody.append(row);
+  }
+}
+
+function setupPathSearch() {
+  const article = document.querySelector('article[data-explorer]');
+  const search = document.getElementById('ghrm-path-search');
+  const input = document.getElementById('ghrm-path-search-input');
+  const button = document.getElementById('ghrm-path-search-toggle');
+  const status = document.getElementById('ghrm-path-search-status');
+  const table = article ? ensureNavTable(article) : null;
+  const tbody = table?.querySelector('tbody');
+  if (!search || !input || !button || !status) return;
+
+  search.hidden = !article;
+  search.classList.remove('is-open');
+  input.value = '';
+  input.tabIndex = -1;
+  input.oninput = null;
+  input.onkeydown = null;
+  button.onclick = null;
+  button.setAttribute('aria-expanded', 'false');
+  status.textContent = '';
+  if (!article || !table || !tbody) return;
+
+  const empty = article.querySelector('.ghrm-nav-empty');
+  const originalRows = tbody.innerHTML;
+  const currentPath = article.dataset.currentPath ?? '';
+  let searchSeq = 0;
+  if (!originalRows.trim()) {
+    table.hidden = true;
+  }
+
+  const resetSearch = () => {
+    tbody.innerHTML = originalRows;
+    table.hidden = !originalRows.trim();
+    if (empty) empty.hidden = false;
+    status.textContent = '';
+    populateDates();
+    setupNavExternalLinks();
+  };
+
+  button.onclick = () => {
+    const open = !search.classList.contains('is-open');
+    search.classList.toggle('is-open', open);
+    button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    input.tabIndex = open ? 0 : -1;
+    if (open) {
+      input.focus();
+    } else {
+      input.value = '';
+      searchSeq += 1;
+      resetSearch();
+    }
+  };
+
+  input.oninput = async () => {
+    searchSeq += 1;
+    const seq = searchSeq;
+    const query = input.value.trim();
+    if (!query) {
+      resetSearch();
+      return;
+    }
+
+    const tree = await scopedTree();
+    if (seq !== searchSeq) return;
+    const results = tree ? searchEntries(tree, currentPath, query) : [];
+    if (empty) empty.hidden = true;
+    table.hidden = false;
+    renderSearchRows(tbody, results, query);
+    status.textContent =
+      results.length === 1 ? '1 path' : `${results.length} paths`;
+    populateDates();
+    setupNavExternalLinks();
+  };
+
+  input.onkeydown = (e) => {
+    if (e.key !== 'Escape') return;
+    search.classList.remove('is-open');
+    button.setAttribute('aria-expanded', 'false');
+    input.tabIndex = -1;
+    input.value = '';
+    searchSeq += 1;
+    resetSearch();
+    button.focus();
+  };
+}
+
 function hasDocChrome() {
   return !!document.querySelector('.ghrm-page-shell, .ghrm-readme-box');
 }
@@ -436,6 +654,7 @@ async function navigate(path, push = true) {
   document.title = doc.title;
   if (push) history.pushState(null, '', target);
   setupFileViews();
+  setupPathSearch();
   setupNavExternalLinks();
   setupScopeSwitch();
   syncScopeSwitch();
@@ -633,6 +852,7 @@ function setupNavExternalLinks() {
 
 document.addEventListener('DOMContentLoaded', () => {
   setupFileViews();
+  setupPathSearch();
   setupScopeSwitch();
   syncScopeVisibility();
   setupDocChromeToggle();

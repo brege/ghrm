@@ -23,7 +23,16 @@
 <body data-default-scope="{{ default_scope }}" data-has-ext-filter="{{ has_ext_filter }}">
 {{ icons }}  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">
-{{ source }}      <button id="doc-chrome-toggle" type="button" hidden aria-label="Hide document wrapper" title="Hide document wrapper">
+{{ source }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
+        <input id="ghrm-path-search-input" class="ghrm-path-search-input" type="search" placeholder="Search paths" aria-label="Search paths">
+        <button id="ghrm-path-search-toggle" type="button" aria-expanded="false" aria-label="Search paths" title="Search paths">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-search"></use>
+          </svg>
+        </button>
+        <span id="ghrm-path-search-status" class="ghrm-path-search-status" aria-live="polite"></span>
+      </div>
+      <button id="doc-chrome-toggle" type="button" hidden aria-label="Hide document wrapper" title="Hide document wrapper">
         <svg class="icon-framed" aria-hidden="true" focusable="false">
           <use href="#ghrm-icon-doc-framed"></use>
         </svg>

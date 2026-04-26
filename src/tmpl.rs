@@ -25,6 +25,7 @@ pub struct PageCtx<'a> {
 
 pub struct ExplorerCtx<'a> {
     pub crumbs: &'a str,
+    pub current_path: &'a str,
     pub has_parent: bool,
     pub parent_href: &'a str,
     pub entries: &'a [ExplorerEntry],
@@ -204,6 +205,11 @@ pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
     replace(&mut title_block, "{{ crumbs }}", ctx.crumbs);
 
     let mut out = explorer_tmpl;
+    replace(
+        &mut out,
+        "{{ current_path }}",
+        &html_escape::encode_double_quoted_attribute(ctx.current_path),
+    );
     replace(&mut out, "{{ title_block }}", &title_block);
     replace(&mut out, "{{ table_or_empty }}", &table_or_empty);
     replace(&mut out, "{{ readme_block }}", &readme_block);
