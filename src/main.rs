@@ -1,6 +1,7 @@
 mod config;
 mod render;
 mod repo;
+mod search;
 mod server;
 mod theme;
 mod tmpl;

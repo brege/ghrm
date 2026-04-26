@@ -1,5 +1,6 @@
 use crate::render::{self, Rendered};
 use crate::repo::{Forge, RepoSet, SourceState};
+use crate::search;
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
 use crate::walk::{self, NavSet, ViewOpts};
 use crate::watch;
@@ -192,6 +193,7 @@ pub async fn run(options: Options) -> Result<()> {
         .route("/", get(root))
         .route("/_ghrm/ws", get(ws_handler))
         .route("/_ghrm/tree", get(api_tree))
+        .route("/_ghrm/search", get(api_search))
         .route("/_ghrm/render", get(api_render))
         .route("/_ghrm/raw/{*path}", get(raw_file))
         .route("/_ghrm/html/{*path}", get(html_file))
@@ -788,6 +790,61 @@ async fn api_tree(State(s): State<AppState>, Query(q): Query<ViewQuery>) -> Resp
             .unwrap(),
         Err(e) => {
             warn!("api_tree error: {}", e);
+            not_found()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct SearchQuery {
+    q: Option<String>,
+    hidden: Option<u8>,
+    excludes: Option<u8>,
+    filter: Option<u8>,
+}
+
+async fn api_search(State(s): State<AppState>, Query(q): Query<SearchQuery>) -> Response {
+    let query = match q.q.as_deref() {
+        Some(q) if !q.is_empty() => q,
+        _ => {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"error":"missing query"}"#))
+                .unwrap();
+        }
+    };
+
+    let hidden = q.hidden.unwrap_or(0) == 1;
+    let show_excludes = q.excludes.unwrap_or(0) == 1;
+    let filter = q.filter.unwrap_or(0) == 1;
+    let filter_exts = if filter {
+        Some(s.filter_exts.as_slice())
+    } else {
+        None
+    };
+    let exclude_names = if show_excludes {
+        &[][..]
+    } else {
+        &s.exclude_names
+    };
+
+    let resp = search::search(search::SearchOpts {
+        query,
+        root: &s.target,
+        hidden,
+        exclude_names,
+        filter_exts,
+    });
+
+    match serde_json::to_string(&resp) {
+        Ok(json) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json))
+            .unwrap(),
+        Err(e) => {
+            warn!("api_search error: {}", e);
             not_found()
         }
     }
