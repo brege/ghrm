@@ -67,6 +67,7 @@ async function pathSearch(query, currentPath) {
   }
   params.set('hidden', view.showHidden ? '1' : '0');
   params.set('excludes', view.showExcludes ? '1' : '0');
+  params.set('ignore', view.useIgnore ? '1' : '0');
   params.set('filter', view.filterExt ? '1' : '0');
   params.set('sort', view.sort);
   params.set('dir', view.sortDir);
@@ -86,6 +87,7 @@ async function contentSearch(query) {
   params.set('q', query);
   params.set('hidden', view.showHidden ? '1' : '0');
   params.set('excludes', view.showExcludes ? '1' : '0');
+  params.set('ignore', view.useIgnore ? '1' : '0');
   params.set('filter', view.filterExt ? '1' : '0');
   params.set('sort', view.sort);
   params.set('dir', view.sortDir);

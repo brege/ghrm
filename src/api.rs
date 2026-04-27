@@ -30,7 +30,12 @@ pub(crate) async fn tree(
     let nav = s.nav.read().unwrap();
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let matcher = view::matcher(&view, &s.filters);
-    let tree = nav.get(view.opts, view.sort, view.sort_dir, matcher.as_ref());
+    let tree = if view.use_ignore == s.use_ignore {
+        nav.get(view.opts, view.sort, view.sort_dir, matcher.as_ref())
+    } else {
+        drop(nav);
+        s.nav_tree(&view, matcher.as_ref())
+    };
     let root = s
         .target
         .file_name()
@@ -49,6 +54,7 @@ pub(crate) struct SearchQuery {
     q: Option<String>,
     hidden: Option<u8>,
     excludes: Option<u8>,
+    ignore: Option<u8>,
     filter: Option<u8>,
     sort: Option<String>,
     dir: Option<String>,
@@ -68,6 +74,7 @@ pub(crate) async fn search(
         &ViewQuery {
             hidden: q.hidden.map(|value| value.to_string()),
             excludes: q.excludes.map(|value| value.to_string()),
+            ignore: q.ignore.map(|value| value.to_string()),
             filter: q.filter.map(|value| value.to_string()),
             sort: q.sort.clone(),
             dir: q.dir.clone(),
@@ -87,7 +94,7 @@ pub(crate) async fn search(
     let resp = content_search::search(content_search::SearchOpts {
         query,
         root: &s.target,
-        use_ignore: s.use_ignore,
+        use_ignore: view.use_ignore,
         hidden: view.opts.show_hidden,
         exclude_names,
         filter_exts,
@@ -133,9 +140,8 @@ pub(crate) async fn path_search(
 
     let view = view::from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let current_path = q.path.as_deref().unwrap_or("").trim_matches('/');
-    let nav = s.nav.read().unwrap();
     let matcher = view::matcher(&view, &s.filters);
-    let tree = nav.get(view.opts, view.sort, view.sort_dir, matcher.as_ref());
+    let tree = s.nav_tree(&view, matcher.as_ref());
     let resp = path_search_results(
         &tree,
         current_path,

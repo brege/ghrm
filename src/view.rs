@@ -6,6 +6,7 @@ use serde::Deserialize;
 #[derive(Clone)]
 pub(crate) struct ViewConfig {
     pub(crate) default: ViewOpts,
+    pub(crate) default_use_ignore: bool,
     pub(crate) default_groups: Vec<String>,
     pub(crate) default_sort: walk::Sort,
     pub(crate) can_toggle_excludes: bool,
@@ -14,6 +15,7 @@ pub(crate) struct ViewConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ViewState {
     pub(crate) opts: ViewOpts,
+    pub(crate) use_ignore: bool,
     pub(crate) groups: Vec<String>,
     pub(crate) sort: walk::Sort,
     pub(crate) sort_dir: walk::SortDir,
@@ -23,6 +25,7 @@ pub(crate) struct ViewState {
 pub(crate) struct ViewQuery {
     pub(crate) hidden: Option<String>,
     pub(crate) excludes: Option<String>,
+    pub(crate) ignore: Option<String>,
     pub(crate) filter: Option<String>,
     pub(crate) sort: Option<String>,
     pub(crate) dir: Option<String>,
@@ -89,6 +92,11 @@ pub(crate) fn from_query(
             },
             filter_ext,
         },
+        use_ignore: q
+            .ignore
+            .as_deref()
+            .and_then(parse_bool_param)
+            .unwrap_or(cfg.default_use_ignore),
         groups,
         sort,
         sort_dir,
@@ -147,6 +155,12 @@ pub(crate) fn with_view(href: &str, view: &ViewState, cfg: &ViewConfig) -> Strin
     } else {
         pairs.retain(|(key, _)| key != "excludes");
     }
+    set_bool_param(
+        &mut pairs,
+        "ignore",
+        view.use_ignore,
+        cfg.default_use_ignore,
+    );
     set_bool_param(
         &mut pairs,
         "filter",
@@ -277,12 +291,14 @@ mod tests {
                 show_excludes: true,
                 filter_ext: false,
             },
+            default_use_ignore: true,
             default_groups: Vec::new(),
             default_sort: walk::Sort::Name,
             can_toggle_excludes: true,
         };
         let view = ViewState {
             opts: cfg.default,
+            use_ignore: cfg.default_use_ignore,
             groups: Vec::new(),
             sort: cfg.default_sort,
             sort_dir: cfg.default_sort.default_dir(),
@@ -298,6 +314,7 @@ mod tests {
                 show_excludes: true,
                 filter_ext: false,
             },
+            default_use_ignore: true,
             default_groups: Vec::new(),
             default_sort: walk::Sort::Name,
             can_toggle_excludes: true,
@@ -308,13 +325,14 @@ mod tests {
                 show_excludes: false,
                 filter_ext: true,
             },
+            use_ignore: false,
             groups: Vec::new(),
             sort: walk::Sort::Timestamp,
             sort_dir: walk::Sort::Timestamp.default_dir(),
         };
         assert_eq!(
             with_view("/docs/", &view, &cfg),
-            "/docs/?hidden=1&excludes=0&filter=1&sort=timestamp"
+            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp"
         );
     }
 
@@ -327,6 +345,7 @@ mod tests {
                 show_excludes: false,
                 filter_ext: false,
             },
+            default_use_ignore: true,
             default_groups: filters.default_groups().to_vec(),
             default_sort: walk::Sort::Name,
             can_toggle_excludes: false,
@@ -337,6 +356,7 @@ mod tests {
                 show_excludes: false,
                 filter_ext: true,
             },
+            use_ignore: true,
             groups: vec!["docs".to_string(), "web".to_string()],
             sort: walk::Sort::Name,
             sort_dir: walk::Sort::Name.default_dir(),

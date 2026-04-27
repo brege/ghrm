@@ -65,6 +65,15 @@ pub struct SortSpec {
     pub dir: SortDir,
 }
 
+pub struct ListSpec<'a> {
+    pub use_ignore: bool,
+    pub exclude_names: &'a [String],
+    pub extensions: &'a [String],
+    pub matcher: Option<&'a crate::filter::Matcher>,
+    pub opts: ViewOpts,
+    pub order: SortSpec,
+}
+
 impl SortDir {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -494,30 +503,37 @@ fn dir_href(path: &Path) -> String {
     }
 }
 
-pub fn list_dir(
-    root: &Path,
-    rel: &Path,
-    exclude_names: &[String],
-    extensions: &[String],
-    matcher: Option<&crate::filter::Matcher>,
-    opts: ViewOpts,
-    order: SortSpec,
-) -> Option<NavDir> {
+pub fn list_dir(root: &Path, rel: &Path, spec: ListSpec<'_>) -> Option<NavDir> {
     let abs = root.join(rel);
-    let read_dir = std::fs::read_dir(&abs).ok()?;
+    if !abs.is_dir() {
+        return None;
+    }
 
     let mut entries = Vec::new();
     let mut readme = None;
+    let mut walker = WalkBuilder::new(&abs);
+    walker
+        .max_depth(Some(1))
+        .hidden(false)
+        .follow_links(true)
+        .same_file_system(true)
+        .require_git(false)
+        .git_ignore(spec.use_ignore)
+        .git_exclude(spec.use_ignore)
+        .git_global(spec.use_ignore);
 
-    for entry in read_dir.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let file_type = match entry.file_type() {
-            Ok(ft) => ft,
-            Err(_) => continue,
+    for entry in walker.build().filter_map(Result::ok) {
+        let path = entry.path();
+        if path == abs {
+            continue;
+        }
+        let Some(file_type) = entry.file_type() else {
+            continue;
         };
+        let name = entry.file_name().to_string_lossy().into_owned();
 
         let entry_rel = rel.join(&name);
-        if !allow_path(&entry_rel, exclude_names, opts) {
+        if !allow_path(&entry_rel, spec.exclude_names, spec.opts) {
             continue;
         }
         let mtime = entry
@@ -535,7 +551,7 @@ pub fn list_dir(
                 modified: mtime,
             });
         } else if file_type.is_file() {
-            if opts.filter_ext && !matches_filter(&entry_rel, extensions, matcher) {
+            if spec.opts.filter_ext && !matches_filter(&entry_rel, spec.extensions, spec.matcher) {
                 continue;
             }
             if is_readme(&entry_rel) {
@@ -550,7 +566,7 @@ pub fn list_dir(
         }
     }
 
-    sort_entries(&mut entries, order.sort, order.dir);
+    sort_entries(&mut entries, spec.order.sort, spec.order.dir);
     Some(NavDir { entries, readme })
 }
 
@@ -648,6 +664,9 @@ fn apply_dir(order: Ordering, dir: SortDir) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn entry(name: &str, is_dir: bool, modified: Option<u64>) -> NavEntry {
         NavEntry {
@@ -706,5 +725,86 @@ mod tests {
         sort_entries(&mut entries, Sort::Name, SortDir::Desc);
         let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
         assert_eq!(names, vec!["beta", "alpha", "b.md", "a.md"]);
+    }
+
+    #[test]
+    fn list_dir_toggles_gitignore() {
+        let td = TempDir::new();
+        fs::write(td.path().join(".gitignore"), "ignored.txt\n").unwrap();
+        fs::write(td.path().join("ignored.txt"), "ignored\n").unwrap();
+        fs::write(td.path().join("visible.txt"), "visible\n").unwrap();
+
+        let opts = ViewOpts {
+            show_hidden: true,
+            show_excludes: true,
+            filter_ext: false,
+        };
+        let order = SortSpec {
+            sort: Sort::Name,
+            dir: SortDir::Asc,
+        };
+        let ignored = list_dir(
+            td.path(),
+            Path::new(""),
+            ListSpec {
+                use_ignore: true,
+                exclude_names: &[],
+                extensions: &[],
+                matcher: None,
+                opts,
+                order,
+            },
+        )
+        .unwrap()
+        .entries;
+        let ignored_names: Vec<_> = ignored.into_iter().map(|entry| entry.name).collect();
+        assert!(!ignored_names.contains(&"ignored.txt".to_string()));
+
+        let shown = list_dir(
+            td.path(),
+            Path::new(""),
+            ListSpec {
+                use_ignore: false,
+                exclude_names: &[],
+                extensions: &[],
+                matcher: None,
+                opts,
+                order,
+            },
+        )
+        .unwrap()
+        .entries;
+        let shown_names: Vec<_> = shown.into_iter().map(|entry| entry.name).collect();
+        assert!(shown_names.contains(&"ignored.txt".to_string()));
+    }
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new() -> Self {
+            let unique = format!(
+                "ghrm-walk-test-{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            );
+            let path = std::env::temp_dir().join(unique);
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
     }
 }

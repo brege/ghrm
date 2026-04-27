@@ -21,6 +21,7 @@ import {
   defaultShowHidden,
   defaultSort,
   defaultSortDir,
+  defaultUseIgnore,
   withView,
 } from './view.js';
 
@@ -34,6 +35,7 @@ function syncViewMenu() {
     const active =
       view.showHidden !== defaultShowHidden() ||
       (canToggleExcludes() && view.showExcludes !== defaultShowExcludes()) ||
+      view.useIgnore !== defaultUseIgnore() ||
       view.filterExt !== defaultFilterExt() ||
       view.filterGroups.join(',') !== defaultFilterGroups().join(',');
     toggle.classList.toggle('is-active', active);
@@ -48,6 +50,7 @@ function syncViewMenu() {
     const active =
       (button.dataset.viewToggle === 'hidden' && view.showHidden) ||
       (button.dataset.viewToggle === 'excludes' && view.showExcludes) ||
+      (button.dataset.viewToggle === 'ignored' && !view.useIgnore) ||
       (button.dataset.viewToggle === 'filter' && view.filterExt) ||
       (button.dataset.filterGroup &&
         view.filterGroups.includes(button.dataset.filterGroup));
@@ -209,6 +212,9 @@ function setupViewMenu() {
         case 'excludes':
           if (!canToggleExcludes()) return;
           next.showExcludes = !view.showExcludes;
+          break;
+        case 'ignored':
+          next.useIgnore = !view.useIgnore;
           break;
         case 'filter':
           next.filterExt = !view.filterExt;

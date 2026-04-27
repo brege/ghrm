@@ -36,6 +36,7 @@ pub struct AppState {
     pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
     pub use_ignore: bool,
+    pub no_excludes: bool,
     pub view_cfg: ViewConfig,
     pub filter_exts: Vec<String>,
     pub filters: filter::Set,
@@ -99,6 +100,7 @@ pub async fn run(options: Options) -> Result<()> {
             show_excludes: no_excludes,
             filter_ext: default_filter_ext,
         },
+        default_use_ignore: use_ignore,
         default_groups: filters.default_groups().to_vec(),
         default_sort: walk::Sort::Name,
         can_toggle_excludes: no_excludes,
@@ -165,6 +167,7 @@ pub async fn run(options: Options) -> Result<()> {
         repos,
         reload: reload_tx,
         use_ignore,
+        no_excludes,
         view_cfg,
         filter_exts: extensions,
         filters,
@@ -228,6 +231,31 @@ pub async fn run(options: Options) -> Result<()> {
     )
     .await?;
     Ok(())
+}
+
+impl AppState {
+    pub(crate) fn nav_tree(
+        &self,
+        view: &ViewState,
+        matcher: Option<&filter::Matcher>,
+    ) -> Arc<walk::NavTree> {
+        if view.use_ignore == self.use_ignore {
+            return self
+                .nav
+                .read()
+                .unwrap()
+                .get(view.opts, view.sort, view.sort_dir, matcher);
+        }
+
+        walk::build_all(
+            &self.target,
+            view.use_ignore,
+            &self.exclude_names,
+            &self.filter_exts,
+            self.no_excludes,
+        )
+        .get(view.opts, view.sort, view.sort_dir, matcher)
+    }
 }
 
 async fn find_addr(bind: &str, start_port: u16) -> Result<SocketAddr> {
@@ -499,26 +527,23 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewS
 async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     let matcher = view::matcher(&view, &s.filters);
     let filter_exts = view::filter_exts(&view, &s.filter_exts);
-    let dir_opt = {
-        let guard = s.nav.read().unwrap();
-        guard
-            .get(view.opts, view.sort, view.sort_dir, matcher.as_ref())
-            .dirs
-            .get(rel)
-            .cloned()
-    };
+    let tree = s.nav_tree(&view, matcher.as_ref());
+    let dir_opt = tree.dirs.get(rel).cloned();
 
     let dir = match dir_opt {
         Some(d) if d.entries.is_empty() => walk::list_dir(
             &s.target,
             Path::new(rel),
-            &s.exclude_names,
-            filter_exts.unwrap_or(&[]),
-            matcher.as_ref(),
-            view.opts,
-            walk::SortSpec {
-                sort: view.sort,
-                dir: view.sort_dir,
+            walk::ListSpec {
+                use_ignore: view.use_ignore,
+                exclude_names: &s.exclude_names,
+                extensions: filter_exts.unwrap_or(&[]),
+                matcher: matcher.as_ref(),
+                opts: view.opts,
+                order: walk::SortSpec {
+                    sort: view.sort,
+                    dir: view.sort_dir,
+                },
             },
         )
         .unwrap_or(d),
@@ -526,13 +551,16 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         None => match walk::list_dir(
             &s.target,
             Path::new(rel),
-            &s.exclude_names,
-            filter_exts.unwrap_or(&[]),
-            matcher.as_ref(),
-            view.opts,
-            walk::SortSpec {
-                sort: view.sort,
-                dir: view.sort_dir,
+            walk::ListSpec {
+                use_ignore: view.use_ignore,
+                exclude_names: &s.exclude_names,
+                extensions: filter_exts.unwrap_or(&[]),
+                matcher: matcher.as_ref(),
+                opts: view.opts,
+                order: walk::SortSpec {
+                    sort: view.sort,
+                    dir: view.sort_dir,
+                },
             },
         ) {
             Some(d) => d,
@@ -665,6 +693,7 @@ fn respond_html(
         show_logout,
         default_show_hidden: cfg.default.show_hidden,
         default_show_excludes: cfg.default.show_excludes,
+        default_use_ignore: cfg.default_use_ignore,
         default_filter_ext: cfg.default.filter_ext,
         default_filter_group: cfg.default_groups.first().map(String::as_str),
         default_sort: cfg.default_sort.as_str(),

@@ -74,8 +74,7 @@ rm -r ~/.cache/ghrm
 
 ## Roadmap
 
-- refactor server.js from being a catchall
-- mainline gitignore to filter mechanic
+- No current plans
 
 ## License
 

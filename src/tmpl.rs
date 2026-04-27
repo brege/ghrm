@@ -15,6 +15,7 @@ pub struct PageShell<'a> {
     pub show_logout: bool,
     pub default_show_hidden: bool,
     pub default_show_excludes: bool,
+    pub default_use_ignore: bool,
     pub default_filter_ext: bool,
     pub default_filter_group: Option<&'a str>,
     pub default_sort: &'a str,

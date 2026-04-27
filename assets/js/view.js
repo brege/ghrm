@@ -6,6 +6,10 @@ export function defaultShowExcludes() {
   return document.body?.dataset.defaultShowExcludes === '1';
 }
 
+export function defaultUseIgnore() {
+  return document.body?.dataset.defaultUseIgnore === '1';
+}
+
 export function defaultFilterExt() {
   return document.body?.dataset.defaultFilterExt === '1';
 }
@@ -66,6 +70,7 @@ export function currentView() {
     showExcludes: canToggleExcludes()
       ? (parseQueryBool(params.get('excludes')) ?? defaultShowExcludes())
       : false,
+    useIgnore: parseQueryBool(params.get('ignore')) ?? defaultUseIgnore(),
     filterExt: parseQueryBool(params.get('filter')) ?? defaultFilterExt(),
     sort: parseSort(params.get('sort')) || defaultSort(),
     sortDir:
@@ -102,6 +107,7 @@ export function withView(urlLike, view = currentView()) {
   } else {
     url.searchParams.delete('excludes');
   }
+  setQueryBool(url.searchParams, 'ignore', view.useIgnore, defaultUseIgnore());
   setQueryBool(url.searchParams, 'filter', view.filterExt, defaultFilterExt());
   if (view.sort === defaultSort()) {
     url.searchParams.delete('sort');

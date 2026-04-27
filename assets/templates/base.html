@@ -28,6 +28,7 @@
 <body
   data-default-show-hidden="{% if default_show_hidden %}1{% else %}0{% endif %}"
   data-default-show-excludes="{% if default_show_excludes %}1{% else %}0{% endif %}"
+  data-default-use-ignore="{% if default_use_ignore %}1{% else %}0{% endif %}"
   data-default-filter-ext="{% if default_filter_ext %}1{% else %}0{% endif %}"
   data-default-filter-group="{% if let Some(group) = default_filter_group %}{{ group }}{% endif %}"
   data-default-sort="{{ default_sort }}"
