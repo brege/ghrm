@@ -1,3 +1,4 @@
+mod auth;
 mod config;
 mod render;
 mod repo;
@@ -9,9 +10,11 @@ mod vendor;
 mod walk;
 mod watch;
 
+use crate::auth::AuthConfig;
 use anyhow::Result;
 use clap::Parser;
 use std::collections::BTreeSet;
+use std::net::IpAddr;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -102,6 +105,25 @@ fn main() -> Result<()> {
         .bind
         .or(cfg.bind)
         .unwrap_or_else(|| "127.0.0.1".to_string());
+    let auth = match (cfg.auth.password, cfg.auth.password_hash) {
+        (Some(_), Some(_)) => {
+            anyhow::bail!("auth.password and auth.password_hash are mutually exclusive")
+        }
+        (Some(password), None) => Some(AuthConfig {
+            username: cfg.auth.username.unwrap_or_else(|| "admin".to_string()),
+            password,
+        }),
+        (None, Some(_)) => anyhow::bail!("auth.password_hash is not supported"),
+        (None, None) => {
+            if cfg.auth.username.is_some() {
+                anyhow::bail!("auth.username requires auth.password");
+            }
+            None
+        }
+    };
+    if bind_requires_auth(&bind) && auth.is_none() {
+        anyhow::bail!("non-loopback bind requires auth.password");
+    }
     let no_ignore = cli.no_ignore || cfg.walk.no_ignore.unwrap_or(false);
     let open = !cli.no_browser
         && match std::env::var("GHRM_OPEN").as_deref() {
@@ -150,6 +172,7 @@ fn main() -> Result<()> {
         exclude_names,
         no_excludes,
         search_max_rows: max_rows,
+        auth,
     }))
 }
 
@@ -163,4 +186,14 @@ fn normalize_extensions(raw: Vec<String>) -> Result<Vec<String>> {
         extensions.insert(ext);
     }
     Ok(extensions.into_iter().collect())
+}
+
+fn bind_requires_auth(bind: &str) -> bool {
+    if bind.eq_ignore_ascii_case("localhost") {
+        return false;
+    }
+    match bind.parse::<IpAddr>() {
+        Ok(addr) => !addr.is_loopback(),
+        Err(_) => true,
+    }
 }

@@ -74,7 +74,6 @@ rm -r ~/.cache/ghrm
 
 ## Roadmap
 
-- add password protection
 - support multiple preset filter creation
 - refactor js/css into components
 - add sorting toggles for explorer (timestamp, name, type)

@@ -10,6 +10,7 @@ pub struct PageShell<'a> {
     pub body: &'a str,
     pub source: &'a str,
     pub favicon: &'static str,
+    pub show_logout: bool,
     pub default_show_hidden: bool,
     pub default_show_excludes: bool,
     pub default_filter_ext: bool,

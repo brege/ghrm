@@ -14,6 +14,8 @@ pub struct Config {
     pub walk: WalkConfig,
     #[serde(default)]
     pub search: SearchConfig,
+    #[serde(default)]
+    pub auth: AuthConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -28,6 +30,13 @@ pub struct WalkConfig {
 #[derive(Debug, Default, Deserialize)]
 pub struct SearchConfig {
     pub max_rows: Option<usize>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct AuthConfig {
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub password_hash: Option<String>,
 }
 
 pub fn default_exclude_names() -> Vec<String> {

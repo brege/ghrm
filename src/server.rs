@@ -1,3 +1,4 @@
+use crate::auth;
 use crate::render::{self, Rendered};
 use crate::repo::{Forge, RepoSet, SourceState};
 use crate::search;
@@ -12,6 +13,7 @@ use axum::{
     body::Body,
     extract::{Path as AxPath, Query, State, ws::WebSocketUpgrade},
     http::{StatusCode, header},
+    middleware,
     response::{Html, IntoResponse, Response},
     routing::get,
 };
@@ -39,6 +41,7 @@ pub struct AppState {
     pub exclude_names: Vec<String>,
     pub search_max_rows: usize,
     pub home: Option<PathBuf>,
+    pub auth: Option<Arc<auth::AuthState>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +62,7 @@ pub struct Options {
     pub exclude_names: Vec<String>,
     pub no_excludes: bool,
     pub search_max_rows: usize,
+    pub auth: Option<auth::AuthConfig>,
 }
 
 #[derive(Clone, Copy)]
@@ -105,6 +109,7 @@ pub async fn run(options: Options) -> Result<()> {
         exclude_names,
         no_excludes,
         search_max_rows,
+        auth,
     } = options;
 
     let meta = std::fs::metadata(&target)?;
@@ -112,6 +117,10 @@ pub async fn run(options: Options) -> Result<()> {
 
     let (reload_tx, _) = broadcast::channel::<()>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
+    let auth = auth
+        .map(|auth| auth::AuthState::new(auth, port))
+        .transpose()?
+        .map(Arc::new);
     let view_cfg = ViewConfig {
         default: ViewOpts {
             show_hidden: default_hidden,
@@ -193,9 +202,10 @@ pub async fn run(options: Options) -> Result<()> {
         exclude_names,
         search_max_rows,
         home: std::env::var_os("HOME").map(PathBuf::from),
+        auth,
     };
 
-    let app = Router::new()
+    let protected = Router::new()
         .route("/", get(root))
         .route("/_ghrm/ws", get(ws_handler))
         .route("/_ghrm/tree", get(api_tree))
@@ -205,10 +215,26 @@ pub async fn run(options: Options) -> Result<()> {
         .route("/_ghrm/raw/{*path}", get(raw_file))
         .route("/_ghrm/html/{*path}", get(html_file))
         .route("/_ghrm/download/{*path}", get(download_file))
-        .route("/_ghrm/assets/{*path}", get(theme_asset))
-        .route("/vendor/{*path}", get(vendor))
-        .route("/{*path}", get(any_path))
-        .with_state(state);
+        .route("/{*path}", get(any_path));
+
+    let app = if state.auth.is_some() {
+        Router::new()
+            .route(
+                "/_ghrm/login",
+                get(auth::login_form).post(auth::login_submit),
+            )
+            .route("/_ghrm/logout", get(auth::logout))
+            .route("/_ghrm/assets/{*path}", get(theme_asset))
+            .route("/vendor/{*path}", get(vendor))
+            .merge(protected.layer(middleware::from_fn_with_state(state.clone(), auth::require)))
+            .with_state(state)
+    } else {
+        Router::new()
+            .route("/_ghrm/assets/{*path}", get(theme_asset))
+            .route("/vendor/{*path}", get(vendor))
+            .merge(protected)
+            .with_state(state)
+    };
 
     let addr = find_addr(&bind, port).await?;
     let listener = TcpListener::bind(addr).await?;
@@ -217,7 +243,11 @@ pub async fn run(options: Options) -> Result<()> {
     if open {
         open_browser(&actual);
     }
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -538,7 +568,13 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewO
             return not_found();
         }
     };
-    respond_html(&rendered, &body, s.repos.source_for(path), s.view_cfg)
+    respond_html(
+        &rendered,
+        &body,
+        s.repos.source_for(path),
+        s.view_cfg,
+        s.auth.is_some(),
+    )
 }
 
 async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
@@ -665,10 +701,22 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
     } else {
         s.target.join(rel)
     };
-    respond_html(&combined, &body, s.repos.source_for(&current), s.view_cfg)
+    respond_html(
+        &combined,
+        &body,
+        s.repos.source_for(&current),
+        s.view_cfg,
+        s.auth.is_some(),
+    )
 }
 
-fn respond_html(r: &Rendered, body: &str, source: SourceState, cfg: ViewConfig) -> Response {
+fn respond_html(
+    r: &Rendered,
+    body: &str,
+    source: SourceState,
+    cfg: ViewConfig,
+    show_logout: bool,
+) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
     } else {
@@ -680,6 +728,7 @@ fn respond_html(r: &Rendered, body: &str, source: SourceState, cfg: ViewConfig) 
         body,
         source: &source,
         favicon: tmpl::FAVICON_SVG_URL,
+        show_logout,
         default_show_hidden: cfg.default.show_hidden,
         default_show_excludes: cfg.default.show_excludes,
         default_filter_ext: cfg.default.filter_ext,
@@ -1193,7 +1242,13 @@ async fn dispatch_file(
             return not_found();
         }
     };
-    respond_html(&rendered, &body, s.repos.source_for(path), s.view_cfg)
+    respond_html(
+        &rendered,
+        &body,
+        s.repos.source_for(path),
+        s.view_cfg,
+        s.auth.is_some(),
+    )
 }
 
 fn mime_guess(path: &Path) -> &'static str {

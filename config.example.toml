@@ -21,3 +21,10 @@ exclude_names = [
 ]
 
 # extensions = ["md", "tex", "txt", "rst"]
+
+[search]
+max_rows = 1000
+
+[auth]
+# username = "admin"
+# password = "change-me"

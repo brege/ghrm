@@ -58,6 +58,12 @@
           <use href="#ghrm-icon-moon"></use>
         </svg>
       </button>
+{% if show_logout %}      <a id="ghrm-logout" href="/_ghrm/logout" aria-label="Log out" title="Log out">
+        <svg aria-hidden="true" focusable="false">
+          <use href="#ghrm-icon-logout"></use>
+        </svg>
+      </a>
+{% endif %}
     </div>
   </header>
   <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
