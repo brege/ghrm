@@ -1,3 +1,5 @@
+use crate::paths;
+
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -126,16 +128,15 @@ fn collect_repo_roots(
             continue;
         }
 
-        if !file_type.is_dir() || file_type.is_symlink() || skip_scan_name(&name, exclude_names) {
+        if !file_type.is_dir()
+            || file_type.is_symlink()
+            || !paths::allowed_name(&name, exclude_names)
+        {
             continue;
         }
 
         collect_repo_roots(&entry.path(), exclude_names, roots, seen);
     }
-}
-
-fn skip_scan_name(name: &str, exclude_names: &[String]) -> bool {
-    exclude_names.iter().any(|entry| entry == name)
 }
 
 fn source_for_repo(root: &Path) -> SourceState {

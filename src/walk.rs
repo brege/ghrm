@@ -1,3 +1,5 @@
+use crate::paths;
+
 use ignore::{WalkBuilder, WalkState};
 use serde::Serialize;
 use std::cmp::Ordering;
@@ -223,7 +225,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
 
     if !no_excludes {
         builder.filter_entry(move |e| {
-            allow_walk_name(&e.file_name().to_string_lossy(), &filter_excludes)
+            paths::allowed_name(&e.file_name().to_string_lossy(), &filter_excludes)
         });
     }
 
@@ -262,7 +264,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
             }
 
             let name = entry.file_name().to_string_lossy();
-            let is_excluded = no_excludes && !allow_walk_name(&name, &excludes);
+            let is_excluded = no_excludes && !paths::allowed_name(&name, &excludes);
 
             {
                 let mut guard = dirs_seen.lock().unwrap();
@@ -429,34 +431,18 @@ fn compute_dirs_with_files(
     dirs_with_files
 }
 
-fn allow_walk_name(name: &str, exclude_names: &[String]) -> bool {
-    name != ".git" && !exclude_names.iter().any(|entry| entry == name)
-}
-
 fn allow_dir(path: &Path, exclude_names: &[String], opts: ViewOpts) -> bool {
     path.as_os_str().is_empty() || allow_path(path, exclude_names, opts)
 }
 
 fn allow_path(path: &Path, exclude_names: &[String], opts: ViewOpts) -> bool {
-    if !opts.show_hidden && has_hidden_part(path) {
+    if !opts.show_hidden && paths::has_hidden_part(path) {
         return false;
     }
-    if !opts.show_excludes && has_excluded_part(path, exclude_names) {
+    if !opts.show_excludes && paths::has_excluded_part(path, exclude_names) {
         return false;
     }
     true
-}
-
-fn has_hidden_part(path: &Path) -> bool {
-    path.iter()
-        .any(|part| part.to_string_lossy().starts_with('.'))
-}
-
-fn has_excluded_part(path: &Path, exclude_names: &[String]) -> bool {
-    path.iter().any(|part| {
-        let name = part.to_string_lossy();
-        name.as_ref() == ".git" || exclude_names.iter().any(|entry| entry == name.as_ref())
-    })
 }
 
 fn matches_filter(

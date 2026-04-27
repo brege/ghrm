@@ -3,6 +3,7 @@ mod auth;
 mod config;
 mod delivery;
 mod filter;
+mod paths;
 mod render;
 mod repo;
 mod search;

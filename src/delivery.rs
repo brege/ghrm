@@ -1,3 +1,4 @@
+use crate::paths;
 use crate::server::{AppState, Mode};
 
 use axum::{
@@ -6,7 +7,7 @@ use axum::{
     http::{StatusCode, header},
     response::Response,
 };
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use tracing::warn;
 
 #[derive(Clone, Copy)]
@@ -43,11 +44,9 @@ pub(crate) async fn theme_asset(AxPath(path): AxPath<String>) -> Response {
         }
     };
     let rel = path.trim_start_matches('/');
-    for comp in PathBuf::from(rel).components() {
-        if !matches!(comp, Component::Normal(_)) {
-            return not_found();
-        }
-    }
+    let Some(rel) = paths::safe_rel(rel) else {
+        return not_found();
+    };
     stream_file(&base.join(rel)).await
 }
 
@@ -222,25 +221,12 @@ fn internal_file_href(kind: &str, rel: &str) -> String {
 }
 
 fn resolve_internal_file(s: &AppState, rel: &str) -> Option<PathBuf> {
-    let clean = rel.trim_matches('/');
-    if clean.is_empty() {
-        return None;
-    }
-
-    let rel_path = Path::new(clean);
-    for comp in rel_path.components() {
-        if !matches!(comp, Component::Normal(_)) {
-            return None;
-        }
-    }
-
     let base = if s.mode == Mode::File {
         s.target.parent().unwrap_or(s.target.as_path())
     } else {
         s.target.as_path()
     };
-    let path = base.join(rel_path);
-    if path.is_file() { Some(path) } else { None }
+    paths::resolve_file(base, rel)
 }
 
 async fn stream_export(path: &Path, attachment: bool) -> Response {
