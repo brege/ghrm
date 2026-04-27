@@ -74,9 +74,8 @@ rm -r ~/.cache/ghrm
 
 ## Roadmap
 
-- refactor js/css into components
-- add sorting toggles for explorer (timestamp, name, type)
-- indicate these are external linkto's in source-slot via icon
+- refactor server.js from being a catchall
+- mainline gitignore to filter mechanic
 
 ## License
 

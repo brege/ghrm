@@ -1,17 +1,85 @@
+use crate::paths;
+
 use ignore::{WalkBuilder, WalkState};
 use serde::Serialize;
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
 
 const VIEW_COMBINATIONS: usize = 8;
+const SORT_VARIANTS: usize = 6;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ViewOpts {
     pub show_hidden: bool,
     pub show_excludes: bool,
     pub filter_ext: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Sort {
+    #[default]
+    Name,
+    Type,
+    Timestamp,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SortDir {
+    #[default]
+    Asc,
+    Desc,
+}
+
+impl Sort {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Name => "name",
+            Self::Type => "type",
+            Self::Timestamp => "timestamp",
+        }
+    }
+
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "name" => Some(Self::Name),
+            "type" => Some(Self::Type),
+            "timestamp" => Some(Self::Timestamp),
+            _ => None,
+        }
+    }
+
+    pub fn default_dir(self) -> SortDir {
+        match self {
+            Self::Timestamp => SortDir::Desc,
+            Self::Name | Self::Type => SortDir::Asc,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SortSpec {
+    pub sort: Sort,
+    pub dir: SortDir,
+}
+
+impl SortDir {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Asc => "asc",
+            Self::Desc => "desc",
+        }
+    }
+
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "asc" => Some(Self::Asc),
+            "desc" => Some(Self::Desc),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -33,7 +101,7 @@ pub struct NavTree {
     pub dirs: BTreeMap<String, NavDir>,
 }
 
-type TreeSet = [Arc<NavTree>; VIEW_COMBINATIONS];
+type TreeSet = [Arc<NavTree>; VIEW_COMBINATIONS * SORT_VARIANTS];
 
 #[derive(Clone, Debug)]
 pub struct NavSet {
@@ -44,8 +112,14 @@ pub struct NavSet {
 }
 
 impl NavSet {
-    pub fn get(&self, opts: ViewOpts, matcher: Option<&crate::filter::Matcher>) -> Arc<NavTree> {
-        let idx = view_key(opts) as usize;
+    pub fn get(
+        &self,
+        opts: ViewOpts,
+        sort: Sort,
+        dir: SortDir,
+        matcher: Option<&crate::filter::Matcher>,
+    ) -> Arc<NavTree> {
+        let idx = tree_key(opts, sort, dir);
         if opts.filter_ext && matcher.is_some() {
             return Arc::new(build_tree(
                 &self.snapshot,
@@ -53,6 +127,8 @@ impl NavSet {
                 &self.extensions,
                 matcher,
                 opts,
+                sort,
+                dir,
             ));
         }
         self.trees[idx].clone()
@@ -103,12 +179,23 @@ fn build_trees(
     matcher: Option<&crate::filter::Matcher>,
 ) -> TreeSet {
     std::array::from_fn(|idx| {
+        let sort = sort_from_index(idx);
+        let dir = dir_from_index(idx);
+        let view = idx % VIEW_COMBINATIONS;
         let opts = ViewOpts {
-            show_hidden: (idx & 1) != 0,
-            show_excludes: (idx & 2) != 0,
-            filter_ext: (idx & 4) != 0,
+            show_hidden: (view & 1) != 0,
+            show_excludes: (view & 2) != 0,
+            filter_ext: (view & 4) != 0,
         };
-        Arc::new(build_tree(snap, exclude_names, extensions, matcher, opts))
+        Arc::new(build_tree(
+            snap,
+            exclude_names,
+            extensions,
+            matcher,
+            opts,
+            sort,
+            dir,
+        ))
     })
 }
 
@@ -138,7 +225,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
 
     if !no_excludes {
         builder.filter_entry(move |e| {
-            allow_walk_name(&e.file_name().to_string_lossy(), &filter_excludes)
+            paths::allowed_name(&e.file_name().to_string_lossy(), &filter_excludes)
         });
     }
 
@@ -177,7 +264,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
             }
 
             let name = entry.file_name().to_string_lossy();
-            let is_excluded = no_excludes && !allow_walk_name(&name, &excludes);
+            let is_excluded = no_excludes && !paths::allowed_name(&name, &excludes);
 
             {
                 let mut guard = dirs_seen.lock().unwrap();
@@ -249,6 +336,8 @@ fn build_tree(
     extensions: &[String],
     matcher: Option<&crate::filter::Matcher>,
     opts: ViewOpts,
+    sort: Sort,
+    dir: SortDir,
 ) -> NavTree {
     let prune_empty = opts.filter_ext;
     let dirs_with_files = if prune_empty {
@@ -302,7 +391,7 @@ fn build_tree(
             });
         }
 
-        sort_entries(&mut entries);
+        sort_entries(&mut entries, sort, dir);
         dirs.insert(path_key(dir_rel), NavDir { entries, readme });
     }
 
@@ -342,34 +431,18 @@ fn compute_dirs_with_files(
     dirs_with_files
 }
 
-fn allow_walk_name(name: &str, exclude_names: &[String]) -> bool {
-    name != ".git" && !exclude_names.iter().any(|entry| entry == name)
-}
-
 fn allow_dir(path: &Path, exclude_names: &[String], opts: ViewOpts) -> bool {
     path.as_os_str().is_empty() || allow_path(path, exclude_names, opts)
 }
 
 fn allow_path(path: &Path, exclude_names: &[String], opts: ViewOpts) -> bool {
-    if !opts.show_hidden && has_hidden_part(path) {
+    if !opts.show_hidden && paths::has_hidden_part(path) {
         return false;
     }
-    if !opts.show_excludes && has_excluded_part(path, exclude_names) {
+    if !opts.show_excludes && paths::has_excluded_part(path, exclude_names) {
         return false;
     }
     true
-}
-
-fn has_hidden_part(path: &Path) -> bool {
-    path.iter()
-        .any(|part| part.to_string_lossy().starts_with('.'))
-}
-
-fn has_excluded_part(path: &Path, exclude_names: &[String]) -> bool {
-    path.iter().any(|part| {
-        let name = part.to_string_lossy();
-        name.as_ref() == ".git" || exclude_names.iter().any(|entry| entry == name.as_ref())
-    })
 }
 
 fn matches_filter(
@@ -428,6 +501,7 @@ pub fn list_dir(
     extensions: &[String],
     matcher: Option<&crate::filter::Matcher>,
     opts: ViewOpts,
+    order: SortSpec,
 ) -> Option<NavDir> {
     let abs = root.join(rel);
     let read_dir = std::fs::read_dir(&abs).ok()?;
@@ -476,18 +550,161 @@ pub fn list_dir(
         }
     }
 
-    sort_entries(&mut entries);
+    sort_entries(&mut entries, order.sort, order.dir);
     Some(NavDir { entries, readme })
 }
 
-fn sort_entries(entries: &mut [NavEntry]) {
-    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-        (true, false) => std::cmp::Ordering::Less,
-        (false, true) => std::cmp::Ordering::Greater,
-        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-    });
+fn sort_entries(entries: &mut [NavEntry], sort: Sort, dir: SortDir) {
+    entries.sort_by(|a, b| cmp_entries(a, b, sort, dir));
 }
 
 fn view_key(opts: ViewOpts) -> u8 {
     (opts.show_hidden as u8) | ((opts.show_excludes as u8) << 1) | ((opts.filter_ext as u8) << 2)
+}
+
+fn tree_key(opts: ViewOpts, sort: Sort, dir: SortDir) -> usize {
+    (sort_index(sort) * 2 + dir_index(dir)) * VIEW_COMBINATIONS + view_key(opts) as usize
+}
+
+fn sort_index(sort: Sort) -> usize {
+    match sort {
+        Sort::Name => 0,
+        Sort::Type => 1,
+        Sort::Timestamp => 2,
+    }
+}
+
+fn sort_from_index(idx: usize) -> Sort {
+    match (idx / VIEW_COMBINATIONS) / 2 {
+        0 => Sort::Name,
+        1 => Sort::Type,
+        _ => Sort::Timestamp,
+    }
+}
+
+fn dir_from_index(idx: usize) -> SortDir {
+    match (idx / VIEW_COMBINATIONS) % 2 {
+        0 => SortDir::Asc,
+        _ => SortDir::Desc,
+    }
+}
+
+fn dir_index(dir: SortDir) -> usize {
+    match dir {
+        SortDir::Asc => 0,
+        SortDir::Desc => 1,
+    }
+}
+
+fn cmp_entries(a: &NavEntry, b: &NavEntry, sort: Sort, dir: SortDir) -> Ordering {
+    dir_first(a.is_dir, b.is_dir).then_with(|| match sort {
+        Sort::Name => apply_dir(cmp_names(&a.name, &b.name), dir),
+        Sort::Type => apply_dir(cmp_types(&a.name, &b.name, a.is_dir, b.is_dir), dir),
+        Sort::Timestamp => apply_dir(
+            cmp_timestamps(a.modified, b.modified, &a.name, &b.name),
+            dir,
+        ),
+    })
+}
+
+fn dir_first(a_is_dir: bool, b_is_dir: bool) -> Ordering {
+    match (a_is_dir, b_is_dir) {
+        (true, false) => Ordering::Less,
+        (false, true) => Ordering::Greater,
+        _ => Ordering::Equal,
+    }
+}
+
+fn cmp_names(a: &str, b: &str) -> Ordering {
+    a.to_lowercase().cmp(&b.to_lowercase())
+}
+
+fn cmp_types(a: &str, b: &str, a_is_dir: bool, b_is_dir: bool) -> Ordering {
+    if a_is_dir || b_is_dir {
+        return cmp_names(a, b);
+    }
+    ext_key(a).cmp(&ext_key(b)).then_with(|| cmp_names(a, b))
+}
+
+fn cmp_timestamps(a: Option<u64>, b: Option<u64>, a_name: &str, b_name: &str) -> Ordering {
+    a.cmp(&b).then_with(|| cmp_names(a_name, b_name))
+}
+
+fn ext_key(name: &str) -> (&str, &str) {
+    let path = Path::new(name);
+    (
+        path.extension().and_then(|ext| ext.to_str()).unwrap_or(""),
+        name,
+    )
+}
+
+fn apply_dir(order: Ordering, dir: SortDir) -> Ordering {
+    match dir {
+        SortDir::Asc => order,
+        SortDir::Desc => order.reverse(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(name: &str, is_dir: bool, modified: Option<u64>) -> NavEntry {
+        NavEntry {
+            name: name.to_string(),
+            href: String::new(),
+            is_dir,
+            modified,
+        }
+    }
+
+    #[test]
+    fn sort_name_keeps_dirs_first() {
+        let mut entries = vec![
+            entry("zeta.rs", false, Some(1)),
+            entry("alpha", true, Some(9)),
+            entry("beta.md", false, Some(3)),
+        ];
+        sort_entries(&mut entries, Sort::Name, SortDir::Asc);
+        let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
+        assert_eq!(names, vec!["alpha", "beta.md", "zeta.rs"]);
+    }
+
+    #[test]
+    fn sort_type_groups_extensions() {
+        let mut entries = vec![
+            entry("b.rs", false, Some(1)),
+            entry("docs", true, Some(9)),
+            entry("a.md", false, Some(3)),
+            entry("a.rs", false, Some(2)),
+        ];
+        sort_entries(&mut entries, Sort::Type, SortDir::Asc);
+        let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
+        assert_eq!(names, vec!["docs", "a.md", "a.rs", "b.rs"]);
+    }
+
+    #[test]
+    fn sort_timestamp_prefers_newest() {
+        let mut entries = vec![
+            entry("old.md", false, Some(1)),
+            entry("missing.md", false, None),
+            entry("new.md", false, Some(9)),
+        ];
+        sort_entries(&mut entries, Sort::Timestamp, SortDir::Desc);
+        let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
+        assert_eq!(names, vec!["new.md", "old.md", "missing.md"]);
+    }
+
+    #[test]
+    fn sort_name_desc_reverses_within_kind() {
+        let mut entries = vec![
+            entry("alpha", true, Some(9)),
+            entry("beta", true, Some(8)),
+            entry("a.md", false, Some(3)),
+            entry("b.md", false, Some(1)),
+        ];
+        sort_entries(&mut entries, Sort::Name, SortDir::Desc);
+        let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
+        assert_eq!(names, vec!["beta", "alpha", "b.md", "a.md"]);
+    }
 }

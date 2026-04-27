@@ -18,6 +18,9 @@
   <link rel="stylesheet" href="/vendor/github-markdown.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/admonitions.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/page.css">
+  <link rel="stylesheet" href="/_ghrm/assets/css/chrome.css">
+  <link rel="stylesheet" href="/_ghrm/assets/css/search.css">
+  <link rel="stylesheet" href="/_ghrm/assets/css/toc.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/features.css">
 {% if has_math %}  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
 {% endif %}{% if has_map %}  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
@@ -27,6 +30,7 @@
   data-default-show-excludes="{% if default_show_excludes %}1{% else %}0{% endif %}"
   data-default-filter-ext="{% if default_filter_ext %}1{% else %}0{% endif %}"
   data-default-filter-group="{% if let Some(group) = default_filter_group %}{{ group }}{% endif %}"
+  data-default-sort="{{ default_sort }}"
   data-can-toggle-excludes="{% if can_toggle_excludes %}1{% else %}0{% endif %}">
 {% include "fragments/icons.html" %}  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">

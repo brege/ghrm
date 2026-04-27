@@ -1,0 +1,110 @@
+.ghrm-toc-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fgColor-default, #1f2328);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex: 0 0 auto;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.ghrm-toc-btn:hover {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+.ghrm-toc-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.ghrm-toc-btn:disabled:hover {
+  background: transparent;
+}
+
+.ghrm-readme-header .ghrm-toc-btn:hover {
+  background: rgba(175, 184, 193, 0.16);
+}
+
+.ghrm-toc-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.ghrm-toc-panel {
+  position: fixed;
+  top: 53px;
+  left: 16px;
+  width: 248px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  background: var(--bgColor-default, #ffffff);
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  padding: 6px 0;
+  z-index: 150;
+  box-shadow: 0 4px 12px rgba(140, 149, 159, 0.12);
+}
+
+.ghrm-toc-panel a {
+  position: relative;
+  display: block;
+  padding: 4px 16px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--fgColor-default, #1f2328);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ghrm-toc-panel a:hover {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+  color: var(--fgColor-accent, #0969da);
+  text-decoration: none;
+}
+
+.ghrm-toc-panel a.is-active {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+  color: var(--fgColor-default, #1f2328);
+}
+
+.ghrm-toc-panel a.is-active::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--fgColor-accent, #0969da);
+}
+
+.ghrm-toc-panel .toc-h1 {
+  padding-left: 16px;
+  font-weight: 600;
+}
+.ghrm-toc-panel .toc-h2 {
+  padding-left: 16px;
+}
+.ghrm-toc-panel .toc-h3 {
+  padding-left: 28px;
+}
+.ghrm-toc-panel .toc-h4 {
+  padding-left: 40px;
+}
+.ghrm-toc-panel .toc-h5 {
+  padding-left: 52px;
+}
+.ghrm-toc-panel .toc-h6 {
+  padding-left: 60px;
+}

@@ -1,4 +1,5 @@
 use crate::filter;
+use crate::paths;
 
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcher;
@@ -88,16 +89,14 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
 
             let path = entry.path();
 
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if exclude_names.iter().any(|ex| name == ex) {
-                    return ignore::WalkState::Continue;
-                }
-            }
-
             let rel = match path.strip_prefix(opts.root) {
                 Ok(r) => r.to_path_buf(),
                 Err(_) => return ignore::WalkState::Continue,
             };
+
+            if paths::has_excluded_part(&rel, exclude_names) {
+                return ignore::WalkState::Continue;
+            }
 
             if let Some(filter) = group_filter {
                 if !filter.matches(&rel) {
@@ -176,4 +175,65 @@ fn find_matches(matcher: &RegexMatcher, text: &str) -> Vec<(usize, usize)> {
         true
     });
     ranges
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn search_skips_nested_excluded_paths() {
+        let td = TempDir::new();
+        fs::create_dir_all(td.path().join("target/debug")).unwrap();
+        fs::create_dir_all(td.path().join("src")).unwrap();
+        fs::write(td.path().join("target/debug/app.txt"), "needle\n").unwrap();
+        fs::write(td.path().join("src/app.txt"), "needle\n").unwrap();
+
+        let resp = search(SearchOpts {
+            query: "needle",
+            root: td.path(),
+            use_ignore: false,
+            hidden: true,
+            exclude_names: &["target".to_string()],
+            filter_exts: None,
+            group_filter: None,
+            max_rows: 10,
+        });
+
+        let paths: Vec<_> = resp.results.into_iter().map(|result| result.path).collect();
+        assert_eq!(paths, vec!["src/app.txt"]);
+    }
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new() -> Self {
+            let unique = format!(
+                "ghrm-search-test-{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            );
+            let path = std::env::temp_dir().join(unique);
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 }

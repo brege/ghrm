@@ -1,8 +1,9 @@
+use crate::paths;
 use crate::walk::{self, NavSet};
 use ignore::gitignore::GitignoreBuilder;
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebouncedEvent, new_debouncer};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -92,16 +93,6 @@ pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<()>) -> anyhow::Re
     Ok(())
 }
 
-fn skip_watch_path(rel: &Path, exclude_names: &[String]) -> bool {
-    rel.components().any(|c| match c {
-        Component::Normal(name) => {
-            let name = name.to_string_lossy();
-            name.as_ref() == ".git" || exclude_names.iter().any(|entry| entry == name.as_ref())
-        }
-        _ => false,
-    })
-}
-
 fn changed_paths(
     root: &Path,
     events: &[DebouncedEvent],
@@ -155,7 +146,7 @@ fn is_relevant_watch_path(
     let Ok(rel) = path.strip_prefix(root) else {
         return false;
     };
-    if skip_watch_path(rel, exclude_names) {
+    if paths::has_excluded_part(rel, exclude_names) {
         return false;
     }
     if !use_ignore {
