@@ -1,5 +1,7 @@
+mod api;
 mod auth;
 mod config;
+mod delivery;
 mod filter;
 mod render;
 mod repo;
@@ -8,6 +10,7 @@ mod server;
 mod theme;
 mod tmpl;
 mod vendor;
+mod view;
 mod walk;
 mod watch;
 
