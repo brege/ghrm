@@ -738,6 +738,19 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   text-decoration: underline;
 }
 
+.ghrm-nav-name .ghrm-nav-external {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  color: var(--fgColor-muted, #636c76);
+  vertical-align: -2px;
+}
+
+.ghrm-nav-name .ghrm-nav-external:hover {
+  color: var(--fgColor-accent, #0969da);
+  text-decoration: none;
+}
+
 .ghrm-nav-date {
   width: 120px;
   text-align: right;

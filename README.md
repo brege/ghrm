@@ -74,7 +74,6 @@ rm -r ~/.cache/ghrm
 
 ## Roadmap
 
-- refactor js/css into components
 - refactor server.js from being a catchall
 - mainline gitignore to filter mechanic
 

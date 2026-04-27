@@ -587,32 +587,25 @@ async function navigate(path, push = true) {
 
 function setupNavExternalLinks() {
   for (const row of document.querySelectorAll('.ghrm-nav-table tr')) {
-    const iconCell = row.querySelector('.ghrm-nav-icon');
     const nameLink = row.querySelector('.ghrm-nav-name a');
-    if (!iconCell || !nameLink) continue;
+    const nameCell = nameLink?.closest('.ghrm-nav-name');
+    if (!nameLink || !nameCell) continue;
 
     const href = nameLink.getAttribute('href');
     if (!isHtmlFile(href)) continue;
-    if (iconCell.querySelector('a')) continue;
+    if (nameCell.querySelector('.ghrm-nav-external')) continue;
 
     const htmlHref = href.replace(/^\//, '/_ghrm/html/');
-    const svg = iconCell.querySelector('svg');
-    if (!svg) continue;
-
-    const use = svg.querySelector('use');
-    if (use) {
-      use.setAttribute('href', '#ghrm-icon-external');
-    }
-
     const link = document.createElement('a');
+    link.className = 'ghrm-nav-external';
     link.href = htmlHref;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.dataset.ghrmNative = '1';
     link.setAttribute('aria-label', 'Open in browser');
     link.title = 'Open in browser';
-    link.appendChild(svg);
-    iconCell.appendChild(link);
+    link.innerHTML = icon('external');
+    nameLink.after(link);
   }
 }
 
