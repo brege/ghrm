@@ -632,10 +632,8 @@ body.ghrm-doc-flat #ghrm-source-slot {
   min-width: 0;
 }
 
-.ghrm-view-option-detail {
-  color: var(--fgColor-muted, #636c76);
-  font-size: 11px;
-  white-space: nowrap;
+.ghrm-view-group {
+  padding-left: 26px;
 }
 
 .ghrm-path-search {

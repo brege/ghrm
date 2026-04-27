@@ -24,9 +24,15 @@
             <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
               <use href="#ghrm-icon-check"></use>
             </svg>
-            <span class="ghrm-view-option-label">Filter filetype</span>
-            <span class="ghrm-view-option-detail">{{ filter_label }}</span>
+            <span class="ghrm-view-option-label">Filter files</span>
           </button>
+{% for group in filter_groups %}          <button class="ghrm-view-option ghrm-view-group" type="button" data-filter-group="{{ group.name }}" role="menuitemcheckbox" aria-checked="false" title="{{ group.detail }}">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">{{ group.label }}</span>
+          </button>
+{% endfor %}
         </div>
       </div>
     </div>

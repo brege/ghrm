@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
 use serde::Deserialize;
 use std::{
+    collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -25,6 +26,24 @@ pub struct WalkConfig {
     pub no_excludes: Option<bool>,
     pub extensions: Option<Vec<String>>,
     pub exclude_names: Option<Vec<String>>,
+    #[serde(default)]
+    pub filter: FilterConfig,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FilterConfig {
+    pub enabled: Option<bool>,
+    pub default_group: Option<String>,
+    #[serde(default)]
+    pub groups: BTreeMap<String, FilterGroupConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FilterGroupConfig {
+    pub label: Option<String>,
+    pub globs: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -80,4 +99,61 @@ pub fn path_default() -> Result<Option<PathBuf>> {
         return Ok(Some(PathBuf::from(home).join(".config/ghrm/config.toml")));
     }
     bail!("missing HOME and XDG_CONFIG_HOME");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_filter_groups() {
+        let config: Config = toml::from_str(
+            r#"
+                [walk.filter]
+                enabled = true
+                default_group = "docs"
+
+                [walk.filter.groups.docs]
+                label = "Docs"
+                globs = ["*.md", "*.txt"]
+
+                [walk.filter.groups.web]
+                globs = ["*.html", "*.css"]
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.walk.filter.enabled, Some(true));
+        assert_eq!(config.walk.filter.default_group.as_deref(), Some("docs"));
+        assert_eq!(
+            config
+                .walk
+                .filter
+                .groups
+                .get("docs")
+                .unwrap()
+                .label
+                .as_deref(),
+            Some("Docs")
+        );
+        assert_eq!(
+            config.walk.filter.groups.get("web").unwrap().globs,
+            vec!["*.html", "*.css"]
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_filter_group_fields() {
+        let err = toml::from_str::<Config>(
+            r#"
+                [walk.filter.groups.docs]
+                label = "Docs"
+                extensions = ["md"]
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(err.contains("unknown field `extensions`"));
+    }
 }

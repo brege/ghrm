@@ -1,3 +1,5 @@
+use crate::filter;
+
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcher;
 use grep_searcher::sinks::UTF8;
@@ -31,6 +33,7 @@ pub struct SearchOpts<'a> {
     pub hidden: bool,
     pub exclude_names: &'a [String],
     pub filter_exts: Option<&'a [String]>,
+    pub group_filter: Option<&'a filter::Matcher>,
     pub max_rows: usize,
 }
 
@@ -56,6 +59,7 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
         .git_global(opts.use_ignore);
 
     let filter_exts = opts.filter_exts;
+    let group_filter = opts.group_filter;
     let exclude_names = opts.exclude_names;
 
     walk.build_parallel().run(|| {
@@ -90,8 +94,17 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
                 }
             }
 
-            if let Some(exts) = filter_exts {
-                let has_ext = path
+            let rel = match path.strip_prefix(opts.root) {
+                Ok(r) => r.to_path_buf(),
+                Err(_) => return ignore::WalkState::Continue,
+            };
+
+            if let Some(filter) = group_filter {
+                if !filter.matches(&rel) {
+                    return ignore::WalkState::Continue;
+                }
+            } else if let Some(exts) = filter_exts {
+                let has_ext = rel
                     .extension()
                     .and_then(|e| e.to_str())
                     .map(|e| exts.iter().any(|x| x == e))
@@ -101,10 +114,7 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
                 }
             }
 
-            let rel = match path.strip_prefix(opts.root) {
-                Ok(r) => r.to_string_lossy().into_owned(),
-                Err(_) => return ignore::WalkState::Continue,
-            };
+            let rel = rel.to_string_lossy().into_owned();
 
             let mut file_matches: Vec<SearchResult> = Vec::new();
             let search_result = searcher.search_path(

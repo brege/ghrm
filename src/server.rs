@@ -1,4 +1,5 @@
 use crate::auth;
+use crate::filter;
 use crate::render::{self, Rendered};
 use crate::repo::{Forge, RepoSet, SourceState};
 use crate::search;
@@ -11,7 +12,7 @@ use anyhow::anyhow;
 use axum::{
     Router,
     body::Body,
-    extract::{Path as AxPath, Query, State, ws::WebSocketUpgrade},
+    extract::{Path as AxPath, Query, RawQuery, State, ws::WebSocketUpgrade},
     http::{StatusCode, header},
     middleware,
     response::{Html, IntoResponse, Response},
@@ -37,7 +38,7 @@ pub struct AppState {
     pub use_ignore: bool,
     pub view_cfg: ViewConfig,
     pub filter_exts: Vec<String>,
-    pub filter_label: String,
+    pub filters: filter::Set,
     pub exclude_names: Vec<String>,
     pub search_max_rows: usize,
     pub home: Option<PathBuf>,
@@ -59,6 +60,7 @@ pub struct Options {
     pub default_hidden: bool,
     pub default_filter_ext: bool,
     pub extensions: Vec<String>,
+    pub filters: filter::Set,
     pub exclude_names: Vec<String>,
     pub no_excludes: bool,
     pub search_max_rows: usize,
@@ -90,10 +92,32 @@ impl FileView {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct ViewConfig {
     default: ViewOpts,
+    default_groups: Vec<String>,
     can_toggle_excludes: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ViewState {
+    opts: ViewOpts,
+    groups: Vec<String>,
+}
+
+fn view_matcher(view: &ViewState, filters: &filter::Set) -> Option<filter::Matcher> {
+    if !view.opts.filter_ext || view.groups.is_empty() {
+        return None;
+    }
+    filters.matcher_for_groups(&view.groups).ok().flatten()
+}
+
+fn view_filter_exts<'a>(view: &ViewState, filter_exts: &'a [String]) -> Option<&'a [String]> {
+    if view.opts.filter_ext && view.groups.is_empty() {
+        Some(filter_exts)
+    } else {
+        None
+    }
 }
 
 pub async fn run(options: Options) -> Result<()> {
@@ -106,6 +130,7 @@ pub async fn run(options: Options) -> Result<()> {
         default_hidden,
         default_filter_ext,
         extensions,
+        filters,
         exclude_names,
         no_excludes,
         search_max_rows,
@@ -127,13 +152,9 @@ pub async fn run(options: Options) -> Result<()> {
             show_excludes: no_excludes,
             filter_ext: default_filter_ext,
         },
+        default_groups: filters.default_groups().to_vec(),
         can_toggle_excludes: no_excludes,
     };
-    let filter_label = extensions
-        .iter()
-        .map(|ext| format!(".{ext}"))
-        .collect::<Vec<_>>()
-        .join(", ");
     let repo_root_buf = if mode == Mode::Dir {
         target.clone()
     } else {
@@ -198,7 +219,7 @@ pub async fn run(options: Options) -> Result<()> {
         use_ignore,
         view_cfg,
         filter_exts: extensions,
-        filter_label,
+        filters,
         exclude_names,
         search_max_rows,
         home: std::env::var_os("HOME").map(PathBuf::from),
@@ -281,27 +302,68 @@ struct ViewQuery {
     filter: Option<String>,
 }
 
-fn view_from_query(q: &ViewQuery, cfg: ViewConfig) -> ViewOpts {
-    ViewOpts {
-        show_hidden: q
-            .hidden
-            .as_deref()
-            .and_then(parse_bool_param)
-            .unwrap_or(cfg.default.show_hidden),
-        show_excludes: if cfg.can_toggle_excludes {
-            q.excludes
+fn view_from_query(
+    q: &ViewQuery,
+    raw_query: Option<&str>,
+    cfg: &ViewConfig,
+    filters: &filter::Set,
+) -> ViewState {
+    let mut groups = parse_group_params(raw_query, filters);
+    if groups.is_empty() {
+        groups = cfg.default_groups.clone();
+    }
+    let filter_ext = q
+        .filter
+        .as_deref()
+        .and_then(parse_bool_param)
+        .unwrap_or(cfg.default.filter_ext);
+    if filter_ext && groups.is_empty() {
+        groups = cfg.default_groups.clone();
+    }
+
+    ViewState {
+        opts: ViewOpts {
+            show_hidden: q
+                .hidden
                 .as_deref()
                 .and_then(parse_bool_param)
-                .unwrap_or(cfg.default.show_excludes)
-        } else {
-            false
+                .unwrap_or(cfg.default.show_hidden),
+            show_excludes: if cfg.can_toggle_excludes {
+                q.excludes
+                    .as_deref()
+                    .and_then(parse_bool_param)
+                    .unwrap_or(cfg.default.show_excludes)
+            } else {
+                false
+            },
+            filter_ext,
         },
-        filter_ext: q
-            .filter
-            .as_deref()
-            .and_then(parse_bool_param)
-            .unwrap_or(cfg.default.filter_ext),
+        groups,
     }
+}
+
+fn parse_group_params(raw_query: Option<&str>, filters: &filter::Set) -> Vec<String> {
+    let mut groups = Vec::new();
+    for pair in raw_query
+        .unwrap_or("")
+        .split('&')
+        .filter(|pair| !pair.is_empty())
+    {
+        let (key, value) = pair
+            .split_once('=')
+            .map_or((pair, ""), |(key, value)| (key, value));
+        if key == "group" {
+            groups.push(decode_query_value(value));
+        }
+    }
+    filters.normalize_groups(&groups)
+}
+
+fn decode_query_value(raw: &str) -> String {
+    let raw = raw.replace('+', " ");
+    percent_encoding::percent_decode_str(&raw)
+        .decode_utf8_lossy()
+        .into_owned()
 }
 
 fn parse_bool_param(raw: &str) -> Option<bool> {
@@ -312,21 +374,21 @@ fn parse_bool_param(raw: &str) -> Option<bool> {
     }
 }
 
-fn with_view(href: &str, view: ViewOpts, cfg: ViewConfig) -> String {
+fn with_view(href: &str, view: &ViewState, cfg: &ViewConfig) -> String {
     let (base, fragment) = href.split_once('#').map_or((href, ""), |(a, b)| (a, b));
     let (path, query) = base.split_once('?').map_or((base, ""), |(a, b)| (a, b));
     let mut pairs = parse_query_pairs(query);
     set_bool_param(
         &mut pairs,
         "hidden",
-        view.show_hidden,
+        view.opts.show_hidden,
         cfg.default.show_hidden,
     );
     if cfg.can_toggle_excludes {
         set_bool_param(
             &mut pairs,
             "excludes",
-            view.show_excludes,
+            view.opts.show_excludes,
             cfg.default.show_excludes,
         );
     } else {
@@ -335,9 +397,10 @@ fn with_view(href: &str, view: ViewOpts, cfg: ViewConfig) -> String {
     set_bool_param(
         &mut pairs,
         "filter",
-        view.filter_ext,
+        view.opts.filter_ext,
         cfg.default.filter_ext,
     );
+    set_multi_string_param(&mut pairs, "group", &view.groups, &cfg.default_groups);
 
     let mut out = path.to_string();
     if !pairs.is_empty() {
@@ -379,12 +442,26 @@ fn set_bool_param(pairs: &mut Vec<(String, String)>, key: &str, value: bool, def
     }
 }
 
+fn set_multi_string_param(
+    pairs: &mut Vec<(String, String)>,
+    key: &str,
+    values: &[String],
+    default_values: &[String],
+) {
+    pairs.retain(|(current, _)| current != key);
+    if values != default_values {
+        for value in values {
+            pairs.push((key.to_string(), value.clone()));
+        }
+    }
+}
+
 fn breadcrumb_html(
     target: &Path,
     home: Option<&Path>,
     rel: &str,
-    view: ViewOpts,
-    cfg: ViewConfig,
+    view: &ViewState,
+    cfg: &ViewConfig,
 ) -> String {
     let display_root = home
         .and_then(|home| target.strip_prefix(home).ok())
@@ -454,8 +531,12 @@ fn breadcrumb_html(
     out
 }
 
-async fn root(State(s): State<AppState>, Query(q): Query<ViewQuery>) -> Response {
-    let view = view_from_query(&q, s.view_cfg);
+async fn root(
+    State(s): State<AppState>,
+    RawQuery(raw_query): RawQuery,
+    Query(q): Query<ViewQuery>,
+) -> Response {
+    let view = view_from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     match s.mode {
         Mode::File => render_target(&s, &s.target, None, view).await,
         Mode::Dir => render_explorer(&s, "", view).await,
@@ -465,9 +546,10 @@ async fn root(State(s): State<AppState>, Query(q): Query<ViewQuery>) -> Response
 async fn any_path(
     State(s): State<AppState>,
     AxPath(path): AxPath<String>,
+    RawQuery(raw_query): RawQuery,
     Query(q): Query<ViewQuery>,
 ) -> Response {
-    let view = view_from_query(&q, s.view_cfg);
+    let view = view_from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     if s.mode == Mode::File {
         return serve_file_mode(&s, &path, view).await;
     }
@@ -484,7 +566,7 @@ async fn any_path(
     };
     if meta.is_dir() {
         if !had_trailing {
-            let loc = with_view(&format!("/{}/", clean), view, s.view_cfg);
+            let loc = with_view(&format!("/{}/", clean), &view, &s.view_cfg);
             return Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
                 .header(header::LOCATION, loc)
@@ -499,7 +581,7 @@ async fn any_path(
     dispatch_file(&s, &joined, &s.target, &clean, view).await
 }
 
-async fn serve_file_mode(s: &AppState, path: &str, view: ViewOpts) -> Response {
+async fn serve_file_mode(s: &AppState, path: &str, view: ViewState) -> Response {
     let Some(root) = s.target.parent() else {
         return not_found();
     };
@@ -518,7 +600,12 @@ async fn serve_file_mode(s: &AppState, path: &str, view: ViewOpts) -> Response {
     render_target(s, &joined, None, view).await
 }
 
-async fn render_target(s: &AppState, path: &Path, root: Option<&Path>, view: ViewOpts) -> Response {
+async fn render_target(
+    s: &AppState,
+    path: &Path,
+    root: Option<&Path>,
+    view: ViewState,
+) -> Response {
     if path.extension().and_then(|s| s.to_str()) == Some("md") {
         render_file(s, path, root, view).await
     } else {
@@ -535,7 +622,7 @@ async fn render_target(s: &AppState, path: &Path, root: Option<&Path>, view: Vie
     }
 }
 
-async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewOpts) -> Response {
+async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewState) -> Response {
     let md = match tokio::fs::read_to_string(path).await {
         Ok(m) => m,
         Err(_) => return not_found(),
@@ -550,7 +637,7 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewO
         .map(|p| p.to_string_lossy().into_owned())
         .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_default();
-    let crumbs = breadcrumb_html(root, s.home.as_deref(), &rel, view, s.view_cfg);
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), &rel, &view, &s.view_cfg);
     let raw_html = raw_blob_html(&md, Some("markdown"));
     let view = FileView::markdown();
     let view_attrs = file_view_attrs(&rel, view);
@@ -572,15 +659,21 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewO
         &rendered,
         &body,
         s.repos.source_for(path),
-        s.view_cfg,
+        &s.view_cfg,
         s.auth.is_some(),
     )
 }
 
-async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
+async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
+    let matcher = view_matcher(&view, &s.filters);
+    let filter_exts = view_filter_exts(&view, &s.filter_exts);
     let dir_opt = {
         let guard = s.nav.read().unwrap();
-        guard.get(view).dirs.get(rel).cloned()
+        guard
+            .get(view.opts, matcher.as_ref())
+            .dirs
+            .get(rel)
+            .cloned()
     };
 
     let dir = match dir_opt {
@@ -588,8 +681,9 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
             &s.target,
             Path::new(rel),
             &s.exclude_names,
-            &s.filter_exts,
-            view,
+            filter_exts.unwrap_or(&[]),
+            matcher.as_ref(),
+            view.opts,
         )
         .unwrap_or(d),
         Some(d) => d,
@@ -597,8 +691,9 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
             &s.target,
             Path::new(rel),
             &s.exclude_names,
-            &s.filter_exts,
-            view,
+            filter_exts.unwrap_or(&[]),
+            matcher.as_ref(),
+            view.opts,
         ) {
             Some(d) => d,
             None => return not_found(),
@@ -618,14 +713,14 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
         "/".to_string()
     };
     let has_parent = !rel.is_empty();
-    let parent_href = with_view(&parent_href, view, s.view_cfg);
+    let parent_href = with_view(&parent_href, &view, &s.view_cfg);
 
     let entries: Vec<ExplorerEntry> = dir
         .entries
         .iter()
         .map(|e| ExplorerEntry {
             name: e.name.clone(),
-            href: with_view(&e.href, view, s.view_cfg),
+            href: with_view(&e.href, &view, &s.view_cfg),
             is_dir: e.is_dir,
             modified: e.modified,
         })
@@ -664,15 +759,14 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
         name: &readme_name,
         html: &r.html,
     });
-    let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, view, s.view_cfg);
-
+    let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, &view, &s.view_cfg);
     let body = match tmpl::explorer(ExplorerCtx {
         crumbs: &crumbs,
         current_path: rel,
         has_parent,
         parent_href: &parent_href,
         show_excludes: s.view_cfg.can_toggle_excludes,
-        filter_label: &s.filter_label,
+        filter_groups: s.filters.groups(),
         entries: &entries,
         readme: readme_tmpl,
     }) {
@@ -705,7 +799,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewOpts) -> Response {
         &combined,
         &body,
         s.repos.source_for(&current),
-        s.view_cfg,
+        &s.view_cfg,
         s.auth.is_some(),
     )
 }
@@ -714,7 +808,7 @@ fn respond_html(
     r: &Rendered,
     body: &str,
     source: SourceState,
-    cfg: ViewConfig,
+    cfg: &ViewConfig,
     show_logout: bool,
 ) -> Response {
     let title = if r.title.is_empty() {
@@ -732,6 +826,7 @@ fn respond_html(
         default_show_hidden: cfg.default.show_hidden,
         default_show_excludes: cfg.default.show_excludes,
         default_filter_ext: cfg.default.filter_ext,
+        default_filter_group: cfg.default_groups.first().map(String::as_str),
         can_toggle_excludes: cfg.can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,
@@ -825,10 +920,15 @@ struct TreeResponse {
     dirs: BTreeMap<String, crate::walk::NavDir>,
 }
 
-async fn api_tree(State(s): State<AppState>, Query(q): Query<ViewQuery>) -> Response {
+async fn api_tree(
+    State(s): State<AppState>,
+    RawQuery(raw_query): RawQuery,
+    Query(q): Query<ViewQuery>,
+) -> Response {
     let nav = s.nav.read().unwrap();
-    let view = view_from_query(&q, s.view_cfg);
-    let tree = nav.get(view);
+    let view = view_from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
+    let matcher = view_matcher(&view, &s.filters);
+    let tree = nav.get(view.opts, matcher.as_ref());
     let root = s
         .target
         .file_name()
@@ -860,7 +960,11 @@ struct SearchQuery {
     filter: Option<u8>,
 }
 
-async fn api_search(State(s): State<AppState>, Query(q): Query<SearchQuery>) -> Response {
+async fn api_search(
+    State(s): State<AppState>,
+    RawQuery(raw_query): RawQuery,
+    Query(q): Query<SearchQuery>,
+) -> Response {
     let query = match q.q.as_deref() {
         Some(q) if !q.is_empty() => q,
         _ => {
@@ -872,27 +976,32 @@ async fn api_search(State(s): State<AppState>, Query(q): Query<SearchQuery>) -> 
         }
     };
 
-    let hidden = q.hidden.unwrap_or(0) == 1;
-    let show_excludes = q.excludes.unwrap_or(0) == 1;
-    let filter = q.filter.unwrap_or(0) == 1;
-    let filter_exts = if filter {
-        Some(s.filter_exts.as_slice())
-    } else {
-        None
-    };
-    let exclude_names = if show_excludes {
+    let view = view_from_query(
+        &ViewQuery {
+            hidden: q.hidden.map(|value| value.to_string()),
+            excludes: q.excludes.map(|value| value.to_string()),
+            filter: q.filter.map(|value| value.to_string()),
+        },
+        raw_query.as_deref(),
+        &s.view_cfg,
+        &s.filters,
+    );
+    let exclude_names = if view.opts.show_excludes {
         &[][..]
     } else {
         &s.exclude_names
     };
+    let matcher = view_matcher(&view, &s.filters);
+    let filter_exts = view_filter_exts(&view, &s.filter_exts);
 
     let resp = search::search(search::SearchOpts {
         query,
         root: &s.target,
         use_ignore: s.use_ignore,
-        hidden,
+        hidden: view.opts.show_hidden,
         exclude_names,
         filter_exts,
+        group_filter: matcher.as_ref(),
         max_rows: s.search_max_rows,
     });
 
@@ -932,7 +1041,11 @@ struct PathSearchQuery {
     view: ViewQuery,
 }
 
-async fn api_path_search(State(s): State<AppState>, Query(q): Query<PathSearchQuery>) -> Response {
+async fn api_path_search(
+    State(s): State<AppState>,
+    RawQuery(raw_query): RawQuery,
+    Query(q): Query<PathSearchQuery>,
+) -> Response {
     let query = match q.q.as_deref() {
         Some(q) if !q.is_empty() => q,
         _ => {
@@ -944,11 +1057,12 @@ async fn api_path_search(State(s): State<AppState>, Query(q): Query<PathSearchQu
         }
     };
 
-    let view = view_from_query(&q.view, s.view_cfg);
+    let view = view_from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let current_path = q.path.as_deref().unwrap_or("").trim_matches('/');
     let nav = s.nav.read().unwrap();
-    let tree = nav.get(view);
-    let resp = path_search(tree, current_path, query, s.search_max_rows);
+    let matcher = view_matcher(&view, &s.filters);
+    let tree = nav.get(view.opts, matcher.as_ref());
+    let resp = path_search(&tree, current_path, query, s.search_max_rows);
 
     match serde_json::to_string(&resp) {
         Ok(json) => Response::builder()
@@ -1197,7 +1311,7 @@ async fn dispatch_file(
     path: &Path,
     root: &Path,
     rel: &str,
-    view: ViewOpts,
+    view: ViewState,
 ) -> Response {
     if path
         .extension()
@@ -1224,7 +1338,7 @@ async fn dispatch_file(
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
     let rendered = render::render_text(filename, &text);
-    let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, view, s.view_cfg);
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, &view, &s.view_cfg);
     let raw_html = raw_blob_html(&text, rendered.lang.as_deref());
     let view = FileView::raw();
     let view_attrs = file_view_attrs(rel, view);
@@ -1246,7 +1360,7 @@ async fn dispatch_file(
         &rendered,
         &body,
         s.repos.source_for(path),
-        s.view_cfg,
+        &s.view_cfg,
         s.auth.is_some(),
     )
 }
@@ -1432,6 +1546,31 @@ fn not_found() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
+
+    fn group_filters() -> filter::Set {
+        let mut groups = BTreeMap::new();
+        groups.insert(
+            "docs".to_string(),
+            crate::config::FilterGroupConfig {
+                label: Some("Docs".to_string()),
+                globs: vec!["*.md".to_string()],
+            },
+        );
+        groups.insert(
+            "web".to_string(),
+            crate::config::FilterGroupConfig {
+                label: Some("Web".to_string()),
+                globs: vec!["*.html".to_string()],
+            },
+        );
+        filter::Set::resolve(&crate::config::FilterConfig {
+            enabled: Some(false),
+            default_group: Some("docs".to_string()),
+            groups,
+        })
+        .unwrap()
+    }
 
     #[test]
     fn content_disposition_escapes_quotes() {
@@ -1456,32 +1595,10 @@ mod tests {
     }
 
     #[test]
-    fn view_from_query_uses_default_when_missing() {
-        let q = ViewQuery::default();
-        let cfg = ViewConfig {
-            default: ViewOpts {
-                show_hidden: true,
-                show_excludes: true,
-                filter_ext: false,
-            },
-            can_toggle_excludes: true,
-        };
-        assert_eq!(view_from_query(&q, cfg), cfg.default);
-    }
-
-    #[test]
-    fn view_from_query_disables_excludes_when_unavailable() {
-        let q = ViewQuery {
-            hidden: None,
-            excludes: Some("1".to_string()),
-            filter: None,
-        };
-        let cfg = ViewConfig {
-            default: ViewOpts::default(),
-            can_toggle_excludes: false,
-        };
-        let view = view_from_query(&q, cfg);
-        assert!(!view.show_excludes);
+    fn parse_group_params_accepts_repeated_keys() {
+        let filters = group_filters();
+        let groups = parse_group_params(Some("filter=1&group=docs&group=web"), &filters);
+        assert_eq!(groups, vec!["docs".to_string(), "web".to_string()]);
     }
 
     #[test]
@@ -1492,9 +1609,14 @@ mod tests {
                 show_excludes: true,
                 filter_ext: false,
             },
+            default_groups: Vec::new(),
             can_toggle_excludes: true,
         };
-        assert_eq!(with_view("/", cfg.default, cfg), "/");
+        let view = ViewState {
+            opts: cfg.default,
+            groups: Vec::new(),
+        };
+        assert_eq!(with_view("/", &view, &cfg), "/");
     }
 
     #[test]
@@ -1505,16 +1627,47 @@ mod tests {
                 show_excludes: true,
                 filter_ext: false,
             },
+            default_groups: Vec::new(),
             can_toggle_excludes: true,
         };
-        let view = ViewOpts {
-            show_hidden: true,
-            show_excludes: false,
-            filter_ext: true,
+        let view = ViewState {
+            opts: ViewOpts {
+                show_hidden: true,
+                show_excludes: false,
+                filter_ext: true,
+            },
+            groups: Vec::new(),
         };
         assert_eq!(
-            with_view("/docs/", view, cfg),
+            with_view("/docs/", &view, &cfg),
             "/docs/?hidden=1&excludes=0&filter=1"
+        );
+    }
+
+    #[test]
+    fn with_view_preserves_selected_groups() {
+        let filters = group_filters();
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: false,
+            },
+            default_groups: filters.default_groups().to_vec(),
+            can_toggle_excludes: false,
+        };
+        let view = ViewState {
+            opts: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: true,
+            },
+            groups: vec!["docs".to_string(), "web".to_string()],
+        };
+
+        assert_eq!(
+            with_view("/docs/", &view, &cfg),
+            "/docs/?filter=1&group=docs&group=web"
         );
     }
 }
