@@ -77,6 +77,8 @@ rm -r ~/.cache/ghrm
 - add password protection
 - support multiple preset filter creation
 - refactor js/css into components
+- add sorting toggles for explorer (timestamp, name, type)
+- indicate these are external linkto's in source-slot via icon
 
 ## License
 
