@@ -180,13 +180,12 @@ fn find_matches(matcher: &RegexMatcher, text: &str) -> Vec<(usize, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutil::TempDir;
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn search_skips_nested_excluded_paths() {
-        let td = TempDir::new();
+        let td = TempDir::new("ghrm-search-test");
         fs::create_dir_all(td.path().join("target/debug")).unwrap();
         fs::create_dir_all(td.path().join("src")).unwrap();
         fs::write(td.path().join("target/debug/app.txt"), "needle\n").unwrap();
@@ -205,35 +204,5 @@ mod tests {
 
         let paths: Vec<_> = resp.results.into_iter().map(|result| result.path).collect();
         assert_eq!(paths, vec!["src/app.txt"]);
-    }
-
-    struct TempDir {
-        path: PathBuf,
-    }
-
-    impl TempDir {
-        fn new() -> Self {
-            let unique = format!(
-                "ghrm-search-test-{}-{}",
-                std::process::id(),
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-            );
-            let path = std::env::temp_dir().join(unique);
-            fs::create_dir_all(&path).unwrap();
-            Self { path }
-        }
-
-        fn path(&self) -> &std::path::Path {
-            &self.path
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
-        }
     }
 }

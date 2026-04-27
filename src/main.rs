@@ -8,6 +8,8 @@ mod render;
 mod repo;
 mod search;
 mod server;
+#[cfg(test)]
+mod testutil;
 mod theme;
 mod tmpl;
 mod vendor;

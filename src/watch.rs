@@ -259,14 +259,15 @@ impl MatchState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutil::TempDir;
     use notify::Event;
     use std::fs;
     use std::sync::{Mutex, OnceLock};
-    use std::time::{Instant, SystemTime, UNIX_EPOCH};
+    use std::time::Instant;
 
     #[test]
     fn changed_paths_skip_excluded_names() {
-        let td = TempDir::new();
+        let td = TempDir::new("ghrm-watch-test");
         let path = td.path().join(".venv/bin/python");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, "").unwrap();
@@ -286,7 +287,7 @@ mod tests {
 
     #[test]
     fn changed_paths_honor_gitignore() {
-        let td = TempDir::new();
+        let td = TempDir::new("ghrm-watch-test");
         fs::write(td.path().join(".gitignore"), ".venv/\n").unwrap();
         let path = td.path().join(".venv/bin/python");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -308,7 +309,7 @@ mod tests {
     #[test]
     fn changed_paths_honor_global_gitignore() {
         let _guard = env_lock().lock().unwrap();
-        let td = TempDir::new();
+        let td = TempDir::new("ghrm-watch-test");
         let xdg = td.path().join("xdg/git");
         fs::create_dir_all(&xdg).unwrap();
         fs::write(xdg.join("ignore"), ".venv/\n").unwrap();
@@ -341,7 +342,7 @@ mod tests {
 
     #[test]
     fn changed_paths_keep_whitelisted_paths() {
-        let td = TempDir::new();
+        let td = TempDir::new("ghrm-watch-test");
         fs::write(td.path().join(".gitignore"), "*\n!notes.md\n").unwrap();
         let path = td.path().join("notes.md");
         fs::write(&path, "# notes\n").unwrap();
@@ -362,35 +363,5 @@ mod tests {
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    struct TempDir {
-        path: PathBuf,
-    }
-
-    impl TempDir {
-        fn new() -> Self {
-            let unique = format!(
-                "ghrm-watch-test-{}-{}",
-                std::process::id(),
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-            );
-            let path = std::env::temp_dir().join(unique);
-            fs::create_dir_all(&path).unwrap();
-            Self { path }
-        }
-
-        fn path(&self) -> &Path {
-            &self.path
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
-        }
     }
 }

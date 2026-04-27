@@ -664,9 +664,8 @@ fn apply_dir(order: Ordering, dir: SortDir) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutil::TempDir;
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn entry(name: &str, is_dir: bool, modified: Option<u64>) -> NavEntry {
         NavEntry {
@@ -729,7 +728,7 @@ mod tests {
 
     #[test]
     fn list_dir_toggles_gitignore() {
-        let td = TempDir::new();
+        let td = TempDir::new("ghrm-walk-test");
         fs::write(td.path().join(".gitignore"), "ignored.txt\n").unwrap();
         fs::write(td.path().join("ignored.txt"), "ignored\n").unwrap();
         fs::write(td.path().join("visible.txt"), "visible\n").unwrap();
@@ -776,35 +775,5 @@ mod tests {
         .entries;
         let shown_names: Vec<_> = shown.into_iter().map(|entry| entry.name).collect();
         assert!(shown_names.contains(&"ignored.txt".to_string()));
-    }
-
-    struct TempDir {
-        path: PathBuf,
-    }
-
-    impl TempDir {
-        fn new() -> Self {
-            let unique = format!(
-                "ghrm-walk-test-{}-{}",
-                std::process::id(),
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-            );
-            let path = std::env::temp_dir().join(unique);
-            fs::create_dir_all(&path).unwrap();
-            Self { path }
-        }
-
-        fn path(&self) -> &std::path::Path {
-            &self.path
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
-        }
     }
 }
