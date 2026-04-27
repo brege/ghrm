@@ -75,8 +75,12 @@ rm -r ~/.cache/ghrm
 ## Roadmap
 
 - refactor js/css into components
+- refactor server.js from being a catchall
 - add sorting toggles for explorer (timestamp, name, type)
 - indicate these are external linkto's in source-slot via icon
+- change the chevron icon to an MdOutlineFilterList icon
+  <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24" height="200px" width="200px" xmlns="http://www.w3.org/2000/svg"><path fill="none" d="M0 0h24v24H0V0z"></path><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"></path></svg>
+- 
 
 ## License
 

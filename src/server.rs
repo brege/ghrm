@@ -1,7 +1,7 @@
 use crate::auth;
 use crate::filter;
 use crate::render::{self, Rendered};
-use crate::repo::{Forge, RepoSet, SourceState};
+use crate::repo::{RepoSet, SourceState};
 use crate::search;
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
 use crate::walk::{self, NavSet, ViewOpts};
@@ -844,7 +844,7 @@ fn respond_html(
 
 fn source_html(source: &SourceState) -> String {
     match source {
-        SourceState::Web { url, label, forge } => web_source_html(url, label, *forge),
+        SourceState::Web { url, label, .. } => web_source_html(url, label),
         SourceState::Transport { raw } => format!(
             "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-disabled\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#ghrm-icon-git\"></use></svg><span class=\"ghrm-source-text\">{text}</span></span>",
             raw = html_escape::encode_double_quoted_attribute(raw),
@@ -855,60 +855,49 @@ fn source_html(source: &SourceState) -> String {
     }
 }
 
-fn web_source_html(url: &str, label: &str, forge: Forge) -> String {
-    let icon = forge_icon(forge);
+const PROJECT_REMOTE_URL: &str = "https://github.com/brege/ghrm";
+
+fn web_source_html(url: &str, label: &str) -> String {
     let href = html_escape::encode_double_quoted_attribute(url);
     let title_attr = html_escape::encode_double_quoted_attribute(url);
+    let (host, repo) = source_display(url, label);
+    let host_href = if host.is_empty() {
+        None
+    } else {
+        Some(format!("https://{host}"))
+    };
+    let host = html_escape::encode_text(&host);
+    let repo = html_escape::encode_text(&repo);
+    let project_href = html_escape::encode_double_quoted_attribute(PROJECT_REMOTE_URL);
 
-    let label_parts: Vec<&str> = label.split(" / ").collect();
+    let host_html = match host_href {
+        Some(host_href) => {
+            let host_href = html_escape::encode_double_quoted_attribute(&host_href);
+            format!(
+                "<a class=\"ghrm-source-host\" href=\"{host_href}\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"Open {host}\">{host}</a>"
+            )
+        }
+        None => String::new(),
+    };
+
+    format!(
+        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#ghrm-icon-source\"></use></svg></a><span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
+    )
+}
+
+fn source_display(url: &str, label: &str) -> (String, String) {
     let after_scheme = url.find("://").map_or(0, |i| i + 3);
     let host_end = after_scheme
         + url[after_scheme..]
             .find('/')
             .unwrap_or(url.len() - after_scheme);
-    let base = &url[..host_end];
-    let path_segs: Vec<&str> = url[host_end..].trim_start_matches('/').split('/').collect();
-
-    if label_parts.len() != path_segs.len() || path_segs.iter().any(|s| s.is_empty()) {
-        return format!(
-            "<a id=\"ghrm-source-slot\" class=\"ghrm-source-link\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#{icon}\"></use></svg><span class=\"ghrm-source-text\">{text}</span></a>",
-            text = html_escape::encode_text(label),
-        );
+    let host = url[after_scheme..host_end].trim_end_matches('/');
+    let repo = url[host_end..].trim_matches('/');
+    if host.is_empty() || repo.is_empty() {
+        let repo = label.replace(" / ", "/");
+        return (String::new(), repo);
     }
-
-    let n = label_parts.len();
-    let mut segs = String::new();
-    for (i, display) in label_parts.iter().enumerate() {
-        if i > 0 {
-            segs.push_str("<span class=\"ghrm-source-sep\"> / </span>");
-        }
-        let seg_url = format!("{}/{}", base, path_segs[..=i].join("/"));
-        let seg_href = html_escape::encode_double_quoted_attribute(&seg_url);
-        let seg_text = html_escape::encode_text(display);
-        let class = if i + 1 == n {
-            "ghrm-source-repo"
-        } else {
-            "ghrm-source-owner"
-        };
-        segs.push_str(&format!(
-            "<a href=\"{seg_href}\" class=\"{class}\" target=\"_blank\" rel=\"noopener noreferrer\">{seg_text}</a>",
-        ));
-    }
-
-    format!(
-        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link\"><a href=\"{href}\" class=\"ghrm-source-icon-link\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#{icon}\"></use></svg></a><span class=\"ghrm-source-text\">{segs}</span></span>",
-    )
-}
-
-fn forge_icon(forge: Forge) -> &'static str {
-    match forge {
-        Forge::GitHub => "ghrm-icon-github",
-        Forge::Bitbucket => "ghrm-icon-bitbucket",
-        Forge::GitLab => "ghrm-icon-gitlab",
-        Forge::Codeberg => "ghrm-icon-codeberg",
-        Forge::SourceHut => "ghrm-icon-sourcehut",
-        Forge::Generic => "ghrm-icon-git",
-    }
+    (host.to_string(), repo.to_string())
 }
 
 // --- JSON APIs for optional SPA navigation ---
@@ -1669,5 +1658,12 @@ mod tests {
             with_view("/docs/", &view, &cfg),
             "/docs/?filter=1&group=docs&group=web"
         );
+    }
+
+    #[test]
+    fn source_display_splits_host_and_repo() {
+        let (host, repo) = source_display("https://github.com/brege/ghrm", "brege / ghrm");
+        assert_eq!(host, "github.com");
+        assert_eq!(repo, "brege/ghrm");
     }
 }

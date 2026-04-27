@@ -754,34 +754,27 @@ body.ghrm-doc-flat #ghrm-source-slot {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+}
+
+.ghrm-source-link a {
+  color: inherit;
   text-decoration: none;
 }
 
-.ghrm-source-icon-link {
+.ghrm-source-link a:hover {
+  color: var(--fgColor-accent, #0969da);
+}
+
+.ghrm-source-badge {
   flex: 0 0 auto;
-  display: flex;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-self: center;
   align-items: center;
-  color: var(--fgColor-default, #1f2328);
-  text-decoration: none;
-}
-
-.ghrm-source-icon-link:hover {
-  color: var(--fgColor-accent, #0969da);
-}
-
-.ghrm-source-owner,
-.ghrm-source-repo {
-  color: var(--fgColor-default, #1f2328);
-  text-decoration: none;
-}
-
-.ghrm-source-owner:hover,
-.ghrm-source-repo:hover {
-  color: var(--fgColor-accent, #0969da);
-}
-
-.ghrm-source-sep {
-  color: var(--fgColor-muted, #636c76);
+  justify-content: center;
+  line-height: 0;
+  color: inherit;
 }
 
 .ghrm-source-link.is-disabled {
@@ -792,18 +785,31 @@ body.ghrm-doc-flat #ghrm-source-slot {
 .ghrm-source-link svg {
   flex: 0 0 auto;
   display: block;
-  width: 28px;
-  height: 28px;
+  width: 16px;
+  height: 16px;
 }
 
 .ghrm-source-text {
-  display: block;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 14px;
+}
+
+.ghrm-source-host {
+  color: var(--fgColor-muted, #636c76);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ghrm-source-repo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
 }
 
