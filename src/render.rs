@@ -23,20 +23,84 @@ static MATH_ADAPTER: GhrmMathAdapter = GhrmMathAdapter;
 pub struct Rendered {
     pub html: String,
     pub title: String,
+    pub lang: Option<String>,
     pub has_mermaid: bool,
     pub has_math: bool,
     pub has_map: bool,
 }
 
 pub fn render_text(filename: &str, text: &str) -> Rendered {
-    let lang = Path::new(filename).extension().and_then(|s| s.to_str());
+    let lang = Path::new(filename)
+        .extension()
+        .and_then(|s| s.to_str())
+        .or_else(|| detect_shebang(text));
     let escaped = html_escape::encode_text(text);
     Rendered {
         title: filename.to_string(),
         html: code_block_html(lang, &escaped),
+        lang: lang.map(String::from),
         has_mermaid: false,
         has_math: false,
         has_map: false,
+    }
+}
+
+fn detect_shebang(text: &str) -> Option<&'static str> {
+    let line = text.lines().next()?;
+    if !line.starts_with("#!") {
+        return None;
+    }
+    let line = line.trim_start_matches("#!");
+    let mut words = line.split_whitespace();
+    let first = words.next()?;
+
+    if first.ends_with("/env") {
+        let interp = words.next()?;
+        return lang_from_interpreter(interp);
+    }
+
+    let bin = first.rsplit('/').next()?;
+    lang_from_interpreter(bin)
+}
+
+fn lang_from_interpreter(interp: &str) -> Option<&'static str> {
+    match interp {
+        "sh" => Some("sh"),
+        "bash" => Some("bash"),
+        "zsh" => Some("zsh"),
+        "ksh" => Some("ksh"),
+        "csh" | "tcsh" => Some("csh"),
+        "fish" => Some("fish"),
+        "dash" => Some("sh"),
+        "ash" => Some("sh"),
+        _ if interp.starts_with("python") => Some("python"),
+        _ if interp.starts_with("ruby") => Some("ruby"),
+        _ if interp.starts_with("perl") => Some("perl"),
+        "node" | "nodejs" | "deno" | "bun" => Some("javascript"),
+        "lua" | "luajit" => Some("lua"),
+        "php" => Some("php"),
+        "Rscript" => Some("r"),
+        "awk" | "gawk" | "mawk" | "nawk" => Some("awk"),
+        "sed" | "gsed" => Some("sed"),
+        "make" | "gmake" => Some("makefile"),
+        "tclsh" | "wish" => Some("tcl"),
+        "osascript" => Some("applescript"),
+        "pwsh" | "powershell" => Some("powershell"),
+        "groovy" => Some("groovy"),
+        "elixir" => Some("elixir"),
+        "escript" => Some("erlang"),
+        "crystal" => Some("crystal"),
+        "julia" => Some("julia"),
+        "nim" | "nimble" => Some("nim"),
+        "dart" => Some("dart"),
+        "swift" => Some("swift"),
+        "scala" => Some("scala"),
+        "sbcl" | "clisp" | "ecl" => Some("lisp"),
+        "racket" => Some("racket"),
+        "guile" | "scheme" => Some("scheme"),
+        "runhaskell" | "runghc" => Some("haskell"),
+        "ocaml" | "ocamlrun" => Some("ocaml"),
+        _ => None,
     }
 }
 
@@ -94,6 +158,7 @@ pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     Rendered {
         html,
         title,
+        lang: None,
         has_mermaid: flags.mermaid,
         has_math: flags.math,
         has_map: flags.map,
@@ -693,5 +758,43 @@ mod tests {
         assert!(r.html.contains(r#"class="ghrm-anchor""#));
         assert!(r.html.contains(r##"href="#taxonomy">#"##));
         assert!(!r.html.contains(r#"class="anchor""#));
+    }
+
+    #[test]
+    fn shebang_detection() {
+        let cases = [
+            ("#!/bin/bash\n", "bash"),
+            ("#!/bin/sh\n", "sh"),
+            ("#!/bin/zsh\n", "zsh"),
+            ("#!/usr/bin/env python3\n", "python"),
+            ("#!/usr/bin/env python3 -u\n", "python"),
+            ("#!/usr/bin/env node\n", "javascript"),
+            ("#!/usr/bin/env ruby\n", "ruby"),
+            ("#!/usr/bin/perl\n", "perl"),
+            ("#!/bin/awk -f\n", "awk"),
+            ("#!/usr/bin/env lua\n", "lua"),
+            ("#!/usr/bin/env deno run\n", "javascript"),
+            ("#!/usr/local/bin/bash\n", "bash"),
+        ];
+        for (shebang, expected) in cases {
+            let r = render_text("script", shebang);
+            let needle = format!(r#"class="language-{expected}""#);
+            assert!(
+                r.html.contains(&needle),
+                "shebang {shebang:?} should detect {expected}"
+            );
+        }
+
+        let r = render_text("script.sh", "#!/bin/bash\n");
+        assert!(
+            r.html.contains(r#"class="language-sh""#),
+            "extension wins over shebang"
+        );
+
+        let r = render_text("notes", "plain text\n");
+        assert!(
+            !r.html.contains("language-"),
+            "no shebang or extension means no lang"
+        );
     }
 }

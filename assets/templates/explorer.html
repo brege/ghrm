@@ -1,6 +1,29 @@
 <article class="markdown-body" data-explorer="true" data-current-path="{{ current_path }}">
   <section class="ghrm-explorer-shell">
-{{ title_block }}{{ table_or_empty }}  </section>
+{% include "fragments/title_block.html" %}{% if entries.is_empty() && !has_parent %}  <p class="ghrm-nav-empty">No files found.</p>
+{% else %}  <table class="ghrm-nav-table">
+    <tbody>
+{% if has_parent %}      <tr>
+        <td class="ghrm-nav-icon">
+          <svg aria-hidden="true" focusable="false" class="octicon octicon-file-directory-fill icon-directory">
+            <use href="#ghrm-icon-dir"></use>
+          </svg>
+        </td>
+        <td class="ghrm-nav-name"><a href="{{ parent_href }}">..</a></td>
+        <td class="ghrm-nav-date"></td>
+      </tr>
+{% endif %}{% for e in entries %}      <tr>
+        <td class="ghrm-nav-icon">
+          <svg aria-hidden="true" focusable="false" class="octicon">
+            <use href="#{% if e.is_dir %}ghrm-icon-dir{% else %}ghrm-icon-file{% endif %}"></use>
+          </svg>
+        </td>
+        <td class="ghrm-nav-name"><a href="{{ e.href }}">{{ e.name }}</a></td>
+        <td class="ghrm-nav-date" data-ts="{% if let Some(ts) = e.modified %}{{ ts }}{% endif %}"></td>
+      </tr>
+{% endfor %}    </tbody>
+  </table>
+{% endif %}  </section>
   <template id="ghrm-search-file-row">
     <tr>
       <td class="ghrm-nav-icon">
@@ -23,4 +46,37 @@
       <td class="ghrm-nav-date"></td>
     </tr>
   </template>
-{{ readme_block }}</article>
+  <template id="ghrm-content-search-row">
+    <tr class="ghrm-content-result">
+      <td class="ghrm-nav-icon">
+        <svg aria-hidden="true" focusable="false" class="octicon">
+          <use href="#ghrm-icon-file"></use>
+        </svg>
+      </td>
+      <td class="ghrm-nav-name ghrm-content-cell" colspan="2">
+        <a class="ghrm-content-path"></a>
+        <span class="ghrm-content-text"></span>
+      </td>
+    </tr>
+  </template>
+{% if let Some(r) = readme %}  <div class="ghrm-readme-box">
+    <div class="ghrm-readme-header">
+      <div class="ghrm-readme-title">
+        <svg aria-hidden="true" focusable="false" class="octicon octicon-book">
+          <use href="#ghrm-icon-book"></use>
+        </svg>
+        {{ r.name }}
+      </div>
+      <div class="ghrm-header-actions">
+        <button type="button" class="ghrm-toc-btn" data-ghrm-toc-btn="readme" hidden title="Table of contents" aria-label="Table of contents">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-list"></use>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="ghrm-readme-content">
+      {{ r.html|safe }}
+    </div>
+  </div>
+{% endif %}</article>

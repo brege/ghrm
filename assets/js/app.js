@@ -1,68 +1,94 @@
+import {
+  applyDocChromePref,
+  setupDocChromeToggle,
+  setupThemeToggle,
+} from './chrome.js';
+import {
+  icon,
+  isHtmlFile,
+  positionFloatingPanel,
+  scrollToHash,
+} from './dom.js';
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
+import { setupPathSearch } from './search.js';
+import { buildToc, setupToc } from './toc.js';
+import {
+  canToggleExcludes,
+  currentView,
+  defaultFilterExt,
+  defaultFilterGroups,
+  defaultShowExcludes,
+  defaultShowHidden,
+  defaultSort,
+  defaultSortDir,
+  withView,
+} from './view.js';
 
-const VALID_SCOPES = new Set(['filter', 'files', 'all']);
-const treeCache = new Map();
+let explorerMenusBound = false;
+let reopenFilterMenu = false;
 
-function defaultScope() {
-  const scope = document.body?.dataset.defaultScope;
-  return VALID_SCOPES.has(scope) ? scope : 'files';
-}
-
-function hasExtFilter() {
-  return document.body?.dataset.hasExtFilter === '1';
-}
-
-function scrollOffset() {
-  return 16;
-}
-
-function scrollToHash(hash) {
-  if (!hash || hash === '#') return false;
-  const id = decodeURIComponent(hash.slice(1));
-  const target = document.getElementById(id);
-  if (!target) return false;
-  const top =
-    window.scrollY + target.getBoundingClientRect().top - scrollOffset();
-  window.scrollTo({ top: Math.max(top, 0), behavior: 'auto' });
-  return true;
-}
-
-function currentScope() {
-  const params = new URLSearchParams(location.search);
-  const scope = params.get('scope');
-  if (scope === 'filter' && !hasExtFilter()) return defaultScope();
-  return VALID_SCOPES.has(scope) ? scope : defaultScope();
-}
-
-function withScope(urlLike, scope = currentScope()) {
-  const url = new URL(urlLike, location.origin);
-  if (scope === defaultScope()) {
-    url.searchParams.delete('scope');
-  } else {
-    url.searchParams.set('scope', scope);
+function syncViewMenu() {
+  const view = currentView();
+  const toggle = document.getElementById('ghrm-view-menu-toggle');
+  if (toggle) {
+    const active =
+      view.showHidden !== defaultShowHidden() ||
+      (canToggleExcludes() && view.showExcludes !== defaultShowExcludes()) ||
+      view.filterExt !== defaultFilterExt() ||
+      view.filterGroups.join(',') !== defaultFilterGroups().join(',');
+    toggle.classList.toggle('is-active', active);
   }
-  return `${url.pathname}${url.search}${url.hash}`;
-}
-
-function syncScopeSwitch() {
-  const scope = currentScope();
   for (const button of document.querySelectorAll(
-    '.ghrm-scope-option[data-scope]',
+    '#ghrm-view-menu .ghrm-view-option',
   )) {
-    if (button.dataset.scope === 'filter' && !hasExtFilter()) {
+    if (button.dataset.viewToggle === 'excludes' && !canToggleExcludes()) {
       button.hidden = true;
       continue;
     }
-    const active = button.dataset.scope === scope;
+    const active =
+      (button.dataset.viewToggle === 'hidden' && view.showHidden) ||
+      (button.dataset.viewToggle === 'excludes' && view.showExcludes) ||
+      (button.dataset.viewToggle === 'filter' && view.filterExt) ||
+      (button.dataset.filterGroup &&
+        view.filterGroups.includes(button.dataset.filterGroup));
     button.classList.toggle('is-active', active);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    button.setAttribute('aria-checked', active ? 'true' : 'false');
   }
 }
 
-function syncScopeVisibility() {
-  for (const scopeSwitch of document.querySelectorAll('.ghrm-scope-switch')) {
-    scopeSwitch.style.display = '';
+function syncSortControls() {
+  const view = currentView();
+  const sortToggle = document.getElementById('ghrm-sort-menu-toggle');
+  if (sortToggle) {
+    const active =
+      view.sort !== defaultSort() || view.sortDir !== defaultSortDir(view.sort);
+    sortToggle.classList.toggle('is-active', active);
   }
+  for (const button of document.querySelectorAll(
+    '#ghrm-sort-menu .ghrm-view-option',
+  )) {
+    const active = button.dataset.sort === view.sort;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-checked', active ? 'true' : 'false');
+  }
+  const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
+  if (!dirToggle) return;
+  const use = dirToggle.querySelector('use');
+  if (use) {
+    use.setAttribute(
+      'href',
+      view.sortDir === 'desc'
+        ? '#ghrm-icon-chevron-down'
+        : '#ghrm-icon-chevron-up',
+    );
+  }
+  const label = view.sortDir === 'desc' ? 'Sort descending' : 'Sort ascending';
+  dirToggle.title = label;
+  dirToggle.setAttribute('aria-label', label);
+  dirToggle.classList.toggle(
+    'is-active',
+    view.sortDir !== defaultSortDir(view.sort),
+  );
 }
 
 function formatRelative(ts) {
@@ -97,94 +123,202 @@ function populateDates() {
   }
 }
 
-function setupScopeSwitch() {
-  const buttons = document.querySelectorAll('.ghrm-scope-option[data-scope]');
-  if (!buttons.length) return;
-
-  syncScopeSwitch();
-  for (const button of buttons) {
-    button.addEventListener('click', () => {
-      if (button.dataset.scope === 'filter' && !hasExtFilter()) {
-        return;
-      }
-      const scope = VALID_SCOPES.has(button.dataset.scope)
-        ? button.dataset.scope
-        : defaultScope();
-      if (scope === currentScope()) {
-        return;
-      }
-      navigate(withScope(location.href, scope));
-    });
+function closeExplorerMenus() {
+  for (const [toggleId, panelId] of [
+    ['ghrm-view-menu-toggle', 'ghrm-view-menu'],
+    ['ghrm-sort-menu-toggle', 'ghrm-sort-menu'],
+  ]) {
+    const toggle = document.getElementById(toggleId);
+    const panel = document.getElementById(panelId);
+    if (!toggle || !panel) continue;
+    panel.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
   }
 }
 
-function setupThemeToggle() {
-  const btn = document.getElementById('theme-toggle');
-  if (!btn) return;
-  btn.addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme');
-    const next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('ghrm-theme', next);
-    document.dispatchEvent(
-      new CustomEvent('ghrm:themechange', { detail: { theme: next } }),
-    );
+function openExplorerMenu(toggle, panel) {
+  closeExplorerMenus();
+  panel.hidden = false;
+  toggle.setAttribute('aria-expanded', 'true');
+  positionFloatingPanel(panel, toggle);
+}
+
+function currentExplorerControls() {
+  return {
+    filterToggle: document.getElementById('ghrm-view-menu-toggle'),
+    filterPanel: document.getElementById('ghrm-view-menu'),
+    sortToggle: document.getElementById('ghrm-sort-menu-toggle'),
+    sortPanel: document.getElementById('ghrm-sort-menu'),
+    dirToggle: document.getElementById('ghrm-sort-dir-toggle'),
+  };
+}
+
+function setupViewMenu() {
+  const filterToggle = document.getElementById('ghrm-view-menu-toggle');
+  const filterPanel = document.getElementById('ghrm-view-menu');
+  const sortToggle = document.getElementById('ghrm-sort-menu-toggle');
+  const sortPanel = document.getElementById('ghrm-sort-menu');
+  const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
+  if (!filterToggle || !filterPanel || !sortToggle || !sortPanel || !dirToggle)
+    return;
+
+  syncViewMenu();
+  syncSortControls();
+  filterPanel.hidden = true;
+  sortPanel.hidden = true;
+  filterToggle.setAttribute('aria-expanded', 'false');
+  sortToggle.setAttribute('aria-expanded', 'false');
+
+  filterToggle.onclick = () => {
+    if (filterPanel.hidden) {
+      openExplorerMenu(filterToggle, filterPanel);
+    } else {
+      closeExplorerMenus();
+    }
+  };
+
+  sortToggle.onclick = () => {
+    if (sortPanel.hidden) {
+      openExplorerMenu(sortToggle, sortPanel);
+    } else {
+      closeExplorerMenus();
+    }
+  };
+
+  dirToggle.onclick = () => {
+    const view = currentView();
+    const next = {
+      ...view,
+      filterGroups: [...view.filterGroups],
+      sortDir: view.sortDir === 'desc' ? 'asc' : 'desc',
+    };
+    navigate(withView(location.href, next));
+  };
+
+  for (const button of filterPanel.querySelectorAll('.ghrm-view-option')) {
+    button.onclick = () => {
+      const view = currentView();
+      const next = {
+        ...view,
+        filterGroups: [...view.filterGroups],
+      };
+      switch (button.dataset.viewToggle) {
+        case 'hidden':
+          next.showHidden = !view.showHidden;
+          break;
+        case 'excludes':
+          if (!canToggleExcludes()) return;
+          next.showExcludes = !view.showExcludes;
+          break;
+        case 'filter':
+          next.filterExt = !view.filterExt;
+          if (next.filterExt && next.filterGroups.length === 0) {
+            next.filterGroups = defaultFilterGroups();
+          }
+          break;
+        default:
+          if (button.dataset.filterGroup) {
+            const group = button.dataset.filterGroup;
+            next.filterExt = true;
+            if (next.filterGroups.includes(group)) {
+              next.filterGroups = next.filterGroups.filter(
+                (current) => current !== group,
+              );
+              if (next.filterGroups.length === 0) {
+                next.filterExt = false;
+              }
+            } else {
+              next.filterGroups.push(group);
+              next.filterGroups = [...new Set(next.filterGroups)];
+            }
+            break;
+          }
+          return;
+      }
+      reopenFilterMenu = true;
+      navigate(withView(location.href, next));
+    };
+  }
+
+  for (const button of sortPanel.querySelectorAll('.ghrm-view-option')) {
+    button.onclick = () => {
+      const view = currentView();
+      const next = {
+        ...view,
+        filterGroups: [...view.filterGroups],
+        sort: button.dataset.sort || view.sort,
+      };
+      if (!button.dataset.sort) return;
+      if (!new URLSearchParams(location.search).has('dir')) {
+        next.sortDir = defaultSortDir(next.sort);
+      }
+      closeExplorerMenus();
+      navigate(withView(location.href, next));
+    };
+  }
+
+  if (explorerMenusBound) {
+    if (reopenFilterMenu) {
+      reopenFilterMenu = false;
+      openExplorerMenu(filterToggle, filterPanel);
+    }
+    return;
+  }
+  explorerMenusBound = true;
+
+  document.addEventListener('click', (e) => {
+    const { filterToggle, filterPanel, sortToggle, sortPanel, dirToggle } =
+      currentExplorerControls();
+    if (
+      !filterToggle ||
+      !filterPanel ||
+      !sortToggle ||
+      !sortPanel ||
+      !dirToggle
+    ) {
+      return;
+    }
+    const insideFilter =
+      filterToggle.contains(e.target) || filterPanel.contains(e.target);
+    const insideSort =
+      sortToggle.contains(e.target) || sortPanel.contains(e.target);
+    const insideDir = dirToggle.contains(e.target);
+    if (insideFilter || insideSort || insideDir) return;
+    closeExplorerMenus();
   });
-}
 
-function icon(name) {
-  return `<svg aria-hidden="true" height="16" width="16" class="ghrm-file-icon"><use href="#ghrm-icon-${name}"></use></svg>`;
-}
-
-function pathJoin(parent, name) {
-  return parent ? `${parent}/${name}` : name;
-}
-
-function pathFromHref(href) {
-  const url = new URL(href, location.origin);
-  return decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g, '');
-}
-
-function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (ch) => {
-    switch (ch) {
-      case '&':
-        return '&amp;';
-      case '<':
-        return '&lt;';
-      case '>':
-        return '&gt;';
-      case '"':
-        return '&quot;';
-      default:
-        return '&#39;';
+  window.addEventListener('resize', () => {
+    const { filterToggle, filterPanel, sortToggle, sortPanel } =
+      currentExplorerControls();
+    if (!filterToggle || !filterPanel || !sortToggle || !sortPanel) return;
+    if (!filterPanel.hidden) {
+      positionFloatingPanel(filterPanel, filterToggle);
+    }
+    if (!sortPanel.hidden) {
+      positionFloatingPanel(sortPanel, sortToggle);
     }
   });
-}
 
-function highlightMatch(value, query) {
-  const lower = value.toLowerCase();
-  const needle = query.toLowerCase();
-  let start = 0;
-  let out = '';
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const { filterToggle, filterPanel, sortToggle, sortPanel } =
+      currentExplorerControls();
+    if (!filterToggle || !filterPanel || !sortToggle || !sortPanel) return;
+    if (!filterPanel.hidden) {
+      closeExplorerMenus();
+      filterToggle.focus();
+      return;
+    }
+    if (!sortPanel.hidden) {
+      closeExplorerMenus();
+      sortToggle.focus();
+    }
+  });
 
-  for (;;) {
-    const idx = lower.indexOf(needle, start);
-    if (idx === -1) break;
-    out += escapeHtml(value.slice(start, idx));
-    out += `<strong class="ghrm-search-hit">${escapeHtml(value.slice(idx, idx + needle.length))}</strong>`;
-    start = idx + needle.length;
+  if (reopenFilterMenu) {
+    reopenFilterMenu = false;
+    openExplorerMenu(filterToggle, filterPanel);
   }
-
-  return out + escapeHtml(value.slice(start));
-}
-
-function visiblePane(selector) {
-  return document.querySelector(`${selector}:not([hidden])`);
-}
-
-function fileViewRoot() {
-  return visiblePane('.ghrm-page-content [data-ghrm-preview-pane]');
 }
 
 function rawText(container) {
@@ -252,15 +386,6 @@ function syncWrapToggle(container, isRaw) {
 
 function fileActionsHost(container) {
   return container.querySelector('.ghrm-explorer-header .ghrm-header-actions');
-}
-
-function isHtmlFile(url) {
-  try {
-    const path = new URL(url, location.origin).pathname;
-    return path.endsWith('.html') || path.endsWith('.htm');
-  } catch {
-    return false;
-  }
 }
 
 function setupFileView(container) {
@@ -373,218 +498,6 @@ function setupFileViews() {
   }
 }
 
-async function scopedTree() {
-  const scope = currentScope();
-  if (treeCache.has(scope)) return treeCache.get(scope);
-  const res = await fetch(withScope('/_ghrm/tree', scope)).catch(() => null);
-  if (!res || !res.ok) return null;
-  const tree = await res.json().catch(() => null);
-  if (!tree?.dirs) return null;
-  treeCache.set(scope, tree);
-  return tree;
-}
-
-function searchEntries(tree, currentPath, rawQuery) {
-  const query = rawQuery.trim().toLowerCase();
-  if (!query) return [];
-
-  const prefix = currentPath ? `${currentPath}/` : '';
-  const results = [];
-  for (const [dir, navDir] of Object.entries(tree.dirs)) {
-    if (currentPath && dir !== currentPath && !dir.startsWith(prefix)) {
-      continue;
-    }
-    const relDir = dir === currentPath ? '' : dir.slice(prefix.length);
-    for (const entry of navDir.entries ?? []) {
-      const fullPath = pathFromHref(entry.href);
-      if (currentPath && !fullPath.startsWith(prefix)) continue;
-      const relPath = relDir
-        ? pathJoin(relDir, entry.name)
-        : pathJoin('', entry.name);
-      if (!relPath.toLowerCase().includes(query)) continue;
-      results.push({
-        ...entry,
-        display: entry.is_dir ? `${relPath}/` : relPath,
-      });
-    }
-  }
-
-  return results
-    .sort((a, b) => {
-      const aName = a.display.toLowerCase();
-      const bName = b.display.toLowerCase();
-      const aBase = a.name.toLowerCase().includes(query) ? 0 : 1;
-      const bBase = b.name.toLowerCase().includes(query) ? 0 : 1;
-      return (
-        aBase - bBase ||
-        aName.length - bName.length ||
-        aName.localeCompare(bName)
-      );
-    })
-    .slice(0, 100);
-}
-
-function ensureNavTable(article) {
-  const table = article.querySelector('.ghrm-nav-table');
-  if (table) return table;
-
-  const empty = article.querySelector('.ghrm-nav-empty');
-  if (!empty) return null;
-  const next = document.createElement('table');
-  next.className = 'ghrm-nav-table';
-  next.innerHTML = '<tbody></tbody>';
-  empty.after(next);
-  return next;
-}
-
-function renderSearchRows(tbody, results, query) {
-  if (results.length === 0) {
-    tbody.innerHTML =
-      '<tr class="ghrm-search-empty"><td colspan="3">No matching paths.</td></tr>';
-    return;
-  }
-
-  tbody.replaceChildren();
-  for (const entry of results) {
-    const id = entry.is_dir ? 'ghrm-search-dir-row' : 'ghrm-search-file-row';
-    const tmpl = document.getElementById(id);
-    const row = tmpl?.content.firstElementChild?.cloneNode(true);
-    if (!row) continue;
-
-    const link = row.querySelector('.ghrm-search-path');
-    const date = row.querySelector('.ghrm-nav-date');
-    link.href = withScope(entry.href);
-    link.innerHTML = highlightMatch(entry.display, query);
-    if (entry.modified) {
-      date.dataset.ts = String(entry.modified);
-    }
-    tbody.append(row);
-  }
-}
-
-function setupPathSearch() {
-  const article = document.querySelector('article[data-explorer]');
-  const search = document.getElementById('ghrm-path-search');
-  const input = document.getElementById('ghrm-path-search-input');
-  const button = document.getElementById('ghrm-path-search-toggle');
-  const status = document.getElementById('ghrm-path-search-status');
-  const table = article ? ensureNavTable(article) : null;
-  const tbody = table?.querySelector('tbody');
-  if (!search || !input || !button || !status) return;
-
-  search.hidden = !article;
-  search.classList.remove('is-open');
-  input.value = '';
-  input.tabIndex = -1;
-  input.oninput = null;
-  input.onkeydown = null;
-  button.onclick = null;
-  button.setAttribute('aria-expanded', 'false');
-  status.textContent = '';
-  if (!article || !table || !tbody) return;
-
-  const empty = article.querySelector('.ghrm-nav-empty');
-  const originalRows = tbody.innerHTML;
-  const currentPath = article.dataset.currentPath ?? '';
-  let searchSeq = 0;
-  if (!originalRows.trim()) {
-    table.hidden = true;
-  }
-
-  const resetSearch = () => {
-    tbody.innerHTML = originalRows;
-    table.hidden = !originalRows.trim();
-    if (empty) empty.hidden = false;
-    status.textContent = '';
-    populateDates();
-    setupNavExternalLinks();
-  };
-
-  button.onclick = () => {
-    const open = !search.classList.contains('is-open');
-    search.classList.toggle('is-open', open);
-    button.setAttribute('aria-expanded', open ? 'true' : 'false');
-    input.tabIndex = open ? 0 : -1;
-    if (open) {
-      input.focus();
-    } else {
-      input.value = '';
-      searchSeq += 1;
-      resetSearch();
-    }
-  };
-
-  input.oninput = async () => {
-    searchSeq += 1;
-    const seq = searchSeq;
-    const query = input.value.trim();
-    if (!query) {
-      resetSearch();
-      return;
-    }
-
-    const tree = await scopedTree();
-    if (seq !== searchSeq) return;
-    const results = tree ? searchEntries(tree, currentPath, query) : [];
-    if (empty) empty.hidden = true;
-    table.hidden = false;
-    renderSearchRows(tbody, results, query);
-    status.textContent =
-      results.length === 1 ? '1 path' : `${results.length} paths`;
-    populateDates();
-    setupNavExternalLinks();
-  };
-
-  input.onkeydown = (e) => {
-    if (e.key !== 'Escape') return;
-    search.classList.remove('is-open');
-    button.setAttribute('aria-expanded', 'false');
-    input.tabIndex = -1;
-    input.value = '';
-    searchSeq += 1;
-    resetSearch();
-    button.focus();
-  };
-}
-
-function hasDocChrome() {
-  return !!document.querySelector('.ghrm-page-shell, .ghrm-readme-box');
-}
-
-function syncDocChromeToggle() {
-  const btn = document.getElementById('doc-chrome-toggle');
-  if (!btn) return;
-  const show = hasDocChrome();
-  btn.hidden = !show;
-  if (!show) {
-    btn.removeAttribute('title');
-    btn.removeAttribute('aria-label');
-    return;
-  }
-  const flat = document.body.classList.contains('ghrm-doc-flat');
-  const label = flat ? 'Show document wrapper' : 'Hide document wrapper';
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
-}
-
-function applyDocChromePref() {
-  const flat = localStorage.getItem('ghrm-doc-flat') === '1';
-  document.body.classList.toggle('ghrm-doc-flat', flat && hasDocChrome());
-  syncDocChromeToggle();
-}
-
-function setupDocChromeToggle() {
-  const btn = document.getElementById('doc-chrome-toggle');
-  if (!btn) return;
-  btn.addEventListener('click', () => {
-    const next = !document.body.classList.contains('ghrm-doc-flat');
-    document.body.classList.toggle('ghrm-doc-flat', next && hasDocChrome());
-    localStorage.setItem('ghrm-doc-flat', next ? '1' : '0');
-    syncDocChromeToggle();
-  });
-  applyDocChromePref();
-}
-
 function setupLiveReload() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${proto}//${location.host}/_ghrm/ws`;
@@ -615,13 +528,17 @@ function setupSpaNav() {
     if (!pathname.endsWith('/') && !pathname.endsWith('.md')) return;
 
     e.preventDefault();
-    navigate(withScope(a.href));
+    navigate(withView(a.href));
   });
 
   window.addEventListener('popstate', () => {
     const target = `${location.pathname}${location.search}${location.hash}`;
     navigate(target, false);
   });
+}
+
+function setupSearch() {
+  setupPathSearch({ populateDates, setupNavExternalLinks });
 }
 
 async function navigate(path, push = true) {
@@ -654,11 +571,10 @@ async function navigate(path, push = true) {
   document.title = doc.title;
   if (push) history.pushState(null, '', target);
   setupFileViews();
-  setupPathSearch();
+  setupSearch();
   setupNavExternalLinks();
-  setupScopeSwitch();
-  syncScopeSwitch();
-  syncScopeVisibility();
+  setupViewMenu();
+  syncViewMenu();
   applyDocChromePref();
   populateDates();
   buildToc();
@@ -669,192 +585,35 @@ async function navigate(path, push = true) {
   document.dispatchEvent(new CustomEvent('ghrm:contentready'));
 }
 
-function tocRoot() {
-  const viewRoot = fileViewRoot();
-  if (viewRoot) return viewRoot;
-  if (document.querySelector('[data-ghrm-view-kind]')) return null;
-  return (
-    document.querySelector('article[data-explorer] .ghrm-readme-content') ||
-    document.querySelector('article.markdown-body')
-  );
-}
-
-function tocButton() {
-  return document.querySelector('[data-ghrm-toc-btn]');
-}
-
-function syncTocButtons(show) {
-  const btn = tocButton();
-  for (const current of document.querySelectorAll('[data-ghrm-toc-btn]')) {
-    current.hidden = current !== btn;
-    current.disabled = current === btn ? !show : true;
-  }
-  return btn;
-}
-
-function headingText(heading) {
-  const copy = heading.cloneNode(true);
-  for (const anchor of copy.querySelectorAll('.ghrm-anchor')) {
-    anchor.remove();
-  }
-  return copy.textContent.replace(/\s+/g, ' ').trim();
-}
-
-function currentHeadingId() {
-  const root = tocRoot();
-  if (!root) return '';
-  const headings = [
-    ...root.querySelectorAll('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]'),
-  ];
-  if (headings.length === 0) return '';
-
-  const threshold = scrollOffset() + 12;
-  let current = headings[0];
-  for (const heading of headings) {
-    if (window.scrollY + heading.getBoundingClientRect().top <= threshold) {
-      current = heading;
-    } else {
-      break;
-    }
-  }
-  return current.id;
-}
-
-function syncTocActive() {
-  const panel = document.getElementById('ghrm-toc-panel');
-  if (!panel) return;
-  const activeId = currentHeadingId();
-  for (const link of panel.querySelectorAll('a[href^="#"]')) {
-    const href = decodeURIComponent(link.getAttribute('href') ?? '').slice(1);
-    const active = href === activeId;
-    link.classList.toggle('is-active', active);
-    if (active) {
-      link.setAttribute('aria-current', 'location');
-    } else {
-      link.removeAttribute('aria-current');
-    }
-  }
-}
-
-function buildToc() {
-  const panel = document.getElementById('ghrm-toc-panel');
-  if (!panel) return;
-
-  panel.hidden = true;
-  panel.replaceChildren();
-
-  const root = tocRoot();
-  const headings = root
-    ? [...root.querySelectorAll('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]')]
-    : [];
-
-  if (headings.length === 0) {
-    syncTocButtons(false);
-    return;
-  }
-
-  syncTocButtons(true);
-  for (const heading of headings) {
-    const text = headingText(heading);
-    if (!text) continue;
-    const link = document.createElement('a');
-    link.className = `toc-h${heading.tagName[1]}`;
-    link.href = `#${heading.id}`;
-    link.textContent = text;
-    panel.append(link);
-  }
-  syncTocActive();
-}
-
-function positionToc(panel, btn) {
-  const rect = btn.getBoundingClientRect();
-  const width = panel.offsetWidth || 248;
-  const left = Math.max(
-    16,
-    Math.min(rect.right - width, window.innerWidth - width - 16),
-  );
-  panel.style.top = `${Math.round(rect.bottom + 8)}px`;
-  panel.style.left = `${Math.round(left)}px`;
-}
-
-function setupToc() {
-  const panel = document.getElementById('ghrm-toc-panel');
-  if (!panel) return;
-
-  panel.addEventListener('click', (e) => {
-    if (e.target.tagName === 'A') panel.hidden = true;
-  });
-
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-ghrm-toc-btn]');
-    if (btn) {
-      if (btn.hidden || btn.disabled) return;
-      buildToc();
-      const nextHidden = !panel.hidden;
-      panel.hidden = nextHidden;
-      if (!nextHidden && panel.childElementCount > 0) {
-        positionToc(panel, btn);
-      }
-      return;
-    }
-    if (!panel.contains(e.target)) {
-      panel.hidden = true;
-    }
-  });
-
-  window.addEventListener('resize', () => {
-    if (panel.hidden) return;
-    const btn = tocButton();
-    if (btn) positionToc(panel, btn);
-  });
-
-  window.addEventListener('hashchange', () => {
-    panel.hidden = true;
-    scrollToHash(location.hash);
-    syncTocActive();
-  });
-
-  window.addEventListener('scroll', syncTocActive, { passive: true });
-
-  buildToc();
-}
-
 function setupNavExternalLinks() {
   for (const row of document.querySelectorAll('.ghrm-nav-table tr')) {
-    const iconCell = row.querySelector('.ghrm-nav-icon');
     const nameLink = row.querySelector('.ghrm-nav-name a');
-    if (!iconCell || !nameLink) continue;
+    const nameCell = nameLink?.closest('.ghrm-nav-name');
+    if (!nameLink || !nameCell) continue;
 
     const href = nameLink.getAttribute('href');
     if (!isHtmlFile(href)) continue;
-    if (iconCell.querySelector('a')) continue;
+    if (nameCell.querySelector('.ghrm-nav-external')) continue;
 
     const htmlHref = href.replace(/^\//, '/_ghrm/html/');
-    const svg = iconCell.querySelector('svg');
-    if (!svg) continue;
-
-    const use = svg.querySelector('use');
-    if (use) {
-      use.setAttribute('href', '#ghrm-icon-external');
-    }
-
     const link = document.createElement('a');
+    link.className = 'ghrm-nav-external';
     link.href = htmlHref;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.dataset.ghrmNative = '1';
     link.setAttribute('aria-label', 'Open in browser');
     link.title = 'Open in browser';
-    link.appendChild(svg);
-    iconCell.appendChild(link);
+    link.innerHTML = icon('external');
+    nameLink.after(link);
   }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   setupFileViews();
-  setupPathSearch();
-  setupScopeSwitch();
-  syncScopeVisibility();
+  setupSearch();
+  setupViewMenu();
+  syncViewMenu();
   setupDocChromeToggle();
   populateDates();
   setupToc();

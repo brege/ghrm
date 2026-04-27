@@ -1,8 +1,12 @@
-# Copy to ~/.config/ghrm/config.toml or pass with --config.
+# ~/.config/ghrm/config.toml or --config
 
 port = 1331
 bind = "127.0.0.1"
 open = true
+
+[auth]
+# username = "admin"
+# password = "ghrm"
 
 [walk]
 hidden = false
@@ -20,4 +24,13 @@ exclude_names = [
   ".ipynb_checkpoints",
 ]
 
-# extensions = ["md", "tex", "txt", "rst"]
+[walk.filter]
+enabled = false
+default_group = "docs"
+
+[walk.filter.groups.docs]
+label = "Docs"
+globs = ["*.md", "*.mdx", "*.txt", "*.rst"]
+
+[search]
+max_rows = 1000

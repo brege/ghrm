@@ -22,6 +22,9 @@ futures-util = "0.3"
 notify = "8"
 notify-debouncer-full = "0.6"
 ignore = "0.4"
+grep-matcher = "0.1"
+grep-regex = "0.1"
+grep-searcher = "0.1"
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -30,6 +33,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1.0"
 include_dir = "0.7"
+askama = "0.12"
+hmac = "0.12"
+percent-encoding = "2"
+sha2 = "0.10"
 
 [profile.release]
 lto = "thin"

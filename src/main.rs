@@ -1,19 +1,26 @@
+mod api;
+mod auth;
 mod config;
+mod delivery;
+mod filter;
+mod paths;
 mod render;
 mod repo;
+mod search;
 mod server;
 mod theme;
 mod tmpl;
 mod vendor;
+mod view;
 mod walk;
 mod watch;
 
+use crate::auth::AuthConfig;
 use anyhow::Result;
 use clap::Parser;
 use std::collections::BTreeSet;
+use std::net::IpAddr;
 use std::path::PathBuf;
-
-use crate::walk::Scope;
 
 #[derive(Parser, Debug)]
 #[command(name = "ghrm", version, about = "GitHub-flavored markdown preview")]
@@ -61,6 +68,14 @@ struct Cli {
     )]
     no_excludes: bool,
 
+    #[arg(
+        short = 'm',
+        long = "max-rows",
+        value_name = "ROWS",
+        help = "Maximum number of search result rows"
+    )]
+    max_rows: Option<usize>,
+
     #[arg(long, help = "Clear cached frontend assets before startup")]
     clean: bool,
 }
@@ -95,6 +110,25 @@ fn main() -> Result<()> {
         .bind
         .or(cfg.bind)
         .unwrap_or_else(|| "127.0.0.1".to_string());
+    let auth = match (cfg.auth.password, cfg.auth.password_hash) {
+        (Some(_), Some(_)) => {
+            anyhow::bail!("auth.password and auth.password_hash are mutually exclusive")
+        }
+        (Some(password), None) => Some(AuthConfig {
+            username: cfg.auth.username.unwrap_or_else(|| "admin".to_string()),
+            password,
+        }),
+        (None, Some(_)) => anyhow::bail!("auth.password_hash is not supported"),
+        (None, None) => {
+            if cfg.auth.username.is_some() {
+                anyhow::bail!("auth.username requires auth.password");
+            }
+            None
+        }
+    };
+    if bind_requires_auth(&bind) && auth.is_none() {
+        anyhow::bail!("non-loopback bind requires auth.password");
+    }
     let no_ignore = cli.no_ignore || cfg.walk.no_ignore.unwrap_or(false);
     let open = !cli.no_browser
         && match std::env::var("GHRM_OPEN").as_deref() {
@@ -102,25 +136,32 @@ fn main() -> Result<()> {
             Ok(_) => true,
             Err(_) => cfg.open.unwrap_or(true),
         };
+    let has_explicit_ext_filter = !cli.extensions.is_empty()
+        || cfg
+            .walk
+            .extensions
+            .as_ref()
+            .is_some_and(|extensions| !extensions.is_empty());
     let extensions = if cli.extensions.is_empty() {
         normalize_extensions(cfg.walk.extensions.unwrap_or_default())?
     } else {
         normalize_extensions(cli.extensions)?
     };
-    let default_scope = if extensions.is_empty() {
-        if cli.hidden || cfg.walk.hidden.unwrap_or(false) {
-            Scope::All
-        } else {
-            Scope::Files
-        }
+    let extensions = if extensions.is_empty() {
+        vec!["md".to_string()]
     } else {
-        Scope::Filtered
+        extensions
     };
+    let filters = filter::Set::resolve(&cfg.walk.filter)?;
     let exclude_names = cfg
         .walk
         .exclude_names
         .unwrap_or_else(config::default_exclude_names);
     let no_excludes = cli.no_excludes || cfg.walk.no_excludes.unwrap_or(false);
+    let max_rows = cli.max_rows.or(cfg.search.max_rows).unwrap_or(1000);
+    if max_rows == 0 {
+        anyhow::bail!("max search rows must be greater than zero");
+    }
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -131,10 +172,14 @@ fn main() -> Result<()> {
         open,
         target: abs,
         use_ignore: !no_ignore,
-        default_scope,
+        default_hidden: cli.hidden || cfg.walk.hidden.unwrap_or(false),
+        default_filter_ext: has_explicit_ext_filter || filters.default_enabled(),
         extensions,
+        filters,
         exclude_names,
         no_excludes,
+        search_max_rows: max_rows,
+        auth,
     }))
 }
 
@@ -148,4 +193,14 @@ fn normalize_extensions(raw: Vec<String>) -> Result<Vec<String>> {
         extensions.insert(ext);
     }
     Ok(extensions.into_iter().collect())
+}
+
+fn bind_requires_auth(bind: &str) -> bool {
+    if bind.eq_ignore_ascii_case("localhost") {
+        return false;
+    }
+    match bind.parse::<IpAddr>() {
+        Ok(addr) => !addr.is_loopback(),
+        Err(_) => true,
+    }
 }

@@ -18,12 +18,27 @@
   <link rel="stylesheet" href="/vendor/github-markdown.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/admonitions.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/page.css">
+  <link rel="stylesheet" href="/_ghrm/assets/css/chrome.css">
+  <link rel="stylesheet" href="/_ghrm/assets/css/search.css">
+  <link rel="stylesheet" href="/_ghrm/assets/css/toc.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/features.css">
-{{ css_math }}{{ css_map }}</head>
-<body data-default-scope="{{ default_scope }}" data-has-ext-filter="{{ has_ext_filter }}">
-{{ icons }}  <header class="ghrm-topbar">
+{% if has_math %}  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
+{% endif %}{% if has_map %}  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+{% endif %}</head>
+<body
+  data-default-show-hidden="{% if default_show_hidden %}1{% else %}0{% endif %}"
+  data-default-show-excludes="{% if default_show_excludes %}1{% else %}0{% endif %}"
+  data-default-filter-ext="{% if default_filter_ext %}1{% else %}0{% endif %}"
+  data-default-filter-group="{% if let Some(group) = default_filter_group %}{{ group }}{% endif %}"
+  data-default-sort="{{ default_sort }}"
+  data-can-toggle-excludes="{% if can_toggle_excludes %}1{% else %}0{% endif %}">
+{% include "fragments/icons.html" %}  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">
-{{ source }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
+{{ source|safe }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
+        <button id="ghrm-search-mode" type="button" class="ghrm-search-mode" title="Switch search mode" aria-label="Switch search mode">
+          <svg class="icon-path" aria-hidden="true" focusable="false"><use href="#ghrm-icon-list"></use></svg>
+          <svg class="icon-content" aria-hidden="true" focusable="false"><use href="#ghrm-icon-code"></use></svg>
+        </button>
         <input id="ghrm-path-search-input" class="ghrm-path-search-input" type="search" placeholder="Search paths" aria-label="Search paths">
         <button id="ghrm-path-search-toggle" type="button" aria-expanded="false" aria-label="Search paths" title="Search paths">
           <svg aria-hidden="true" focusable="false">
@@ -48,12 +63,21 @@
           <use href="#ghrm-icon-moon"></use>
         </svg>
       </button>
+{% if show_logout %}      <a id="ghrm-logout" href="/_ghrm/logout" aria-label="Log out" title="Log out">
+        <svg aria-hidden="true" focusable="false">
+          <use href="#ghrm-icon-logout"></use>
+        </svg>
+      </a>
+{% endif %}
     </div>
   </header>
   <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
-{{ body }}{{ vendor_mermaid }}
-{{ vendor_math }}
-{{ vendor_map }}
+{{ body|safe }}{% if has_mermaid %}  <script defer src="/vendor/mermaid.js"></script>
+  <script defer src="/vendor/svg-pan-zoom.min.js"></script>{% endif %}
+{% if has_math %}<script defer src="/vendor/katex/katex.min.js"></script>
+  <script defer src="/vendor/katex/auto-render.min.js"></script>{% endif %}
+{% if has_map %}<script defer src="/vendor/leaflet/leaflet.js"></script>
+  <script defer src="/vendor/topojson-client.min.js"></script>{% endif %}
   <script defer src="/vendor/highlightjs/highlight.min.js"></script>
   <script type="module" src="/_ghrm/assets/js/preview.js"></script>
   <script type="module" src="/_ghrm/assets/js/app.js"></script>

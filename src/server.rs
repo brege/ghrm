@@ -1,7 +1,12 @@
+use crate::api;
+use crate::auth;
+use crate::delivery;
+use crate::filter;
 use crate::render::{self, Rendered};
-use crate::repo::{Forge, RepoSet, SourceState};
+use crate::repo::{RepoSet, SourceState};
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
-use crate::walk::{self, NavSet, Scope};
+use crate::view::{self, ViewConfig, ViewQuery, ViewState};
+use crate::walk::{self, NavSet, ViewOpts};
 use crate::watch;
 
 use anyhow::Result;
@@ -9,15 +14,14 @@ use anyhow::anyhow;
 use axum::{
     Router,
     body::Body,
-    extract::{Path as AxPath, Query, State, ws::WebSocketUpgrade},
+    extract::{Path as AxPath, Query, RawQuery, State, ws::WebSocketUpgrade},
     http::{StatusCode, header},
+    middleware,
     response::{Html, IntoResponse, Response},
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::net::TcpListener;
@@ -31,9 +35,14 @@ pub struct AppState {
     pub nav: Arc<RwLock<NavSet>>,
     pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
-    pub default_scope: Scope,
-    pub has_ext_filter: bool,
+    pub use_ignore: bool,
+    pub view_cfg: ViewConfig,
+    pub filter_exts: Vec<String>,
+    pub filters: filter::Set,
+    pub exclude_names: Vec<String>,
+    pub search_max_rows: usize,
     pub home: Option<PathBuf>,
+    pub auth: Option<Arc<auth::AuthState>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,35 +57,14 @@ pub struct Options {
     pub open: bool,
     pub target: PathBuf,
     pub use_ignore: bool,
-    pub default_scope: Scope,
+    pub default_hidden: bool,
+    pub default_filter_ext: bool,
     pub extensions: Vec<String>,
+    pub filters: filter::Set,
     pub exclude_names: Vec<String>,
     pub no_excludes: bool,
-}
-
-#[derive(Clone, Copy)]
-struct FileView {
-    kind: &'static str,
-    preview_hidden: bool,
-    raw_hidden: bool,
-}
-
-impl FileView {
-    fn markdown() -> Self {
-        Self {
-            kind: "markdown",
-            preview_hidden: false,
-            raw_hidden: true,
-        }
-    }
-
-    fn raw() -> Self {
-        Self {
-            kind: "raw",
-            preview_hidden: true,
-            raw_hidden: false,
-        }
-    }
+    pub search_max_rows: usize,
+    pub auth: Option<auth::AuthConfig>,
 }
 
 pub async fn run(options: Options) -> Result<()> {
@@ -86,10 +74,14 @@ pub async fn run(options: Options) -> Result<()> {
         open,
         target,
         use_ignore,
-        default_scope,
+        default_hidden,
+        default_filter_ext,
         extensions,
+        filters,
         exclude_names,
         no_excludes,
+        search_max_rows,
+        auth,
     } = options;
 
     let meta = std::fs::metadata(&target)?;
@@ -97,7 +89,20 @@ pub async fn run(options: Options) -> Result<()> {
 
     let (reload_tx, _) = broadcast::channel::<()>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
-    let has_ext_filter = !extensions.is_empty();
+    let auth = auth
+        .map(|auth| auth::AuthState::new(auth, port))
+        .transpose()?
+        .map(Arc::new);
+    let view_cfg = ViewConfig {
+        default: ViewOpts {
+            show_hidden: default_hidden,
+            show_excludes: no_excludes,
+            filter_ext: default_filter_ext,
+        },
+        default_groups: filters.default_groups().to_vec(),
+        default_sort: walk::Sort::Name,
+        can_toggle_excludes: no_excludes,
+    };
     let repo_root_buf = if mode == Mode::Dir {
         target.clone()
     } else {
@@ -108,23 +113,29 @@ pub async fn run(options: Options) -> Result<()> {
         Mode::Dir => {
             let repo_root2 = repo_root_buf.clone();
             let repo_excludes = exclude_names.clone();
-            let target2 = target.clone();
+            let repo_h =
+                tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes));
+
+            // Build nav tree in background - don't block startup
+            let nav_bg = nav.clone();
+            let target_bg = target.clone();
             let walk_excludes = exclude_names.clone();
             let walk_extensions = extensions.clone();
-            let walk_h = tokio::task::spawn_blocking(move || {
-                walk::build_all(
-                    &target2,
+            tokio::task::spawn_blocking(move || {
+                let fresh = walk::build_all(
+                    &target_bg,
                     use_ignore,
                     &walk_excludes,
                     &walk_extensions,
                     no_excludes,
-                )
+                );
+                if let Ok(mut guard) = nav_bg.write() {
+                    *guard = fresh;
+                }
             });
-            let repo_h =
-                tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes));
-            let (fresh, repos) = tokio::join!(walk_h, repo_h);
-            *nav.write().unwrap() = fresh?;
-            watch::spawn_dir(
+
+            // Watcher failure shouldn't kill the server
+            if let Err(e) = watch::spawn_dir(
                 target.clone(),
                 nav.clone(),
                 reload_tx.clone(),
@@ -132,12 +143,17 @@ pub async fn run(options: Options) -> Result<()> {
                 exclude_names.clone(),
                 extensions.clone(),
                 no_excludes,
-            )?;
-            repos?
+            ) {
+                warn!("file watcher disabled: {e}");
+            }
+            repo_h.await?
         }
         Mode::File => {
-            watch::spawn_file(target.clone(), reload_tx.clone())?;
-            tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root_buf, &exclude_names))
+            if let Err(e) = watch::spawn_file(target.clone(), reload_tx.clone()) {
+                warn!("file watcher disabled: {e}");
+            }
+            let repo_excludes = exclude_names.clone();
+            tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root_buf, &repo_excludes))
                 .await?
         }
     };
@@ -148,32 +164,69 @@ pub async fn run(options: Options) -> Result<()> {
         nav,
         repos,
         reload: reload_tx,
-        default_scope,
-        has_ext_filter,
+        use_ignore,
+        view_cfg,
+        filter_exts: extensions,
+        filters,
+        exclude_names,
+        search_max_rows,
         home: std::env::var_os("HOME").map(PathBuf::from),
+        auth,
     };
 
-    let app = Router::new()
+    let protected = Router::new()
         .route("/", get(root))
         .route("/_ghrm/ws", get(ws_handler))
-        .route("/_ghrm/tree", get(api_tree))
-        .route("/_ghrm/render", get(api_render))
-        .route("/_ghrm/raw/{*path}", get(raw_file))
-        .route("/_ghrm/html/{*path}", get(html_file))
-        .route("/_ghrm/download/{*path}", get(download_file))
-        .route("/_ghrm/assets/{*path}", get(theme_asset))
-        .route("/vendor/{*path}", get(vendor))
-        .route("/{*path}", get(any_path))
-        .with_state(state);
+        .route("/_ghrm/tree", get(api::tree))
+        .route("/_ghrm/path-search", get(api::path_search))
+        .route("/_ghrm/search", get(api::search))
+        .route("/_ghrm/render", get(api::render))
+        .route("/_ghrm/raw/{*path}", get(delivery::raw_file))
+        .route("/_ghrm/html/{*path}", get(delivery::html_file))
+        .route("/_ghrm/download/{*path}", get(delivery::download_file))
+        .route("/{*path}", get(any_path));
+
+    let auth_enabled = state.auth.is_some();
+    let app = if auth_enabled {
+        Router::new()
+            .route(
+                "/_ghrm/login",
+                get(auth::login_form).post(auth::login_submit),
+            )
+            .route("/_ghrm/logout", get(auth::logout))
+            .route("/_ghrm/assets/{*path}", get(delivery::theme_asset))
+            .route("/vendor/{*path}", get(delivery::vendor))
+            .merge(protected.layer(middleware::from_fn_with_state(state.clone(), auth::require)))
+            .with_state(state)
+    } else {
+        Router::new()
+            .route("/_ghrm/assets/{*path}", get(delivery::theme_asset))
+            .route("/vendor/{*path}", get(delivery::vendor))
+            .merge(protected)
+            .with_state(state)
+    };
 
     let addr = find_addr(&bind, port).await?;
     let listener = TcpListener::bind(addr).await?;
     let actual = listener.local_addr()?;
+    let url = server_url(&actual);
     info!(%actual, "ghrm listening");
-    if open {
-        open_browser(&actual);
+    info!("local: {}", url);
+    if let Some(url) = network_url(&actual) {
+        if auth_enabled {
+            info!("network: {} (auth required)", url);
+        } else {
+            info!("network: {}", url);
+        }
     }
-    axum::serve(listener, app).await?;
+    if open {
+        open_browser(&url);
+    }
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -191,51 +244,56 @@ async fn find_addr(bind: &str, start_port: u16) -> Result<SocketAddr> {
     Err(anyhow!("no free port in range"))
 }
 
-fn open_browser(addr: &SocketAddr) {
-    let url = format!("http://{}/", addr);
+fn server_url(addr: &SocketAddr) -> String {
+    let host = if addr.ip().is_loopback() || addr.ip().is_unspecified() {
+        "localhost".to_string()
+    } else if addr.ip().is_ipv6() {
+        format!("[{}]", addr.ip())
+    } else {
+        addr.ip().to_string()
+    };
+    format!("http://{}:{}/", host, addr.port())
+}
+
+fn network_url(addr: &SocketAddr) -> Option<String> {
+    let ip = if addr.ip().is_unspecified() {
+        outbound_ip()?
+    } else if addr.ip().is_loopback() {
+        return None;
+    } else {
+        addr.ip()
+    };
+    Some(format!("http://{}:{}/", url_host(ip), addr.port()))
+}
+
+fn outbound_ip() -> Option<IpAddr> {
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    Some(socket.local_addr().ok()?.ip())
+}
+
+fn url_host(ip: IpAddr) -> String {
+    if ip.is_ipv6() {
+        format!("[{ip}]")
+    } else {
+        ip.to_string()
+    }
+}
+
+fn open_browser(url: &str) {
     let _ = std::process::Command::new("xdg-open")
-        .arg(&url)
+        .arg(url)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn();
-}
-
-#[derive(Default, Deserialize)]
-struct ScopeQuery {
-    scope: Option<String>,
-}
-
-fn scope_from_query(q: &ScopeQuery, default_scope: Scope, has_ext_filter: bool) -> Scope {
-    let scope = q
-        .scope
-        .as_deref()
-        .and_then(Scope::parse)
-        .unwrap_or(default_scope);
-    if scope == Scope::Filtered && !has_ext_filter {
-        default_scope
-    } else {
-        scope
-    }
-}
-
-fn with_scope(href: &str, scope: Scope, default_scope: Scope) -> String {
-    if scope == default_scope {
-        return href.to_string();
-    }
-    let scope = scope_name(scope);
-    if href.contains('?') {
-        format!("{href}&scope={scope}")
-    } else {
-        format!("{href}?scope={scope}")
-    }
 }
 
 fn breadcrumb_html(
     target: &Path,
     home: Option<&Path>,
     rel: &str,
-    scope: Scope,
-    default_scope: Scope,
+    view: &ViewState,
+    cfg: &ViewConfig,
 ) -> String {
     let display_root = home
         .and_then(|home| target.strip_prefix(home).ok())
@@ -294,11 +352,9 @@ fn breadcrumb_html(
             format!("/{}/", rel_parts[..depth].join("/"))
         };
         out.push_str(r#"<a class="ghrm-crumb ghrm-crumb-link" href=""#);
-        out.push_str(&html_escape::encode_double_quoted_attribute(&with_scope(
-            &href,
-            scope,
-            default_scope,
-        )));
+        out.push_str(&html_escape::encode_double_quoted_attribute(
+            &view::with_view(&href, view, cfg),
+        ));
         out.push_str(r#"">"#);
         out.push_str(&label);
         out.push_str("</a>");
@@ -307,22 +363,27 @@ fn breadcrumb_html(
     out
 }
 
-async fn root(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
-    let scope = scope_from_query(&q, s.default_scope, s.has_ext_filter);
+async fn root(
+    State(s): State<AppState>,
+    RawQuery(raw_query): RawQuery,
+    Query(q): Query<ViewQuery>,
+) -> Response {
+    let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     match s.mode {
-        Mode::File => render_target(&s, &s.target, None, scope).await,
-        Mode::Dir => render_explorer(&s, "", scope).await,
+        Mode::File => render_target(&s, &s.target, None, view).await,
+        Mode::Dir => render_explorer(&s, "", view).await,
     }
 }
 
 async fn any_path(
     State(s): State<AppState>,
     AxPath(path): AxPath<String>,
-    Query(q): Query<ScopeQuery>,
+    RawQuery(raw_query): RawQuery,
+    Query(q): Query<ViewQuery>,
 ) -> Response {
-    let scope = scope_from_query(&q, s.default_scope, s.has_ext_filter);
+    let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     if s.mode == Mode::File {
-        return serve_file_mode(&s, &path, scope).await;
+        return serve_file_mode(&s, &path, view).await;
     }
     let had_trailing = path.ends_with('/');
     let clean = path.trim_matches('/').to_string();
@@ -337,28 +398,28 @@ async fn any_path(
     };
     if meta.is_dir() {
         if !had_trailing {
-            let loc = with_scope(&format!("/{}/", clean), scope, s.default_scope);
+            let loc = view::with_view(&format!("/{}/", clean), &view, &s.view_cfg);
             return Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
                 .header(header::LOCATION, loc)
                 .body(Body::empty())
                 .unwrap();
         }
-        return render_explorer(&s, &clean, scope).await;
+        return render_explorer(&s, &clean, view).await;
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&s, &joined, Some(s.target.as_path()), scope).await;
+        return render_file(&s, &joined, Some(s.target.as_path()), view).await;
     }
-    dispatch_file(&s, &joined, &s.target, &clean, scope).await
+    dispatch_file(&s, &joined, &s.target, &clean, view).await
 }
 
-async fn serve_file_mode(s: &AppState, path: &str, scope: Scope) -> Response {
+async fn serve_file_mode(s: &AppState, path: &str, view: ViewState) -> Response {
     let Some(root) = s.target.parent() else {
         return not_found();
     };
     let clean = path.trim_matches('/');
     if clean.is_empty() {
-        return render_target(s, &s.target, None, scope).await;
+        return render_target(s, &s.target, None, view).await;
     }
     let joined = root.join(clean);
     let meta = match tokio::fs::metadata(&joined).await {
@@ -368,12 +429,17 @@ async fn serve_file_mode(s: &AppState, path: &str, scope: Scope) -> Response {
     if meta.is_dir() {
         return not_found();
     }
-    render_target(s, &joined, None, scope).await
+    render_target(s, &joined, None, view).await
 }
 
-async fn render_target(s: &AppState, path: &Path, root: Option<&Path>, scope: Scope) -> Response {
+async fn render_target(
+    s: &AppState,
+    path: &Path,
+    root: Option<&Path>,
+    view: ViewState,
+) -> Response {
     if path.extension().and_then(|s| s.to_str()) == Some("md") {
-        render_file(s, path, root, scope).await
+        render_file(s, path, root, view).await
     } else {
         let Some(base) = root.or_else(|| path.parent()) else {
             return not_found();
@@ -384,11 +450,11 @@ async fn render_target(s: &AppState, path: &Path, root: Option<&Path>, scope: Sc
             .map(|p| p.to_string_lossy().into_owned())
             .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_default();
-        dispatch_file(s, path, base, &rel, scope).await
+        dispatch_file(s, path, base, &rel, view).await
     }
 }
 
-async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scope) -> Response {
+async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewState) -> Response {
     let md = match tokio::fs::read_to_string(path).await {
         Ok(m) => m,
         Err(_) => return not_found(),
@@ -403,10 +469,10 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
         .map(|p| p.to_string_lossy().into_owned())
         .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_default();
-    let crumbs = breadcrumb_html(root, s.home.as_deref(), &rel, scope, s.default_scope);
-    let raw_html = raw_blob_html(&md, Some("markdown"));
-    let view = FileView::markdown();
-    let view_attrs = file_view_attrs(&rel, view);
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), &rel, &view, &s.view_cfg);
+    let raw_html = delivery::raw_blob_html(&md, Some("markdown"));
+    let view = delivery::FileView::markdown();
+    let view_attrs = delivery::file_view_attrs(&rel, view);
     let body = match tmpl::page(tmpl::PageCtx {
         crumbs: &crumbs,
         preview_html: &rendered.html,
@@ -421,28 +487,54 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, scope: Scop
             return not_found();
         }
     };
-    respond_html_with_scope(
+    respond_html(
         &rendered,
         &body,
         s.repos.source_for(path),
-        s.default_scope,
-        s.has_ext_filter,
+        &s.view_cfg,
+        s.auth.is_some(),
     )
 }
 
-async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
+async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
+    let matcher = view::matcher(&view, &s.filters);
+    let filter_exts = view::filter_exts(&view, &s.filter_exts);
     let dir_opt = {
         let guard = s.nav.read().unwrap();
-        guard.get(scope).dirs.get(rel).cloned()
+        guard
+            .get(view.opts, view.sort, view.sort_dir, matcher.as_ref())
+            .dirs
+            .get(rel)
+            .cloned()
     };
 
-    let show_hidden = scope == Scope::All;
     let dir = match dir_opt {
-        Some(d) if d.entries.is_empty() => {
-            walk::list_dir(&s.target, Path::new(rel), show_hidden).unwrap_or(d)
-        }
+        Some(d) if d.entries.is_empty() => walk::list_dir(
+            &s.target,
+            Path::new(rel),
+            &s.exclude_names,
+            filter_exts.unwrap_or(&[]),
+            matcher.as_ref(),
+            view.opts,
+            walk::SortSpec {
+                sort: view.sort,
+                dir: view.sort_dir,
+            },
+        )
+        .unwrap_or(d),
         Some(d) => d,
-        None => match walk::list_dir(&s.target, Path::new(rel), show_hidden) {
+        None => match walk::list_dir(
+            &s.target,
+            Path::new(rel),
+            &s.exclude_names,
+            filter_exts.unwrap_or(&[]),
+            matcher.as_ref(),
+            view.opts,
+            walk::SortSpec {
+                sort: view.sort,
+                dir: view.sort_dir,
+            },
+        ) {
             Some(d) => d,
             None => return not_found(),
         },
@@ -461,14 +553,14 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         "/".to_string()
     };
     let has_parent = !rel.is_empty();
-    let parent_href = with_scope(&parent_href, scope, s.default_scope);
+    let parent_href = view::with_view(&parent_href, &view, &s.view_cfg);
 
     let entries: Vec<ExplorerEntry> = dir
         .entries
         .iter()
         .map(|e| ExplorerEntry {
             name: e.name.clone(),
-            href: with_scope(&e.href, scope, s.default_scope),
+            href: view::with_view(&e.href, &view, &s.view_cfg),
             is_dir: e.is_dir,
             modified: e.modified,
         })
@@ -507,13 +599,14 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
         name: &readme_name,
         html: &r.html,
     });
-    let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, scope, s.default_scope);
-
+    let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, &view, &s.view_cfg);
     let body = match tmpl::explorer(ExplorerCtx {
         crumbs: &crumbs,
         current_path: rel,
         has_parent,
         parent_href: &parent_href,
+        show_excludes: s.view_cfg.can_toggle_excludes,
+        filter_groups: s.filters.groups(),
         entries: &entries,
         readme: readme_tmpl,
     }) {
@@ -531,6 +624,7 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
     let combined = Rendered {
         html: String::new(),
         title,
+        lang: None,
         has_mermaid,
         has_math,
         has_map,
@@ -541,21 +635,21 @@ async fn render_explorer(s: &AppState, rel: &str, scope: Scope) -> Response {
     } else {
         s.target.join(rel)
     };
-    respond_html_with_scope(
+    respond_html(
         &combined,
         &body,
         s.repos.source_for(&current),
-        s.default_scope,
-        s.has_ext_filter,
+        &s.view_cfg,
+        s.auth.is_some(),
     )
 }
 
-fn respond_html_with_scope(
+fn respond_html(
     r: &Rendered,
     body: &str,
     source: SourceState,
-    default_scope: Scope,
-    has_ext_filter: bool,
+    cfg: &ViewConfig,
+    show_logout: bool,
 ) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
@@ -563,16 +657,23 @@ fn respond_html_with_scope(
         &r.title
     };
     let source = source_html(&source);
-    let html = match tmpl::base(PageShell {
+    let shell = PageShell {
         title,
         body,
         source: &source,
-        default_scope: scope_name(default_scope),
-        has_ext_filter,
+        favicon: tmpl::FAVICON_SVG_URL,
+        show_logout,
+        default_show_hidden: cfg.default.show_hidden,
+        default_show_excludes: cfg.default.show_excludes,
+        default_filter_ext: cfg.default.filter_ext,
+        default_filter_group: cfg.default_groups.first().map(String::as_str),
+        default_sort: cfg.default_sort.as_str(),
+        can_toggle_excludes: cfg.can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,
         has_map: r.has_map,
-    }) {
+    };
+    let html = match tmpl::base(shell) {
         Ok(h) => h,
         Err(e) => {
             warn!("template error: {}", e);
@@ -582,17 +683,9 @@ fn respond_html_with_scope(
     Html(html).into_response()
 }
 
-fn scope_name(scope: Scope) -> &'static str {
-    match scope {
-        Scope::Filtered => "filter",
-        Scope::Files => "files",
-        Scope::All => "all",
-    }
-}
-
 fn source_html(source: &SourceState) -> String {
     match source {
-        SourceState::Web { url, label, forge } => web_source_html(url, label, *forge),
+        SourceState::Web { url, label, .. } => web_source_html(url, label),
         SourceState::Transport { raw } => format!(
             "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-disabled\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#ghrm-icon-git\"></use></svg><span class=\"ghrm-source-text\">{text}</span></span>",
             raw = html_escape::encode_double_quoted_attribute(raw),
@@ -603,243 +696,49 @@ fn source_html(source: &SourceState) -> String {
     }
 }
 
-fn web_source_html(url: &str, label: &str, forge: Forge) -> String {
-    let icon = forge_icon(forge);
+const PROJECT_REMOTE_URL: &str = "https://github.com/brege/ghrm";
+
+fn web_source_html(url: &str, label: &str) -> String {
     let href = html_escape::encode_double_quoted_attribute(url);
     let title_attr = html_escape::encode_double_quoted_attribute(url);
+    let (host, repo) = source_display(url, label);
+    let host_href = if host.is_empty() {
+        None
+    } else {
+        Some(format!("https://{host}"))
+    };
+    let host = html_escape::encode_text(&host);
+    let repo = html_escape::encode_text(&repo);
+    let project_href = html_escape::encode_double_quoted_attribute(PROJECT_REMOTE_URL);
 
-    let label_parts: Vec<&str> = label.split(" / ").collect();
+    let host_html = match host_href {
+        Some(host_href) => {
+            let host_href = html_escape::encode_double_quoted_attribute(&host_href);
+            format!(
+                "<a class=\"ghrm-source-host\" href=\"{host_href}\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"Open {host}\">{host}</a>"
+            )
+        }
+        None => String::new(),
+    };
+
+    format!(
+        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#ghrm-icon-source\"></use></svg></a><span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
+    )
+}
+
+fn source_display(url: &str, label: &str) -> (String, String) {
     let after_scheme = url.find("://").map_or(0, |i| i + 3);
     let host_end = after_scheme
         + url[after_scheme..]
             .find('/')
             .unwrap_or(url.len() - after_scheme);
-    let base = &url[..host_end];
-    let path_segs: Vec<&str> = url[host_end..].trim_start_matches('/').split('/').collect();
-
-    if label_parts.len() != path_segs.len() || path_segs.iter().any(|s| s.is_empty()) {
-        return format!(
-            "<a id=\"ghrm-source-slot\" class=\"ghrm-source-link\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#{icon}\"></use></svg><span class=\"ghrm-source-text\">{text}</span></a>",
-            text = html_escape::encode_text(label),
-        );
+    let host = url[after_scheme..host_end].trim_end_matches('/');
+    let repo = url[host_end..].trim_matches('/');
+    if host.is_empty() || repo.is_empty() {
+        let repo = label.replace(" / ", "/");
+        return (String::new(), repo);
     }
-
-    let n = label_parts.len();
-    let mut segs = String::new();
-    for (i, display) in label_parts.iter().enumerate() {
-        if i > 0 {
-            segs.push_str("<span class=\"ghrm-source-sep\"> / </span>");
-        }
-        let seg_url = format!("{}/{}", base, path_segs[..=i].join("/"));
-        let seg_href = html_escape::encode_double_quoted_attribute(&seg_url);
-        let seg_text = html_escape::encode_text(display);
-        let class = if i + 1 == n {
-            "ghrm-source-repo"
-        } else {
-            "ghrm-source-owner"
-        };
-        segs.push_str(&format!(
-            "<a href=\"{seg_href}\" class=\"{class}\" target=\"_blank\" rel=\"noopener noreferrer\">{seg_text}</a>",
-        ));
-    }
-
-    format!(
-        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link\"><a href=\"{href}\" class=\"ghrm-source-icon-link\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#{icon}\"></use></svg></a><span class=\"ghrm-source-text\">{segs}</span></span>",
-    )
-}
-
-fn forge_icon(forge: Forge) -> &'static str {
-    match forge {
-        Forge::GitHub => "ghrm-icon-github",
-        Forge::Bitbucket => "ghrm-icon-bitbucket",
-        Forge::GitLab => "ghrm-icon-gitlab",
-        Forge::Codeberg => "ghrm-icon-codeberg",
-        Forge::SourceHut => "ghrm-icon-sourcehut",
-        Forge::Generic => "ghrm-icon-git",
-    }
-}
-
-// --- JSON APIs for optional SPA navigation ---
-
-#[derive(Serialize)]
-struct TreeResponse {
-    mode: &'static str,
-    root: String,
-    dirs: BTreeMap<String, crate::walk::NavDir>,
-}
-
-async fn api_tree(State(s): State<AppState>, Query(q): Query<ScopeQuery>) -> Response {
-    let nav = s.nav.read().unwrap();
-    let scope = scope_from_query(&q, s.default_scope, s.has_ext_filter);
-    let tree = nav.get(scope);
-    let root = s
-        .target
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let resp = TreeResponse {
-        mode: if s.mode == Mode::Dir { "dir" } else { "file" },
-        root,
-        dirs: tree.dirs.clone(),
-    };
-    match serde_json::to_string(&resp) {
-        Ok(json) => Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(json))
-            .unwrap(),
-        Err(e) => {
-            warn!("api_tree error: {}", e);
-            not_found()
-        }
-    }
-}
-
-#[derive(Deserialize)]
-struct RenderQuery {
-    path: Option<String>,
-}
-
-async fn api_render(State(s): State<AppState>, Query(q): Query<RenderQuery>) -> Response {
-    let rel = q.path.as_deref().unwrap_or("").trim_matches('/');
-
-    let (file_path, root) = if s.mode == Mode::File {
-        let parent = s.target.parent().unwrap_or(&s.target).to_path_buf();
-        let fp = if rel.is_empty() {
-            s.target.clone()
-        } else {
-            parent.join(rel)
-        };
-        (fp, parent)
-    } else {
-        let fp = if rel.is_empty() {
-            s.target.clone()
-        } else {
-            s.target.join(rel)
-        };
-        (fp, s.target.clone())
-    };
-
-    let md = match tokio::fs::read_to_string(&file_path).await {
-        Ok(m) => m,
-        Err(_) => return not_found(),
-    };
-
-    let rendered = render::render_at(
-        &md,
-        Some(render::RenderPath {
-            root: &root,
-            src: &file_path,
-        }),
-    );
-
-    match serde_json::to_string(&rendered) {
-        Ok(json) => Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(json))
-            .unwrap(),
-        Err(e) => {
-            warn!("api_render error: {}", e);
-            not_found()
-        }
-    }
-}
-
-async fn theme_asset(AxPath(path): AxPath<String>) -> Response {
-    let base = match crate::theme::dir() {
-        Ok(d) => d,
-        Err(e) => {
-            warn!("theme dir error: {}", e);
-            return not_found();
-        }
-    };
-    let rel = path.trim_start_matches('/');
-    for comp in PathBuf::from(rel).components() {
-        if !matches!(comp, Component::Normal(_)) {
-            return not_found();
-        }
-    }
-    stream_file(&base.join(rel)).await
-}
-
-async fn vendor(AxPath(path): AxPath<String>) -> Response {
-    let path = match crate::vendor::path(&path) {
-        Ok(p) => p,
-        Err(_) => return not_found(),
-    };
-    stream_file(&path).await
-}
-
-fn is_binary_ext(ext: &str) -> bool {
-    matches!(
-        ext,
-        "png"
-            | "jpg"
-            | "jpeg"
-            | "gif"
-            | "svg"
-            | "webp"
-            | "ico"
-            | "bmp"
-            | "tiff"
-            | "tif"
-            | "pdf"
-            | "woff"
-            | "woff2"
-            | "ttf"
-            | "otf"
-            | "eot"
-            | "zip"
-            | "gz"
-            | "tar"
-            | "bz2"
-            | "xz"
-            | "7z"
-            | "rar"
-            | "zst"
-            | "exe"
-            | "bin"
-            | "so"
-            | "dylib"
-            | "dll"
-            | "o"
-            | "a"
-            | "lib"
-            | "mp3"
-            | "mp4"
-            | "wav"
-            | "ogg"
-            | "flac"
-            | "mkv"
-            | "avi"
-            | "mov"
-            | "webm"
-            | "sqlite"
-            | "db"
-            | "sqlite3"
-            | "class"
-            | "jar"
-            | "pyc"
-    )
-}
-
-fn stream_bytes(path: &Path, bytes: Vec<u8>) -> Response {
-    let mime = mime_guess(path);
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, mime)
-        .header(header::CACHE_CONTROL, "no-cache")
-        .body(Body::from(bytes))
-        .unwrap()
-}
-
-async fn stream_file(path: &Path) -> Response {
-    let bytes = match tokio::fs::read(path).await {
-        Ok(b) => b,
-        Err(_) => return not_found(),
-    };
-    stream_bytes(path, bytes)
+    (host.to_string(), repo.to_string())
 }
 
 async fn dispatch_file(
@@ -847,15 +746,15 @@ async fn dispatch_file(
     path: &Path,
     root: &Path,
     rel: &str,
-    scope: Scope,
+    view: ViewState,
 ) -> Response {
     if path
         .extension()
         .and_then(|s| s.to_str())
-        .map(|ext| is_binary_ext(&ext.to_lowercase()))
+        .map(|ext| delivery::is_binary_ext(&ext.to_lowercase()))
         .unwrap_or(false)
     {
-        return stream_file(path).await;
+        return delivery::stream_file(path).await;
     }
 
     let bytes = match tokio::fs::read(path).await {
@@ -864,25 +763,20 @@ async fn dispatch_file(
     };
 
     if bytes.contains(&0u8) {
-        return stream_bytes(path, bytes);
+        return delivery::stream_bytes(path, bytes);
     }
 
     let text = match String::from_utf8(bytes) {
         Ok(s) => s,
-        Err(e) => return stream_bytes(path, e.into_bytes()),
+        Err(e) => return delivery::stream_bytes(path, e.into_bytes()),
     };
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
     let rendered = render::render_text(filename, &text);
-    let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, scope, s.default_scope);
-    let raw_html = raw_blob_html(
-        &text,
-        path.extension()
-            .and_then(|s| s.to_str())
-            .filter(|s| !s.is_empty()),
-    );
-    let view = FileView::raw();
-    let view_attrs = file_view_attrs(rel, view);
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, &view, &s.view_cfg);
+    let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
+    let view = delivery::FileView::raw();
+    let view_attrs = delivery::file_view_attrs(rel, view);
     let body = match tmpl::page(tmpl::PageCtx {
         crumbs: &crumbs,
         preview_html: &rendered.html,
@@ -897,163 +791,13 @@ async fn dispatch_file(
             return not_found();
         }
     };
-    respond_html_with_scope(
+    respond_html(
         &rendered,
         &body,
         s.repos.source_for(path),
-        s.default_scope,
-        s.has_ext_filter,
+        &s.view_cfg,
+        s.auth.is_some(),
     )
-}
-
-fn mime_guess(path: &Path) -> &'static str {
-    match path.extension().and_then(|s| s.to_str()) {
-        Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
-        Some("gif") => "image/gif",
-        Some("svg") => "image/svg+xml",
-        Some("webp") => "image/webp",
-        Some("ico") => "image/x-icon",
-        Some("css") => "text/css; charset=utf-8",
-        Some("js") | Some("mjs") => "application/javascript; charset=utf-8",
-        Some("json") => "application/json; charset=utf-8",
-        Some("woff") => "font/woff",
-        Some("woff2") => "font/woff2",
-        Some("ttf") => "font/ttf",
-        Some("otf") => "font/otf",
-        Some("html") => "text/html; charset=utf-8",
-        _ => "application/octet-stream",
-    }
-}
-
-async fn raw_file(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Response {
-    let Some(path) = resolve_internal_file(&s, &path) else {
-        return not_found();
-    };
-    stream_export(&path, false).await
-}
-
-async fn html_file(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Response {
-    let Some(path) = resolve_internal_file(&s, &path) else {
-        return not_found();
-    };
-    let bytes = match tokio::fs::read(&path).await {
-        Ok(b) => b,
-        Err(_) => return not_found(),
-    };
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, mime_guess(&path))
-        .header(header::CACHE_CONTROL, "no-cache")
-        .body(Body::from(bytes))
-        .unwrap()
-}
-
-async fn download_file(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Response {
-    let Some(path) = resolve_internal_file(&s, &path) else {
-        return not_found();
-    };
-    stream_export(&path, true).await
-}
-
-fn raw_blob_html(text: &str, lang: Option<&str>) -> String {
-    let attrs = lang
-        .map(|lang| {
-            format!(
-                r#" class="language-{lang}" data-lang="{lang}""#,
-                lang = html_escape::encode_double_quoted_attribute(lang),
-            )
-        })
-        .unwrap_or_default();
-    format!(
-        "<div class=\"ghrm-blob\">{}<div class=\"highlight ghrm-blob-source\" hidden><pre tabindex=\"0\" class=\"chroma\"><code{attrs}>{body}</code></pre></div><table class=\"ghrm-blob-table\" role=\"presentation\"><tbody></tbody></table></div>",
-        raw_source_html(text),
-        attrs = attrs,
-        body = html_escape::encode_text(text),
-    )
-}
-
-fn raw_source_html(text: &str) -> String {
-    format!(
-        "<template class=\"ghrm-data\">{}</template>",
-        html_escape::encode_text(text),
-    )
-}
-
-fn file_view_attrs(rel: &str, view: FileView) -> String {
-    format!(
-        "data-ghrm-view-kind=\"{kind}\" data-ghrm-raw-url=\"{raw}\" data-ghrm-download-url=\"{download}\"",
-        kind = view.kind,
-        raw = html_escape::encode_double_quoted_attribute(&internal_file_href("raw", rel)),
-        download =
-            html_escape::encode_double_quoted_attribute(&internal_file_href("download", rel)),
-    )
-}
-
-fn internal_file_href(kind: &str, rel: &str) -> String {
-    format!("/_ghrm/{kind}/{}", rel.trim_matches('/'))
-}
-
-fn resolve_internal_file(s: &AppState, rel: &str) -> Option<PathBuf> {
-    let clean = rel.trim_matches('/');
-    if clean.is_empty() {
-        return None;
-    }
-
-    let rel_path = Path::new(clean);
-    for comp in rel_path.components() {
-        if !matches!(comp, Component::Normal(_)) {
-            return None;
-        }
-    }
-
-    let base = if s.mode == Mode::File {
-        s.target.parent().unwrap_or(s.target.as_path())
-    } else {
-        s.target.as_path()
-    };
-    let path = base.join(rel_path);
-    if path.is_file() { Some(path) } else { None }
-}
-
-async fn stream_export(path: &Path, attachment: bool) -> Response {
-    let bytes = match tokio::fs::read(path).await {
-        Ok(b) => b,
-        Err(_) => return not_found(),
-    };
-
-    let mut res = Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, export_mime(path, &bytes))
-        .header(header::CACHE_CONTROL, "no-cache");
-    if attachment {
-        res = res.header(header::CONTENT_DISPOSITION, content_disposition(path));
-    }
-    res.body(Body::from(bytes)).unwrap()
-}
-
-fn export_mime(path: &Path, bytes: &[u8]) -> &'static str {
-    let is_binary = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(|ext| is_binary_ext(&ext.to_lowercase()))
-        .unwrap_or(false)
-        || bytes.contains(&0);
-    if is_binary {
-        mime_guess(path)
-    } else {
-        "text/plain; charset=utf-8"
-    }
-}
-
-fn content_disposition(path: &Path) -> String {
-    let filename = path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("file")
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"");
-    format!("attachment; filename=\"{filename}\"")
 }
 
 async fn ws_handler(State(s): State<AppState>, ws: WebSocketUpgrade) -> Response {
@@ -1089,46 +833,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn content_disposition_escapes_quotes() {
-        let value = content_disposition(Path::new("odd\"name.md"));
-        assert_eq!(value, "attachment; filename=\"odd\\\"name.md\"");
-    }
-
-    #[test]
-    fn export_mime_prefers_text_plain_for_text_files() {
-        assert_eq!(
-            export_mime(Path::new("README.md"), b"# hello\n"),
-            "text/plain; charset=utf-8",
-        );
-    }
-
-    #[test]
-    fn raw_blob_includes_hidden_source_block() {
-        let html = raw_blob_html("fn main() {}\n", Some("rust"));
-        assert!(html.contains("ghrm-blob-source"));
-        assert!(html.contains(r#"class="language-rust""#));
-        assert!(html.contains("<tbody></tbody>"));
-    }
-
-    #[test]
-    fn scope_from_query_uses_default_when_missing() {
-        let q = ScopeQuery::default();
-        assert_eq!(scope_from_query(&q, Scope::All, false), Scope::All);
-        assert_eq!(scope_from_query(&q, Scope::Filtered, true), Scope::Filtered);
-    }
-
-    #[test]
-    fn with_scope_omits_default_scope() {
-        assert_eq!(with_scope("/", Scope::All, Scope::All), "/");
-        assert_eq!(with_scope("/", Scope::Filtered, Scope::Filtered), "/");
-    }
-
-    #[test]
-    fn with_scope_preserves_non_default_scope() {
-        assert_eq!(with_scope("/", Scope::All, Scope::Filtered), "/?scope=all");
-        assert_eq!(
-            with_scope("/docs/", Scope::Filtered, Scope::All),
-            "/docs/?scope=filter"
-        );
+    fn source_display_splits_host_and_repo() {
+        let (host, repo) = source_display("https://github.com/brege/ghrm", "brege / ghrm");
+        assert_eq!(host, "github.com");
+        assert_eq!(repo, "brege/ghrm");
     }
 }

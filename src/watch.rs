@@ -1,12 +1,13 @@
+use crate::paths;
 use crate::walk::{self, NavSet};
 use ignore::gitignore::GitignoreBuilder;
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebouncedEvent, new_debouncer};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::sync::broadcast;
-use tracing::{error, info};
+use tracing::{info, warn};
 
 pub fn spawn_dir(
     root: PathBuf,
@@ -23,17 +24,12 @@ pub fn spawn_dir(
     let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel::<anyhow::Result<()>>(1);
 
     std::thread::spawn(move || {
-        let result = debouncer
-            .watch(&root, RecursiveMode::Recursive)
-            .map_err(anyhow::Error::from);
-        let failed = result.is_err();
-        if let Err(ref e) = result {
-            error!("watcher failed: {e}");
-        }
-        let _ = ready_tx.send(result);
-        if failed {
+        if let Err(e) = debouncer.watch(&root, RecursiveMode::Recursive) {
+            warn!("watcher setup failed, live reload disabled: {e}");
+            let _ = ready_tx.send(Ok(()));
             return;
         }
+        let _ = ready_tx.send(Ok(()));
         let _debouncer = debouncer;
         for res in rx {
             let events = match res {
@@ -97,16 +93,6 @@ pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<()>) -> anyhow::Re
     Ok(())
 }
 
-fn skip_watch_path(rel: &Path, exclude_names: &[String]) -> bool {
-    rel.components().any(|c| match c {
-        Component::Normal(name) => {
-            let name = name.to_string_lossy();
-            name.as_ref() == ".git" || exclude_names.iter().any(|entry| entry == name.as_ref())
-        }
-        _ => false,
-    })
-}
-
 fn changed_paths(
     root: &Path,
     events: &[DebouncedEvent],
@@ -160,7 +146,7 @@ fn is_relevant_watch_path(
     let Ok(rel) = path.strip_prefix(root) else {
         return false;
     };
-    if skip_watch_path(rel, exclude_names) {
+    if paths::has_excluded_part(rel, exclude_names) {
         return false;
     }
     if !use_ignore {

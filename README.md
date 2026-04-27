@@ -74,8 +74,8 @@ rm -r ~/.cache/ghrm
 
 ## Roadmap
 
-- detect languages via shebang
-- support content search (ripgrep)
+- refactor server.js from being a catchall
+- mainline gitignore to filter mechanic
 
 ## License
 
