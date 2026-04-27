@@ -2,12 +2,12 @@
     <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs|safe }}</nav>
     <div class="ghrm-header-actions">
       <div class="ghrm-view-menu-shell">
-        <button id="ghrm-view-menu-toggle" class="ghrm-view-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Explorer options" title="Explorer options">
+        <button id="ghrm-view-menu-toggle" class="ghrm-view-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Filter files" title="Filter files">
           <svg aria-hidden="true" focusable="false">
-            <use href="#ghrm-icon-chevron-down"></use>
+            <use href="#ghrm-icon-filter"></use>
           </svg>
         </button>
-        <div id="ghrm-view-menu" class="ghrm-view-menu" role="menu" aria-label="Explorer options" hidden>
+        <div id="ghrm-view-menu" class="ghrm-view-menu" role="menu" aria-label="Filter files" hidden>
           <button class="ghrm-view-option" type="button" data-view-toggle="hidden" role="menuitemcheckbox" aria-checked="false" title="Set by -H">
             <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
               <use href="#ghrm-icon-check"></use>
@@ -34,6 +34,40 @@
           </button>
 {% endfor %}
         </div>
+      </div>
+      <div class="ghrm-sort-controls">
+        <div class="ghrm-sort-menu-shell">
+          <button id="ghrm-sort-menu-toggle" class="ghrm-view-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Sort entries" title="Sort entries">
+            <svg aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-sort-entity"></use>
+            </svg>
+          </button>
+          <div id="ghrm-sort-menu" class="ghrm-view-menu" role="menu" aria-label="Sort entries" hidden>
+            <button class="ghrm-view-option" type="button" data-sort="name" role="menuitemradio" aria-checked="false" title="Sort explorer entries by name">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Sort by name</span>
+          </button>
+          <button class="ghrm-view-option" type="button" data-sort="type" role="menuitemradio" aria-checked="false" title="Sort explorer entries by type">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Sort by type</span>
+          </button>
+          <button class="ghrm-view-option" type="button" data-sort="timestamp" role="menuitemradio" aria-checked="false" title="Sort explorer entries by timestamp">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Sort by timestamp</span>
+          </button>
+          </div>
+        </div>
+        <button id="ghrm-sort-dir-toggle" class="ghrm-view-menu-toggle" type="button" aria-label="Sort descending" title="Sort descending">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-sort-down"></use>
+          </svg>
+        </button>
       </div>
     </div>
   </div>

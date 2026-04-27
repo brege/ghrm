@@ -96,6 +96,7 @@ impl FileView {
 pub(crate) struct ViewConfig {
     default: ViewOpts,
     default_groups: Vec<String>,
+    default_sort: walk::Sort,
     can_toggle_excludes: bool,
 }
 
@@ -103,6 +104,8 @@ pub(crate) struct ViewConfig {
 struct ViewState {
     opts: ViewOpts,
     groups: Vec<String>,
+    sort: walk::Sort,
+    sort_dir: walk::SortDir,
 }
 
 fn view_matcher(view: &ViewState, filters: &filter::Set) -> Option<filter::Matcher> {
@@ -153,6 +156,7 @@ pub async fn run(options: Options) -> Result<()> {
             filter_ext: default_filter_ext,
         },
         default_groups: filters.default_groups().to_vec(),
+        default_sort: walk::Sort::Name,
         can_toggle_excludes: no_excludes,
     };
     let repo_root_buf = if mode == Mode::Dir {
@@ -300,6 +304,8 @@ struct ViewQuery {
     hidden: Option<String>,
     excludes: Option<String>,
     filter: Option<String>,
+    sort: Option<String>,
+    dir: Option<String>,
 }
 
 fn view_from_query(
@@ -320,6 +326,16 @@ fn view_from_query(
     if filter_ext && groups.is_empty() {
         groups = cfg.default_groups.clone();
     }
+    let sort = q
+        .sort
+        .as_deref()
+        .and_then(walk::Sort::parse)
+        .unwrap_or(cfg.default_sort);
+    let sort_dir = q
+        .dir
+        .as_deref()
+        .and_then(walk::SortDir::parse)
+        .unwrap_or_else(|| sort.default_dir());
 
     ViewState {
         opts: ViewOpts {
@@ -339,6 +355,8 @@ fn view_from_query(
             filter_ext,
         },
         groups,
+        sort,
+        sort_dir,
     }
 }
 
@@ -400,6 +418,18 @@ fn with_view(href: &str, view: &ViewState, cfg: &ViewConfig) -> String {
         view.opts.filter_ext,
         cfg.default.filter_ext,
     );
+    set_string_param(
+        &mut pairs,
+        "sort",
+        view.sort.as_str(),
+        cfg.default_sort.as_str(),
+    );
+    set_string_param(
+        &mut pairs,
+        "dir",
+        view.sort_dir.as_str(),
+        view.sort.default_dir().as_str(),
+    );
     set_multi_string_param(&mut pairs, "group", &view.groups, &cfg.default_groups);
 
     let mut out = path.to_string();
@@ -439,6 +469,18 @@ fn set_bool_param(pairs: &mut Vec<(String, String)>, key: &str, value: bool, def
     pairs.retain(|(current, _)| current != key);
     if value != default_value {
         pairs.push((key.to_string(), if value { "1" } else { "0" }.to_string()));
+    }
+}
+
+fn set_string_param(
+    pairs: &mut Vec<(String, String)>,
+    key: &str,
+    value: &str,
+    default_value: &str,
+) {
+    pairs.retain(|(current, _)| current != key);
+    if value != default_value {
+        pairs.push((key.to_string(), value.to_string()));
     }
 }
 
@@ -670,7 +712,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     let dir_opt = {
         let guard = s.nav.read().unwrap();
         guard
-            .get(view.opts, matcher.as_ref())
+            .get(view.opts, view.sort, view.sort_dir, matcher.as_ref())
             .dirs
             .get(rel)
             .cloned()
@@ -684,6 +726,10 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
             filter_exts.unwrap_or(&[]),
             matcher.as_ref(),
             view.opts,
+            walk::SortSpec {
+                sort: view.sort,
+                dir: view.sort_dir,
+            },
         )
         .unwrap_or(d),
         Some(d) => d,
@@ -694,6 +740,10 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
             filter_exts.unwrap_or(&[]),
             matcher.as_ref(),
             view.opts,
+            walk::SortSpec {
+                sort: view.sort,
+                dir: view.sort_dir,
+            },
         ) {
             Some(d) => d,
             None => return not_found(),
@@ -827,6 +877,7 @@ fn respond_html(
         default_show_excludes: cfg.default.show_excludes,
         default_filter_ext: cfg.default.filter_ext,
         default_filter_group: cfg.default_groups.first().map(String::as_str),
+        default_sort: cfg.default_sort.as_str(),
         can_toggle_excludes: cfg.can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,
@@ -917,7 +968,7 @@ async fn api_tree(
     let nav = s.nav.read().unwrap();
     let view = view_from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let matcher = view_matcher(&view, &s.filters);
-    let tree = nav.get(view.opts, matcher.as_ref());
+    let tree = nav.get(view.opts, view.sort, view.sort_dir, matcher.as_ref());
     let root = s
         .target
         .file_name()
@@ -947,6 +998,8 @@ struct SearchQuery {
     hidden: Option<u8>,
     excludes: Option<u8>,
     filter: Option<u8>,
+    sort: Option<String>,
+    dir: Option<String>,
 }
 
 async fn api_search(
@@ -970,6 +1023,8 @@ async fn api_search(
             hidden: q.hidden.map(|value| value.to_string()),
             excludes: q.excludes.map(|value| value.to_string()),
             filter: q.filter.map(|value| value.to_string()),
+            sort: q.sort.clone(),
+            dir: q.dir.clone(),
         },
         raw_query.as_deref(),
         &s.view_cfg,
@@ -1050,8 +1105,15 @@ async fn api_path_search(
     let current_path = q.path.as_deref().unwrap_or("").trim_matches('/');
     let nav = s.nav.read().unwrap();
     let matcher = view_matcher(&view, &s.filters);
-    let tree = nav.get(view.opts, matcher.as_ref());
-    let resp = path_search(&tree, current_path, query, s.search_max_rows);
+    let tree = nav.get(view.opts, view.sort, view.sort_dir, matcher.as_ref());
+    let resp = path_search(
+        &tree,
+        current_path,
+        query,
+        s.search_max_rows,
+        view.sort,
+        view.sort_dir,
+    );
 
     match serde_json::to_string(&resp) {
         Ok(json) => Response::builder()
@@ -1071,6 +1133,8 @@ fn path_search(
     current_path: &str,
     query: &str,
     max_rows: usize,
+    sort: walk::Sort,
+    dir: walk::SortDir,
 ) -> PathSearchResponse {
     let needle = query.trim().to_lowercase();
     if needle.is_empty() {
@@ -1134,8 +1198,7 @@ fn path_search(
             .is_some_and(|name| name.contains(&needle)) as u8;
         b_base
             .cmp(&a_base)
-            .then_with(|| a_name.len().cmp(&b_name.len()))
-            .then_with(|| a_name.cmp(&b_name))
+            .then_with(|| cmp_path_rows(a, b, sort, dir))
     });
 
     let truncated = rows.len() > max_rows;
@@ -1145,6 +1208,50 @@ fn path_search(
         results: rows,
         truncated,
         max_rows,
+    }
+}
+
+fn cmp_path_rows(
+    a: &PathSearchResult,
+    b: &PathSearchResult,
+    sort: walk::Sort,
+    dir: walk::SortDir,
+) -> std::cmp::Ordering {
+    match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => match sort {
+            walk::Sort::Name => {
+                apply_path_dir(a.display.to_lowercase().cmp(&b.display.to_lowercase()), dir)
+            }
+            walk::Sort::Type => apply_path_dir(
+                path_ext(&a.display)
+                    .cmp(&path_ext(&b.display))
+                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
+                dir,
+            ),
+            walk::Sort::Timestamp => apply_path_dir(
+                a.modified
+                    .cmp(&b.modified)
+                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
+                dir,
+            ),
+        },
+    }
+}
+
+fn path_ext(display: &str) -> String {
+    Path::new(display.trim_end_matches('/'))
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase()
+}
+
+fn apply_path_dir(order: std::cmp::Ordering, dir: walk::SortDir) -> std::cmp::Ordering {
+    match dir {
+        walk::SortDir::Asc => order,
+        walk::SortDir::Desc => order.reverse(),
     }
 }
 
@@ -1599,11 +1706,14 @@ mod tests {
                 filter_ext: false,
             },
             default_groups: Vec::new(),
+            default_sort: walk::Sort::Name,
             can_toggle_excludes: true,
         };
         let view = ViewState {
             opts: cfg.default,
             groups: Vec::new(),
+            sort: cfg.default_sort,
+            sort_dir: cfg.default_sort.default_dir(),
         };
         assert_eq!(with_view("/", &view, &cfg), "/");
     }
@@ -1617,6 +1727,7 @@ mod tests {
                 filter_ext: false,
             },
             default_groups: Vec::new(),
+            default_sort: walk::Sort::Name,
             can_toggle_excludes: true,
         };
         let view = ViewState {
@@ -1626,10 +1737,12 @@ mod tests {
                 filter_ext: true,
             },
             groups: Vec::new(),
+            sort: walk::Sort::Timestamp,
+            sort_dir: walk::Sort::Timestamp.default_dir(),
         };
         assert_eq!(
             with_view("/docs/", &view, &cfg),
-            "/docs/?hidden=1&excludes=0&filter=1"
+            "/docs/?hidden=1&excludes=0&filter=1&sort=timestamp"
         );
     }
 
@@ -1643,6 +1756,7 @@ mod tests {
                 filter_ext: false,
             },
             default_groups: filters.default_groups().to_vec(),
+            default_sort: walk::Sort::Name,
             can_toggle_excludes: false,
         };
         let view = ViewState {
@@ -1652,12 +1766,57 @@ mod tests {
                 filter_ext: true,
             },
             groups: vec!["docs".to_string(), "web".to_string()],
+            sort: walk::Sort::Name,
+            sort_dir: walk::Sort::Name.default_dir(),
         };
 
         assert_eq!(
             with_view("/docs/", &view, &cfg),
             "/docs/?filter=1&group=docs&group=web"
         );
+    }
+
+    #[test]
+    fn path_search_uses_selected_sort() {
+        let mut dirs = BTreeMap::new();
+        dirs.insert(
+            String::new(),
+            walk::NavDir {
+                entries: vec![
+                    walk::NavEntry {
+                        name: "src".to_string(),
+                        href: "/src/".to_string(),
+                        is_dir: true,
+                        modified: Some(3),
+                    },
+                    walk::NavEntry {
+                        name: "older.md".to_string(),
+                        href: "/older.md".to_string(),
+                        is_dir: false,
+                        modified: Some(1),
+                    },
+                    walk::NavEntry {
+                        name: "newer.md".to_string(),
+                        href: "/newer.md".to_string(),
+                        is_dir: false,
+                        modified: Some(9),
+                    },
+                ],
+                readme: None,
+            },
+        );
+        let tree = walk::NavTree { dirs };
+
+        let resp = path_search(
+            &tree,
+            "",
+            "m",
+            10,
+            walk::Sort::Timestamp,
+            walk::SortDir::Desc,
+        );
+        let names: Vec<_> = resp.results.into_iter().map(|row| row.display).collect();
+        assert_eq!(names, vec!["newer.md", "older.md"]);
     }
 
     #[test]

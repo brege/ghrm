@@ -547,6 +547,17 @@ body.ghrm-doc-flat #ghrm-source-slot {
   position: relative;
 }
 
+.ghrm-sort-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.ghrm-sort-menu-shell {
+  position: relative;
+  display: inline-flex;
+}
+
 .ghrm-view-menu-toggle {
   width: 32px;
   height: 32px;
@@ -576,6 +587,34 @@ body.ghrm-doc-flat #ghrm-source-slot {
   width: 16px;
   height: 16px;
   fill: currentColor;
+}
+
+.ghrm-view-menu-toggle use[href="#ghrm-icon-filter"] {
+  stroke: currentColor;
+}
+
+#ghrm-sort-menu-toggle {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+#ghrm-sort-dir-toggle {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+#ghrm-sort-menu-toggle,
+#ghrm-sort-dir-toggle {
+  position: relative;
+}
+
+#ghrm-sort-menu-toggle:hover,
+#ghrm-sort-menu-toggle.is-active,
+#ghrm-sort-menu-toggle[aria-expanded="true"],
+#ghrm-sort-dir-toggle:hover,
+#ghrm-sort-dir-toggle.is-active {
+  z-index: 1;
 }
 
 .ghrm-view-menu {

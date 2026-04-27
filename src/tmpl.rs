@@ -17,6 +17,7 @@ pub struct PageShell<'a> {
     pub default_show_excludes: bool,
     pub default_filter_ext: bool,
     pub default_filter_group: Option<&'a str>,
+    pub default_sort: &'a str,
     pub can_toggle_excludes: bool,
     pub has_mermaid: bool,
     pub has_math: bool,

@@ -1,6 +1,7 @@
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
 
-let viewMenuBound = false;
+let explorerMenusBound = false;
+let reopenFilterMenu = false;
 let searchMode = 'path';
 
 function defaultShowHidden() {
@@ -24,6 +25,14 @@ function defaultFilterGroups() {
   return group ? [group] : [];
 }
 
+function defaultSort() {
+  return document.body?.dataset.defaultSort || 'name';
+}
+
+function defaultSortDir(sort = defaultSort()) {
+  return sort === 'timestamp' ? 'desc' : 'asc';
+}
+
 function canToggleExcludes() {
   return document.body?.dataset.canToggleExcludes === '1';
 }
@@ -32,6 +41,27 @@ function parseQueryBool(raw) {
   if (raw === '1' || raw === 'true') return true;
   if (raw === '0' || raw === 'false') return false;
   return null;
+}
+
+function parseSort(raw) {
+  switch (raw) {
+    case 'name':
+    case 'type':
+    case 'timestamp':
+      return raw;
+    default:
+      return null;
+  }
+}
+
+function parseSortDir(raw) {
+  switch (raw) {
+    case 'asc':
+    case 'desc':
+      return raw;
+    default:
+      return null;
+  }
 }
 
 function scrollOffset() {
@@ -69,6 +99,10 @@ function currentView() {
       ? (parseQueryBool(params.get('excludes')) ?? defaultShowExcludes())
       : false,
     filterExt: parseQueryBool(params.get('filter')) ?? defaultFilterExt(),
+    sort: parseSort(params.get('sort')) || defaultSort(),
+    sortDir:
+      parseSortDir(params.get('dir')) ||
+      defaultSortDir(parseSort(params.get('sort')) || defaultSort()),
     filterGroups:
       groups.length > 0 ? [...new Set(groups)] : defaultFilterGroups(),
   };
@@ -101,6 +135,16 @@ function withView(urlLike, view = currentView()) {
     url.searchParams.delete('excludes');
   }
   setQueryBool(url.searchParams, 'filter', view.filterExt, defaultFilterExt());
+  if (view.sort === defaultSort()) {
+    url.searchParams.delete('sort');
+  } else {
+    url.searchParams.set('sort', view.sort);
+  }
+  if (view.sortDir === defaultSortDir(view.sort)) {
+    url.searchParams.delete('dir');
+  } else {
+    url.searchParams.set('dir', view.sortDir);
+  }
   url.searchParams.delete('group');
   const groups = [...new Set(view.filterGroups)];
   const defaults = defaultFilterGroups();
@@ -126,7 +170,9 @@ function syncViewMenu() {
       view.filterGroups.join(',') !== defaultFilterGroups().join(',');
     toggle.classList.toggle('is-active', active);
   }
-  for (const button of document.querySelectorAll('.ghrm-view-option')) {
+  for (const button of document.querySelectorAll(
+    '#ghrm-view-menu .ghrm-view-option',
+  )) {
     if (button.dataset.viewToggle === 'excludes' && !canToggleExcludes()) {
       button.hidden = true;
       continue;
@@ -140,6 +186,41 @@ function syncViewMenu() {
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-checked', active ? 'true' : 'false');
   }
+}
+
+function syncSortControls() {
+  const view = currentView();
+  const sortToggle = document.getElementById('ghrm-sort-menu-toggle');
+  if (sortToggle) {
+    const active =
+      view.sort !== defaultSort() || view.sortDir !== defaultSortDir(view.sort);
+    sortToggle.classList.toggle('is-active', active);
+  }
+  for (const button of document.querySelectorAll(
+    '#ghrm-sort-menu .ghrm-view-option',
+  )) {
+    const active = button.dataset.sort === view.sort;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-checked', active ? 'true' : 'false');
+  }
+  const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
+  if (!dirToggle) return;
+  const use = dirToggle.querySelector('use');
+  if (use) {
+    use.setAttribute(
+      'href',
+      view.sortDir === 'desc'
+        ? '#ghrm-icon-chevron-down'
+        : '#ghrm-icon-chevron-up',
+    );
+  }
+  const label = view.sortDir === 'desc' ? 'Sort descending' : 'Sort ascending';
+  dirToggle.title = label;
+  dirToggle.setAttribute('aria-label', label);
+  dirToggle.classList.toggle(
+    'is-active',
+    view.sortDir !== defaultSortDir(view.sort),
+  );
 }
 
 function formatRelative(ts) {
@@ -174,25 +255,79 @@ function populateDates() {
   }
 }
 
+function closeExplorerMenus() {
+  for (const [toggleId, panelId] of [
+    ['ghrm-view-menu-toggle', 'ghrm-view-menu'],
+    ['ghrm-sort-menu-toggle', 'ghrm-sort-menu'],
+  ]) {
+    const toggle = document.getElementById(toggleId);
+    const panel = document.getElementById(panelId);
+    if (!toggle || !panel) continue;
+    panel.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function openExplorerMenu(toggle, panel) {
+  closeExplorerMenus();
+  panel.hidden = false;
+  toggle.setAttribute('aria-expanded', 'true');
+  positionFloatingPanel(panel, toggle);
+}
+
+function currentExplorerControls() {
+  return {
+    filterToggle: document.getElementById('ghrm-view-menu-toggle'),
+    filterPanel: document.getElementById('ghrm-view-menu'),
+    sortToggle: document.getElementById('ghrm-sort-menu-toggle'),
+    sortPanel: document.getElementById('ghrm-sort-menu'),
+    dirToggle: document.getElementById('ghrm-sort-dir-toggle'),
+  };
+}
+
 function setupViewMenu() {
-  const toggle = document.getElementById('ghrm-view-menu-toggle');
-  const panel = document.getElementById('ghrm-view-menu');
-  if (!toggle || !panel) return;
+  const filterToggle = document.getElementById('ghrm-view-menu-toggle');
+  const filterPanel = document.getElementById('ghrm-view-menu');
+  const sortToggle = document.getElementById('ghrm-sort-menu-toggle');
+  const sortPanel = document.getElementById('ghrm-sort-menu');
+  const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
+  if (!filterToggle || !filterPanel || !sortToggle || !sortPanel || !dirToggle)
+    return;
 
   syncViewMenu();
-  panel.hidden = true;
-  toggle.setAttribute('aria-expanded', 'false');
+  syncSortControls();
+  filterPanel.hidden = true;
+  sortPanel.hidden = true;
+  filterToggle.setAttribute('aria-expanded', 'false');
+  sortToggle.setAttribute('aria-expanded', 'false');
 
-  toggle.onclick = () => {
-    const nextHidden = !panel.hidden;
-    panel.hidden = nextHidden;
-    toggle.setAttribute('aria-expanded', nextHidden ? 'false' : 'true');
-    if (!nextHidden) {
-      positionFloatingPanel(panel, toggle);
+  filterToggle.onclick = () => {
+    if (filterPanel.hidden) {
+      openExplorerMenu(filterToggle, filterPanel);
+    } else {
+      closeExplorerMenus();
     }
   };
 
-  for (const button of panel.querySelectorAll('.ghrm-view-option')) {
+  sortToggle.onclick = () => {
+    if (sortPanel.hidden) {
+      openExplorerMenu(sortToggle, sortPanel);
+    } else {
+      closeExplorerMenus();
+    }
+  };
+
+  dirToggle.onclick = () => {
+    const view = currentView();
+    const next = {
+      ...view,
+      filterGroups: [...view.filterGroups],
+      sortDir: view.sortDir === 'desc' ? 'asc' : 'desc',
+    };
+    navigate(withView(location.href, next));
+  };
+
+  for (const button of filterPanel.querySelectorAll('.ghrm-view-option')) {
     button.onclick = () => {
       const view = currentView();
       const next = {
@@ -232,42 +367,90 @@ function setupViewMenu() {
           }
           return;
       }
-      panel.hidden = true;
-      toggle.setAttribute('aria-expanded', 'false');
+      reopenFilterMenu = true;
       navigate(withView(location.href, next));
     };
   }
 
-  if (viewMenuBound) return;
-  viewMenuBound = true;
+  for (const button of sortPanel.querySelectorAll('.ghrm-view-option')) {
+    button.onclick = () => {
+      const view = currentView();
+      const next = {
+        ...view,
+        filterGroups: [...view.filterGroups],
+        sort: button.dataset.sort || view.sort,
+      };
+      if (!button.dataset.sort) return;
+      if (!new URLSearchParams(location.search).has('dir')) {
+        next.sortDir = defaultSortDir(next.sort);
+      }
+      closeExplorerMenus();
+      navigate(withView(location.href, next));
+    };
+  }
+
+  if (explorerMenusBound) {
+    if (reopenFilterMenu) {
+      reopenFilterMenu = false;
+      openExplorerMenu(filterToggle, filterPanel);
+    }
+    return;
+  }
+  explorerMenusBound = true;
 
   document.addEventListener('click', (e) => {
-    const currentToggle = document.getElementById('ghrm-view-menu-toggle');
-    const currentPanel = document.getElementById('ghrm-view-menu');
-    if (!currentToggle || !currentPanel) return;
-    if (currentToggle.contains(e.target) || currentPanel.contains(e.target)) {
+    const { filterToggle, filterPanel, sortToggle, sortPanel, dirToggle } =
+      currentExplorerControls();
+    if (
+      !filterToggle ||
+      !filterPanel ||
+      !sortToggle ||
+      !sortPanel ||
+      !dirToggle
+    ) {
       return;
     }
-    currentPanel.hidden = true;
-    currentToggle.setAttribute('aria-expanded', 'false');
+    const insideFilter =
+      filterToggle.contains(e.target) || filterPanel.contains(e.target);
+    const insideSort =
+      sortToggle.contains(e.target) || sortPanel.contains(e.target);
+    const insideDir = dirToggle.contains(e.target);
+    if (insideFilter || insideSort || insideDir) return;
+    closeExplorerMenus();
   });
 
   window.addEventListener('resize', () => {
-    const currentToggle = document.getElementById('ghrm-view-menu-toggle');
-    const currentPanel = document.getElementById('ghrm-view-menu');
-    if (!currentToggle || !currentPanel || currentPanel.hidden) return;
-    positionFloatingPanel(currentPanel, currentToggle);
+    const { filterToggle, filterPanel, sortToggle, sortPanel } =
+      currentExplorerControls();
+    if (!filterToggle || !filterPanel || !sortToggle || !sortPanel) return;
+    if (!filterPanel.hidden) {
+      positionFloatingPanel(filterPanel, filterToggle);
+    }
+    if (!sortPanel.hidden) {
+      positionFloatingPanel(sortPanel, sortToggle);
+    }
   });
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    const currentToggle = document.getElementById('ghrm-view-menu-toggle');
-    const currentPanel = document.getElementById('ghrm-view-menu');
-    if (!currentToggle || !currentPanel || currentPanel.hidden) return;
-    currentPanel.hidden = true;
-    currentToggle.setAttribute('aria-expanded', 'false');
-    currentToggle.focus();
+    const { filterToggle, filterPanel, sortToggle, sortPanel } =
+      currentExplorerControls();
+    if (!filterToggle || !filterPanel || !sortToggle || !sortPanel) return;
+    if (!filterPanel.hidden) {
+      closeExplorerMenus();
+      filterToggle.focus();
+      return;
+    }
+    if (!sortPanel.hidden) {
+      closeExplorerMenus();
+      sortToggle.focus();
+    }
   });
+
+  if (reopenFilterMenu) {
+    reopenFilterMenu = false;
+    openExplorerMenu(filterToggle, filterPanel);
+  }
 }
 
 function setupThemeToggle() {
@@ -564,6 +747,8 @@ async function pathSearch(query, currentPath) {
   params.set('hidden', view.showHidden ? '1' : '0');
   params.set('excludes', view.showExcludes ? '1' : '0');
   params.set('filter', view.filterExt ? '1' : '0');
+  params.set('sort', view.sort);
+  params.set('dir', view.sortDir);
   for (const group of view.filterGroups) {
     params.append('group', group);
   }
@@ -581,6 +766,8 @@ async function contentSearch(query) {
   params.set('hidden', view.showHidden ? '1' : '0');
   params.set('excludes', view.showExcludes ? '1' : '0');
   params.set('filter', view.filterExt ? '1' : '0');
+  params.set('sort', view.sort);
+  params.set('dir', view.sortDir);
   for (const group of view.filterGroups) {
     params.append('group', group);
   }
