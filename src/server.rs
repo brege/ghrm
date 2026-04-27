@@ -21,7 +21,7 @@ use axum::{
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::net::TcpListener;
@@ -186,7 +186,8 @@ pub async fn run(options: Options) -> Result<()> {
         .route("/_ghrm/download/{*path}", get(delivery::download_file))
         .route("/{*path}", get(any_path));
 
-    let app = if state.auth.is_some() {
+    let auth_enabled = state.auth.is_some();
+    let app = if auth_enabled {
         Router::new()
             .route(
                 "/_ghrm/login",
@@ -208,9 +209,18 @@ pub async fn run(options: Options) -> Result<()> {
     let addr = find_addr(&bind, port).await?;
     let listener = TcpListener::bind(addr).await?;
     let actual = listener.local_addr()?;
+    let url = server_url(&actual);
     info!(%actual, "ghrm listening");
+    info!("local: {}", url);
+    if let Some(url) = network_url(&actual) {
+        if auth_enabled {
+            info!("network: {} (auth required)", url);
+        } else {
+            info!("network: {}", url);
+        }
+    }
     if open {
-        open_browser(&actual);
+        open_browser(&url);
     }
     axum::serve(
         listener,
@@ -234,10 +244,45 @@ async fn find_addr(bind: &str, start_port: u16) -> Result<SocketAddr> {
     Err(anyhow!("no free port in range"))
 }
 
-fn open_browser(addr: &SocketAddr) {
-    let url = format!("http://{}/", addr);
+fn server_url(addr: &SocketAddr) -> String {
+    let host = if addr.ip().is_loopback() || addr.ip().is_unspecified() {
+        "localhost".to_string()
+    } else if addr.ip().is_ipv6() {
+        format!("[{}]", addr.ip())
+    } else {
+        addr.ip().to_string()
+    };
+    format!("http://{}:{}/", host, addr.port())
+}
+
+fn network_url(addr: &SocketAddr) -> Option<String> {
+    let ip = if addr.ip().is_unspecified() {
+        outbound_ip()?
+    } else if addr.ip().is_loopback() {
+        return None;
+    } else {
+        addr.ip()
+    };
+    Some(format!("http://{}:{}/", url_host(ip), addr.port()))
+}
+
+fn outbound_ip() -> Option<IpAddr> {
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    Some(socket.local_addr().ok()?.ip())
+}
+
+fn url_host(ip: IpAddr) -> String {
+    if ip.is_ipv6() {
+        format!("[{ip}]")
+    } else {
+        ip.to_string()
+    }
+}
+
+fn open_browser(url: &str) {
     let _ = std::process::Command::new("xdg-open")
-        .arg(&url)
+        .arg(url)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn();
