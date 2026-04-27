@@ -61,9 +61,6 @@ pub(crate) fn from_query(
         .as_deref()
         .and_then(parse_bool_param)
         .unwrap_or(cfg.default.filter_ext);
-    if filter_ext && groups.is_empty() {
-        groups = cfg.default_groups.clone();
-    }
     let sort = q
         .sort
         .as_deref()

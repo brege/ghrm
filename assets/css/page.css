@@ -129,12 +129,7 @@ html {
   margin-top: 12px;
 }
 
-.ghrm-explorer-shell {
-  border: 1px solid var(--borderColor-default, #d0d7de);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
+.ghrm-explorer-shell,
 .ghrm-page-shell {
   border: 1px solid var(--borderColor-default, #d0d7de);
   border-radius: 6px;
@@ -370,8 +365,7 @@ html {
   background: var(--bgColor-default, #ffffff);
 }
 
-.ghrm-blob-source,
-.ghrm-blob-source[hidden] {
+.ghrm-blob-source {
   display: none;
 }
 

@@ -58,12 +58,12 @@ function renderSearchRows(tbody, results, query) {
   }
 }
 
-async function pathSearch(query, currentPath) {
+function buildSearchParams(query, extraParams = {}) {
   const view = currentView();
   const params = new URLSearchParams();
   params.set('q', query);
-  if (currentPath) {
-    params.set('path', currentPath);
+  for (const [k, v] of Object.entries(extraParams)) {
+    params.set(k, v);
   }
   params.set('hidden', view.showHidden ? '1' : '0');
   params.set('excludes', view.showExcludes ? '1' : '0');
@@ -74,6 +74,12 @@ async function pathSearch(query, currentPath) {
   for (const group of view.filterGroups) {
     params.append('group', group);
   }
+  return params;
+}
+
+async function pathSearch(query, currentPath) {
+  const extra = currentPath ? { path: currentPath } : {};
+  const params = buildSearchParams(query, extra);
   const res = await fetch(`/_ghrm/path-search?${params}`).catch(() => null);
   if (!res || !res.ok) return { results: [], truncated: false, max_rows: 0 };
   return res
@@ -82,18 +88,7 @@ async function pathSearch(query, currentPath) {
 }
 
 async function contentSearch(query) {
-  const view = currentView();
-  const params = new URLSearchParams();
-  params.set('q', query);
-  params.set('hidden', view.showHidden ? '1' : '0');
-  params.set('excludes', view.showExcludes ? '1' : '0');
-  params.set('ignore', view.useIgnore ? '1' : '0');
-  params.set('filter', view.filterExt ? '1' : '0');
-  params.set('sort', view.sort);
-  params.set('dir', view.sortDir);
-  for (const group of view.filterGroups) {
-    params.append('group', group);
-  }
+  const params = buildSearchParams(query);
   const res = await fetch(`/_ghrm/search?${params}`).catch(() => null);
   if (!res || !res.ok) return { results: [], truncated: false, max_rows: 0 };
   return res
@@ -273,7 +268,7 @@ export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
         searchSeq += 1;
         resetSearch();
       } else {
-        input.oninput?.();
+        doSearch();
       }
       input.focus();
     };
@@ -294,7 +289,7 @@ export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
     }
   };
 
-  input.oninput = async () => {
+  const doSearch = async () => {
     searchSeq += 1;
     const seq = searchSeq;
     const query = input.value.trim();
@@ -330,6 +325,8 @@ export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
       setupNavExternalLinks();
     }
   };
+
+  input.oninput = doSearch;
 
   input.onkeydown = (e) => {
     if (e.key !== 'Escape') return;

@@ -30,7 +30,7 @@
 }
 
 .ghrm-readme-header .ghrm-toc-btn:hover {
-  background: rgba(175, 184, 193, 0.16);
+  background: var(--bgColor-neutral-muted, #afb8c133);
 }
 
 .ghrm-toc-btn svg {

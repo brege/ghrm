@@ -1,3 +1,5 @@
+import { escapeHtml } from './dom.js';
+
 let mermaidId = 0;
 let mermaidVersionPromise;
 const copyResetDelay = 1000;
@@ -311,14 +313,6 @@ function highlightBlobCode(code) {
   window.hljs.highlightElement(code);
   normalizeShellHighlight(code);
   code.dataset.ghrmHighlighted = '1';
-}
-
-function escapeHtml(text) {
-  return text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
 }
 
 function openTag(node) {
