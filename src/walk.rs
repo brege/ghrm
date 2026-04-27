@@ -33,17 +33,44 @@ pub struct NavTree {
     pub dirs: BTreeMap<String, NavDir>,
 }
 
-#[derive(Clone, Debug, Default)]
+type TreeSet = [Arc<NavTree>; VIEW_COMBINATIONS];
+
+#[derive(Clone, Debug)]
 pub struct NavSet {
-    trees: [NavTree; VIEW_COMBINATIONS],
+    trees: TreeSet,
+    snapshot: Arc<Snapshot>,
+    exclude_names: Arc<Vec<String>>,
+    extensions: Arc<Vec<String>>,
 }
 
 impl NavSet {
-    pub fn get(&self, opts: ViewOpts) -> &NavTree {
-        &self.trees[view_key(opts) as usize]
+    pub fn get(&self, opts: ViewOpts, matcher: Option<&crate::filter::Matcher>) -> Arc<NavTree> {
+        let idx = view_key(opts) as usize;
+        if opts.filter_ext && matcher.is_some() {
+            return Arc::new(build_tree(
+                &self.snapshot,
+                &self.exclude_names,
+                &self.extensions,
+                matcher,
+                opts,
+            ));
+        }
+        self.trees[idx].clone()
     }
 }
 
+impl Default for NavSet {
+    fn default() -> Self {
+        Self {
+            trees: build_trees(&Snapshot::default(), &[], &[], None),
+            snapshot: Arc::new(Snapshot::default()),
+            exclude_names: Arc::new(Vec::new()),
+            extensions: Arc::new(Vec::new()),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
 struct Snapshot {
     dirs: Vec<PathBuf>,
     direct_dirs: BTreeMap<PathBuf, Vec<PathBuf>>,
@@ -59,21 +86,30 @@ pub fn build_all(
     extensions: &[String],
     no_excludes: bool,
 ) -> NavSet {
-    let snap = scan(root, use_ignore, exclude_names, no_excludes);
-    let mut trees: [NavTree; VIEW_COMBINATIONS] = Default::default();
-    for show_hidden in [false, true] {
-        for show_excludes in [false, true] {
-            for filter_ext in [false, true] {
-                let opts = ViewOpts {
-                    show_hidden,
-                    show_excludes,
-                    filter_ext,
-                };
-                trees[view_key(opts) as usize] = build_tree(&snap, exclude_names, extensions, opts);
-            }
-        }
+    let snapshot = Arc::new(scan(root, use_ignore, exclude_names, no_excludes));
+    let trees = build_trees(&snapshot, exclude_names, extensions, None);
+    NavSet {
+        trees,
+        snapshot,
+        exclude_names: Arc::new(exclude_names.to_vec()),
+        extensions: Arc::new(extensions.to_vec()),
     }
-    NavSet { trees }
+}
+
+fn build_trees(
+    snap: &Snapshot,
+    exclude_names: &[String],
+    extensions: &[String],
+    matcher: Option<&crate::filter::Matcher>,
+) -> TreeSet {
+    std::array::from_fn(|idx| {
+        let opts = ViewOpts {
+            show_hidden: (idx & 1) != 0,
+            show_excludes: (idx & 2) != 0,
+            filter_ext: (idx & 4) != 0,
+        };
+        Arc::new(build_tree(snap, exclude_names, extensions, matcher, opts))
+    })
 }
 
 fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bool) -> Snapshot {
@@ -211,11 +247,12 @@ fn build_tree(
     snap: &Snapshot,
     exclude_names: &[String],
     extensions: &[String],
+    matcher: Option<&crate::filter::Matcher>,
     opts: ViewOpts,
 ) -> NavTree {
     let prune_empty = opts.filter_ext;
     let dirs_with_files = if prune_empty {
-        compute_dirs_with_files(snap, exclude_names, extensions, opts)
+        compute_dirs_with_files(snap, exclude_names, extensions, matcher, opts)
     } else {
         HashSet::new()
     };
@@ -251,7 +288,7 @@ fn build_tree(
             if !allow_path(file_rel, exclude_names, opts) {
                 continue;
             }
-            if opts.filter_ext && !has_extension(file_rel, extensions) {
+            if opts.filter_ext && !matches_filter(file_rel, extensions, matcher) {
                 continue;
             }
             if is_readme(file_rel) {
@@ -280,6 +317,7 @@ fn compute_dirs_with_files(
     snap: &Snapshot,
     exclude_names: &[String],
     extensions: &[String],
+    matcher: Option<&crate::filter::Matcher>,
     opts: ViewOpts,
 ) -> HashSet<PathBuf> {
     let mut dirs_with_files = HashSet::new();
@@ -289,7 +327,7 @@ fn compute_dirs_with_files(
         if !allow_path(file_rel, exclude_names, opts) {
             continue;
         }
-        if !has_extension(file_rel, extensions) {
+        if !matches_filter(file_rel, extensions, matcher) {
             continue;
         }
         let mut current = file_rel.parent().unwrap_or(Path::new("")).to_path_buf();
@@ -334,6 +372,18 @@ fn has_excluded_part(path: &Path, exclude_names: &[String]) -> bool {
     })
 }
 
+fn matches_filter(
+    path: &Path,
+    extensions: &[String],
+    matcher: Option<&crate::filter::Matcher>,
+) -> bool {
+    if let Some(matcher) = matcher {
+        matcher.matches(path)
+    } else {
+        has_extension(path, extensions)
+    }
+}
+
 fn has_extension(path: &Path, extensions: &[String]) -> bool {
     let Some(ext) = path.extension().and_then(|s| s.to_str()) else {
         return false;
@@ -376,6 +426,7 @@ pub fn list_dir(
     rel: &Path,
     exclude_names: &[String],
     extensions: &[String],
+    matcher: Option<&crate::filter::Matcher>,
     opts: ViewOpts,
 ) -> Option<NavDir> {
     let abs = root.join(rel);
@@ -410,7 +461,7 @@ pub fn list_dir(
                 modified: mtime,
             });
         } else if file_type.is_file() {
-            if opts.filter_ext && !has_extension(&entry_rel, extensions) {
+            if opts.filter_ext && !matches_filter(&entry_rel, extensions, matcher) {
                 continue;
             }
             if is_readme(&entry_rel) {

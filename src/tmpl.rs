@@ -1,3 +1,5 @@
+use crate::filter::GroupMeta;
+
 use anyhow::Result;
 use askama::Template;
 
@@ -14,6 +16,7 @@ pub struct PageShell<'a> {
     pub default_show_hidden: bool,
     pub default_show_excludes: bool,
     pub default_filter_ext: bool,
+    pub default_filter_group: Option<&'a str>,
     pub can_toggle_excludes: bool,
     pub has_mermaid: bool,
     pub has_math: bool,
@@ -39,7 +42,7 @@ pub struct ExplorerCtx<'a> {
     pub has_parent: bool,
     pub parent_href: &'a str,
     pub show_excludes: bool,
-    pub filter_label: &'a str,
+    pub filter_groups: &'a [GroupMeta],
     pub entries: &'a [ExplorerEntry],
     pub readme: Option<ExplorerReadme<'a>>,
 }

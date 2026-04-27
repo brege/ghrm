@@ -15,6 +15,15 @@ function defaultFilterExt() {
   return document.body?.dataset.defaultFilterExt === '1';
 }
 
+function defaultFilterGroup() {
+  return document.body?.dataset.defaultFilterGroup || null;
+}
+
+function defaultFilterGroups() {
+  const group = defaultFilterGroup();
+  return group ? [group] : [];
+}
+
 function canToggleExcludes() {
   return document.body?.dataset.canToggleExcludes === '1';
 }
@@ -53,12 +62,15 @@ function scrollToHash(hash) {
 
 function currentView() {
   const params = new URLSearchParams(location.search);
+  const groups = params.getAll('group');
   return {
     showHidden: parseQueryBool(params.get('hidden')) ?? defaultShowHidden(),
     showExcludes: canToggleExcludes()
       ? (parseQueryBool(params.get('excludes')) ?? defaultShowExcludes())
       : false,
     filterExt: parseQueryBool(params.get('filter')) ?? defaultFilterExt(),
+    filterGroups:
+      groups.length > 0 ? [...new Set(groups)] : defaultFilterGroups(),
   };
 }
 
@@ -89,6 +101,17 @@ function withView(urlLike, view = currentView()) {
     url.searchParams.delete('excludes');
   }
   setQueryBool(url.searchParams, 'filter', view.filterExt, defaultFilterExt());
+  url.searchParams.delete('group');
+  const groups = [...new Set(view.filterGroups)];
+  const defaults = defaultFilterGroups();
+  if (
+    groups.length !== defaults.length ||
+    groups.some((group, index) => group !== defaults[index])
+  ) {
+    for (const group of groups) {
+      url.searchParams.append('group', group);
+    }
+  }
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -99,7 +122,8 @@ function syncViewMenu() {
     const active =
       view.showHidden !== defaultShowHidden() ||
       (canToggleExcludes() && view.showExcludes !== defaultShowExcludes()) ||
-      view.filterExt !== defaultFilterExt();
+      view.filterExt !== defaultFilterExt() ||
+      view.filterGroups.join(',') !== defaultFilterGroups().join(',');
     toggle.classList.toggle('is-active', active);
   }
   for (const button of document.querySelectorAll('.ghrm-view-option')) {
@@ -110,7 +134,9 @@ function syncViewMenu() {
     const active =
       (button.dataset.viewToggle === 'hidden' && view.showHidden) ||
       (button.dataset.viewToggle === 'excludes' && view.showExcludes) ||
-      (button.dataset.viewToggle === 'filter' && view.filterExt);
+      (button.dataset.viewToggle === 'filter' && view.filterExt) ||
+      (button.dataset.filterGroup &&
+        view.filterGroups.includes(button.dataset.filterGroup));
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-checked', active ? 'true' : 'false');
   }
@@ -169,7 +195,10 @@ function setupViewMenu() {
   for (const button of panel.querySelectorAll('.ghrm-view-option')) {
     button.onclick = () => {
       const view = currentView();
-      const next = { ...view };
+      const next = {
+        ...view,
+        filterGroups: [...view.filterGroups],
+      };
       switch (button.dataset.viewToggle) {
         case 'hidden':
           next.showHidden = !view.showHidden;
@@ -180,8 +209,27 @@ function setupViewMenu() {
           break;
         case 'filter':
           next.filterExt = !view.filterExt;
+          if (next.filterExt && next.filterGroups.length === 0) {
+            next.filterGroups = defaultFilterGroups();
+          }
           break;
         default:
+          if (button.dataset.filterGroup) {
+            const group = button.dataset.filterGroup;
+            next.filterExt = true;
+            if (next.filterGroups.includes(group)) {
+              next.filterGroups = next.filterGroups.filter(
+                (current) => current !== group,
+              );
+              if (next.filterGroups.length === 0) {
+                next.filterExt = false;
+              }
+            } else {
+              next.filterGroups.push(group);
+              next.filterGroups = [...new Set(next.filterGroups)];
+            }
+            break;
+          }
           return;
       }
       panel.hidden = true;
@@ -516,6 +564,9 @@ async function pathSearch(query, currentPath) {
   params.set('hidden', view.showHidden ? '1' : '0');
   params.set('excludes', view.showExcludes ? '1' : '0');
   params.set('filter', view.filterExt ? '1' : '0');
+  for (const group of view.filterGroups) {
+    params.append('group', group);
+  }
   const res = await fetch(`/_ghrm/path-search?${params}`).catch(() => null);
   if (!res || !res.ok) return { results: [], truncated: false, max_rows: 0 };
   return res
@@ -530,6 +581,9 @@ async function contentSearch(query) {
   params.set('hidden', view.showHidden ? '1' : '0');
   params.set('excludes', view.showExcludes ? '1' : '0');
   params.set('filter', view.filterExt ? '1' : '0');
+  for (const group of view.filterGroups) {
+    params.append('group', group);
+  }
   const res = await fetch(`/_ghrm/search?${params}`).catch(() => null);
   if (!res || !res.ok) return { results: [], truncated: false, max_rows: 0 };
   return res

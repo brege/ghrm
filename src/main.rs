@@ -1,5 +1,6 @@
 mod auth;
 mod config;
+mod filter;
 mod render;
 mod repo;
 mod search;
@@ -147,6 +148,7 @@ fn main() -> Result<()> {
     } else {
         extensions
     };
+    let filters = filter::Set::resolve(&cfg.walk.filter)?;
     let exclude_names = cfg
         .walk
         .exclude_names
@@ -167,8 +169,9 @@ fn main() -> Result<()> {
         target: abs,
         use_ignore: !no_ignore,
         default_hidden: cli.hidden || cfg.walk.hidden.unwrap_or(false),
-        default_filter_ext: has_explicit_ext_filter,
+        default_filter_ext: has_explicit_ext_filter || filters.default_enabled(),
         extensions,
+        filters,
         exclude_names,
         no_excludes,
         search_max_rows: max_rows,
