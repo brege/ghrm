@@ -259,10 +259,9 @@ impl MatchState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::TempDir;
+    use crate::testutil::{TempDir, env_lock};
     use notify::Event;
     use std::fs;
-    use std::sync::{Mutex, OnceLock};
     use std::time::Instant;
 
     #[test]
@@ -358,10 +357,5 @@ mod tests {
         );
 
         assert_eq!(changed, vec![path]);
-    }
-
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
     }
 }

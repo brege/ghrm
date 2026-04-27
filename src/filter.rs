@@ -172,30 +172,11 @@ fn detail_text(globs: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutil::group_filters;
 
     #[test]
     fn combines_selected_groups() {
-        let mut groups = BTreeMap::new();
-        groups.insert(
-            "docs".to_string(),
-            config::FilterGroupConfig {
-                label: Some("Docs".to_string()),
-                globs: vec!["*.md".to_string()],
-            },
-        );
-        groups.insert(
-            "web".to_string(),
-            config::FilterGroupConfig {
-                label: Some("Web".to_string()),
-                globs: vec!["*.html".to_string()],
-            },
-        );
-        let filters = Set::resolve(&config::FilterConfig {
-            enabled: Some(false),
-            default_group: Some("docs".to_string()),
-            groups,
-        })
-        .unwrap();
+        let filters = group_filters();
 
         let matcher = filters
             .matcher_for_groups(&["docs".to_string(), "web".to_string()])

@@ -247,31 +247,7 @@ fn set_multi_string_param(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
-
-    fn group_filters() -> filter::Set {
-        let mut groups = BTreeMap::new();
-        groups.insert(
-            "docs".to_string(),
-            crate::config::FilterGroupConfig {
-                label: Some("Docs".to_string()),
-                globs: vec!["*.md".to_string()],
-            },
-        );
-        groups.insert(
-            "web".to_string(),
-            crate::config::FilterGroupConfig {
-                label: Some("Web".to_string()),
-                globs: vec!["*.html".to_string()],
-            },
-        );
-        filter::Set::resolve(&crate::config::FilterConfig {
-            enabled: Some(false),
-            default_group: Some("docs".to_string()),
-            groups,
-        })
-        .unwrap()
-    }
+    use crate::testutil::group_filters;
 
     #[test]
     fn parse_group_params_accepts_repeated_keys() {

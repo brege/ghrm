@@ -355,6 +355,7 @@ fn not_found() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutil::nav_entry;
 
     #[test]
     fn path_search_uses_selected_sort() {
@@ -364,22 +365,16 @@ mod tests {
             walk::NavDir {
                 entries: vec![
                     walk::NavEntry {
-                        name: "src".to_string(),
                         href: "/src/".to_string(),
-                        is_dir: true,
-                        modified: Some(3),
+                        ..nav_entry("src", true, Some(3))
                     },
                     walk::NavEntry {
-                        name: "older.md".to_string(),
                         href: "/older.md".to_string(),
-                        is_dir: false,
-                        modified: Some(1),
+                        ..nav_entry("older.md", false, Some(1))
                     },
                     walk::NavEntry {
-                        name: "newer.md".to_string(),
                         href: "/newer.md".to_string(),
-                        is_dir: false,
-                        modified: Some(9),
+                        ..nav_entry("newer.md", false, Some(9))
                     },
                 ],
                 readme: None,

@@ -664,24 +664,15 @@ fn apply_dir(order: Ordering, dir: SortDir) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::TempDir;
+    use crate::testutil::{TempDir, nav_entry};
     use std::fs;
-
-    fn entry(name: &str, is_dir: bool, modified: Option<u64>) -> NavEntry {
-        NavEntry {
-            name: name.to_string(),
-            href: String::new(),
-            is_dir,
-            modified,
-        }
-    }
 
     #[test]
     fn sort_name_keeps_dirs_first() {
         let mut entries = vec![
-            entry("zeta.rs", false, Some(1)),
-            entry("alpha", true, Some(9)),
-            entry("beta.md", false, Some(3)),
+            nav_entry("zeta.rs", false, Some(1)),
+            nav_entry("alpha", true, Some(9)),
+            nav_entry("beta.md", false, Some(3)),
         ];
         sort_entries(&mut entries, Sort::Name, SortDir::Asc);
         let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
@@ -691,10 +682,10 @@ mod tests {
     #[test]
     fn sort_type_groups_extensions() {
         let mut entries = vec![
-            entry("b.rs", false, Some(1)),
-            entry("docs", true, Some(9)),
-            entry("a.md", false, Some(3)),
-            entry("a.rs", false, Some(2)),
+            nav_entry("b.rs", false, Some(1)),
+            nav_entry("docs", true, Some(9)),
+            nav_entry("a.md", false, Some(3)),
+            nav_entry("a.rs", false, Some(2)),
         ];
         sort_entries(&mut entries, Sort::Type, SortDir::Asc);
         let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
@@ -704,9 +695,9 @@ mod tests {
     #[test]
     fn sort_timestamp_prefers_newest() {
         let mut entries = vec![
-            entry("old.md", false, Some(1)),
-            entry("missing.md", false, None),
-            entry("new.md", false, Some(9)),
+            nav_entry("old.md", false, Some(1)),
+            nav_entry("missing.md", false, None),
+            nav_entry("new.md", false, Some(9)),
         ];
         sort_entries(&mut entries, Sort::Timestamp, SortDir::Desc);
         let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
@@ -716,10 +707,10 @@ mod tests {
     #[test]
     fn sort_name_desc_reverses_within_kind() {
         let mut entries = vec![
-            entry("alpha", true, Some(9)),
-            entry("beta", true, Some(8)),
-            entry("a.md", false, Some(3)),
-            entry("b.md", false, Some(1)),
+            nav_entry("alpha", true, Some(9)),
+            nav_entry("beta", true, Some(8)),
+            nav_entry("a.md", false, Some(3)),
+            nav_entry("b.md", false, Some(1)),
         ];
         sort_entries(&mut entries, Sort::Name, SortDir::Desc);
         let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
