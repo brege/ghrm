@@ -139,7 +139,7 @@ function syncColumnControls(view = currentView()) {
     const active =
       (button.dataset.columnToggle === 'date' && view.showDate) ||
       (button.dataset.columnToggle === 'commit' && view.showCommit) ||
-      (button.dataset.columnToggle === 'commit-date' && view.showCommitDate);
+      (button.dataset.columnToggle === 'commit_date' && view.showCommitDate);
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-checked', active ? 'true' : 'false');
   }
@@ -348,7 +348,7 @@ function setupViewMenu() {
         case 'commit':
           next.showCommit = !view.showCommit;
           break;
-        case 'commit-date':
+        case 'commit_date':
           next.showCommitDate = !view.showCommitDate;
           break;
         default:

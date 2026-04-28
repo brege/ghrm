@@ -1,3 +1,4 @@
+use crate::column;
 use crate::render;
 use crate::search as content_search;
 use crate::server::{AppState, Mode};
@@ -78,9 +79,7 @@ pub(crate) async fn search(
             filter: q.filter.map(|value| value.to_string()),
             sort: q.sort.clone(),
             dir: q.dir.clone(),
-            date: None,
-            commit: None,
-            commit_date: None,
+            extra: Default::default(),
         },
         raw_query.as_deref(),
         &s.view_cfg,
@@ -155,7 +154,9 @@ pub(crate) async fn path_search(
         view.sort,
         view.sort_dir,
     );
-    if view.columns.commit || view.columns.commit_date {
+    if view.columns.is_visible(column::Id::CommitMessage)
+        || view.columns.is_visible(column::Id::CommitDate)
+    {
         let paths: Vec<_> = resp
             .results
             .iter()

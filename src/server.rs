@@ -1,11 +1,12 @@
 use crate::api;
 use crate::auth;
+use crate::column;
 use crate::delivery;
 use crate::filter;
 use crate::render::{self, Rendered};
 use crate::repo::{RepoSet, SourceState};
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
-use crate::view::{self, ColumnView, ViewConfig, ViewQuery, ViewState};
+use crate::view::{self, ViewConfig, ViewQuery, ViewState};
 use crate::walk::{self, NavSet, ViewOpts};
 use crate::watch;
 
@@ -60,7 +61,7 @@ pub struct Options {
     pub use_ignore: bool,
     pub default_hidden: bool,
     pub default_filter_ext: bool,
-    pub default_columns: ColumnView,
+    pub default_columns: column::Set,
     pub extensions: Vec<String>,
     pub filters: filter::Set,
     pub exclude_names: Vec<String>,
@@ -586,7 +587,8 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     let has_parent = !rel.is_empty();
     let parent_href = view::with_view(&parent_href, &view, &s.view_cfg);
 
-    let show_commit_meta = view.columns.commit || view.columns.commit_date;
+    let show_commit_meta = view.columns.is_visible(column::Id::CommitMessage)
+        || view.columns.is_visible(column::Id::CommitDate);
     let entry_paths = if show_commit_meta {
         dir.entries
             .iter()
@@ -662,9 +664,10 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         has_parent,
         parent_href: &parent_href,
         show_excludes: s.view_cfg.can_toggle_excludes,
-        show_date: view.columns.date,
-        show_commit: view.columns.commit,
-        show_commit_date: view.columns.commit_date,
+        show_date: view.columns.is_visible(column::Id::ModifiedDate),
+        show_commit: view.columns.is_visible(column::Id::CommitMessage),
+        show_commit_date: view.columns.is_visible(column::Id::CommitDate),
+        column_defs: column::DEFS,
         filter_groups: s.filters.groups(),
         entries: &entries,
         readme: readme_tmpl,
@@ -728,9 +731,9 @@ fn respond_html(
         default_filter_ext: cfg.default.filter_ext,
         default_filter_group: cfg.default_groups.first().map(String::as_str),
         default_sort: cfg.default_sort.as_str(),
-        default_show_date: cfg.default_columns.date,
-        default_show_commit: cfg.default_columns.commit,
-        default_show_commit_date: cfg.default_columns.commit_date,
+        default_show_date: cfg.default_columns.is_visible(column::Id::ModifiedDate),
+        default_show_commit: cfg.default_columns.is_visible(column::Id::CommitMessage),
+        default_show_commit_date: cfg.default_columns.is_visible(column::Id::CommitDate),
         can_toggle_excludes: cfg.can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,

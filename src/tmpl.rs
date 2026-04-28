@@ -1,3 +1,4 @@
+use crate::column;
 use crate::filter::GroupMeta;
 
 use anyhow::Result;
@@ -50,6 +51,7 @@ pub struct ExplorerCtx<'a> {
     pub show_date: bool,
     pub show_commit: bool,
     pub show_commit_date: bool,
+    pub column_defs: &'a [column::Def],
     pub filter_groups: &'a [GroupMeta],
     pub entries: &'a [ExplorerEntry],
     pub readme: Option<ExplorerReadme<'a>>,

@@ -82,24 +82,13 @@
           </svg>
         </button>
         <div id="ghrm-column-menu" class="ghrm-view-menu" role="menu" aria-label="Display columns" hidden>
-          <button class="ghrm-view-option" type="button" data-column-toggle="date" role="menuitemcheckbox" aria-checked="false" title="Show file dates">
+{% for column in column_defs %}          <button class="ghrm-view-option" type="button" data-column-toggle="{{ column.key }}" role="menuitemcheckbox" aria-checked="false" title="{{ column.title }}">
             <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
               <use href="#ghrm-icon-check"></use>
             </svg>
-            <span class="ghrm-view-option-label">Date</span>
+            <span class="ghrm-view-option-label">{{ column.label }}</span>
           </button>
-          <button class="ghrm-view-option" type="button" data-column-toggle="commit" role="menuitemcheckbox" aria-checked="false" title="Show commit messages">
-            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-              <use href="#ghrm-icon-check"></use>
-            </svg>
-            <span class="ghrm-view-option-label">Commit message</span>
-          </button>
-          <button class="ghrm-view-option" type="button" data-column-toggle="commit-date" role="menuitemcheckbox" aria-checked="false" title="Show commit dates">
-            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-              <use href="#ghrm-icon-check"></use>
-            </svg>
-            <span class="ghrm-view-option-label">Commit date</span>
-          </button>
+{% endfor %}
         </div>
       </div>
     </div>

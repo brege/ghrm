@@ -1,3 +1,5 @@
+use crate::column;
+
 use anyhow::{Result, bail};
 use serde::Deserialize;
 use std::{
@@ -65,6 +67,17 @@ pub struct ColumnConfig {
     pub date: Option<bool>,
     pub commit_message: Option<bool>,
     pub commit_date: Option<bool>,
+}
+
+impl ColumnConfig {
+    pub(crate) fn default_for(&self, id: column::Id) -> bool {
+        match id {
+            column::Id::ModifiedDate => self.date,
+            column::Id::CommitMessage => self.commit_message,
+            column::Id::CommitDate => self.commit_date,
+        }
+        .unwrap_or_else(|| column::default_visible(id))
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]

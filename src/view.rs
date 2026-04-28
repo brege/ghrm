@@ -1,7 +1,9 @@
+use crate::column;
 use crate::filter;
 use crate::walk::{self, ViewOpts};
 
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 #[derive(Clone)]
 pub(crate) struct ViewConfig {
@@ -9,15 +11,8 @@ pub(crate) struct ViewConfig {
     pub(crate) default_use_ignore: bool,
     pub(crate) default_groups: Vec<String>,
     pub(crate) default_sort: walk::Sort,
-    pub(crate) default_columns: ColumnView,
+    pub(crate) default_columns: column::Set,
     pub(crate) can_toggle_excludes: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct ColumnView {
-    pub(crate) date: bool,
-    pub(crate) commit: bool,
-    pub(crate) commit_date: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,7 +22,7 @@ pub(crate) struct ViewState {
     pub(crate) groups: Vec<String>,
     pub(crate) sort: walk::Sort,
     pub(crate) sort_dir: walk::SortDir,
-    pub(crate) columns: ColumnView,
+    pub(crate) columns: column::Set,
 }
 
 #[derive(Default, Deserialize)]
@@ -38,9 +33,8 @@ pub(crate) struct ViewQuery {
     pub(crate) filter: Option<String>,
     pub(crate) sort: Option<String>,
     pub(crate) dir: Option<String>,
-    pub(crate) date: Option<String>,
-    pub(crate) commit: Option<String>,
-    pub(crate) commit_date: Option<String>,
+    #[serde(flatten)]
+    pub(crate) extra: BTreeMap<String, String>,
 }
 
 pub(crate) fn matcher(view: &ViewState, filters: &filter::Set) -> Option<filter::Matcher> {
@@ -107,24 +101,19 @@ pub(crate) fn from_query(
         groups,
         sort,
         sort_dir,
-        columns: ColumnView {
-            date: q
-                .date
-                .as_deref()
-                .and_then(parse_bool_param)
-                .unwrap_or(cfg.default_columns.date),
-            commit: q
-                .commit
-                .as_deref()
-                .and_then(parse_bool_param)
-                .unwrap_or(cfg.default_columns.commit),
-            commit_date: q
-                .commit_date
-                .as_deref()
-                .and_then(parse_bool_param)
-                .unwrap_or(cfg.default_columns.commit_date),
-        },
+        columns: columns_from_query(q, &cfg.default_columns),
     }
+}
+
+fn columns_from_query(q: &ViewQuery, defaults: &column::Set) -> column::Set {
+    let mut columns = defaults.clone();
+    for def in column::DEFS {
+        let Some(visible) = q.extra.get(def.key).and_then(|raw| parse_bool_param(raw)) else {
+            continue;
+        };
+        columns.set_visible(def.id, visible);
+    }
+    columns
 }
 
 fn parse_group_params(raw_query: Option<&str>, filters: &filter::Set) -> Option<Vec<String>> {
@@ -206,24 +195,14 @@ pub(crate) fn with_view(href: &str, view: &ViewState, cfg: &ViewConfig) -> Strin
         view.sort.default_dir().as_str(),
     );
     set_multi_string_param(&mut pairs, "group", &view.groups, &cfg.default_groups);
-    set_bool_param(
-        &mut pairs,
-        "date",
-        view.columns.date,
-        cfg.default_columns.date,
-    );
-    set_bool_param(
-        &mut pairs,
-        "commit",
-        view.columns.commit,
-        cfg.default_columns.commit,
-    );
-    set_bool_param(
-        &mut pairs,
-        "commit_date",
-        view.columns.commit_date,
-        cfg.default_columns.commit_date,
-    );
+    for def in column::DEFS {
+        set_bool_param(
+            &mut pairs,
+            def.key,
+            view.columns.is_visible(def.id),
+            cfg.default_columns.is_visible(def.id),
+        );
+    }
 
     let mut out = path.to_string();
     if !pairs.is_empty() {
@@ -298,7 +277,16 @@ fn set_multi_string_param(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::column;
     use crate::testutil::group_filters;
+
+    fn columns(date: bool, commit: bool, commit_date: bool) -> column::Set {
+        column::Set::from_defaults(|id| match id {
+            column::Id::ModifiedDate => date,
+            column::Id::CommitMessage => commit,
+            column::Id::CommitDate => commit_date,
+        })
+    }
 
     #[test]
     fn parse_group_params_accepts_repeated_keys() {
@@ -325,11 +313,7 @@ mod tests {
             default_use_ignore: true,
             default_groups: Vec::new(),
             default_sort: walk::Sort::Name,
-            default_columns: ColumnView {
-                date: true,
-                commit: true,
-                commit_date: false,
-            },
+            default_columns: columns(true, true, false),
             can_toggle_excludes: true,
         };
         let view = ViewState {
@@ -338,7 +322,7 @@ mod tests {
             groups: Vec::new(),
             sort: cfg.default_sort,
             sort_dir: cfg.default_sort.default_dir(),
-            columns: cfg.default_columns,
+            columns: cfg.default_columns.clone(),
         };
         assert_eq!(with_view("/", &view, &cfg), "/");
     }
@@ -354,11 +338,7 @@ mod tests {
             default_use_ignore: true,
             default_groups: Vec::new(),
             default_sort: walk::Sort::Name,
-            default_columns: ColumnView {
-                date: true,
-                commit: true,
-                commit_date: true,
-            },
+            default_columns: columns(true, true, true),
             can_toggle_excludes: true,
         };
         let view = ViewState {
@@ -371,11 +351,7 @@ mod tests {
             groups: Vec::new(),
             sort: walk::Sort::Timestamp,
             sort_dir: walk::Sort::Timestamp.default_dir(),
-            columns: ColumnView {
-                date: false,
-                commit: false,
-                commit_date: false,
-            },
+            columns: columns(false, false, false),
         };
         assert_eq!(
             with_view("/docs/", &view, &cfg),
@@ -395,11 +371,7 @@ mod tests {
             default_use_ignore: true,
             default_groups: filters.default_groups().to_vec(),
             default_sort: walk::Sort::Name,
-            default_columns: ColumnView {
-                date: true,
-                commit: true,
-                commit_date: false,
-            },
+            default_columns: columns(true, true, false),
             can_toggle_excludes: false,
         };
         let view = ViewState {
@@ -412,7 +384,7 @@ mod tests {
             groups: vec!["docs".to_string(), "web".to_string()],
             sort: walk::Sort::Name,
             sort_dir: walk::Sort::Name.default_dir(),
-            columns: cfg.default_columns,
+            columns: cfg.default_columns.clone(),
         };
 
         assert_eq!(
@@ -433,11 +405,7 @@ mod tests {
             default_use_ignore: true,
             default_groups: filters.default_groups().to_vec(),
             default_sort: walk::Sort::Name,
-            default_columns: ColumnView {
-                date: true,
-                commit: true,
-                commit_date: false,
-            },
+            default_columns: columns(true, true, false),
             can_toggle_excludes: false,
         };
         let view = ViewState {
@@ -450,7 +418,7 @@ mod tests {
             groups: Vec::new(),
             sort: walk::Sort::Name,
             sort_dir: walk::Sort::Name.default_dir(),
-            columns: cfg.default_columns,
+            columns: cfg.default_columns.clone(),
         };
 
         assert_eq!(with_view("/docs/", &view, &cfg), "/docs/?group=");
