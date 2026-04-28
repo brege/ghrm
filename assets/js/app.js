@@ -33,22 +33,39 @@ import {
 } from './view.js';
 
 let explorerMenusBound = false;
-let reopenFilterMenu = false;
+let reopenExplorerMenu = null;
+
+const EXPLORER_MENUS = [
+  {
+    name: 'filter',
+    toggleId: 'ghrm-view-menu-toggle',
+    panelId: 'ghrm-view-menu',
+  },
+  {
+    name: 'sort',
+    toggleId: 'ghrm-sort-menu-toggle',
+    panelId: 'ghrm-sort-menu',
+  },
+  {
+    name: 'column',
+    toggleId: 'ghrm-column-menu-toggle',
+    panelId: 'ghrm-column-menu',
+  },
+];
 
 function syncViewMenu(view = currentView()) {
-  const toggle = document.getElementById('ghrm-view-menu-toggle');
-  if (toggle) {
+  const menu = currentExplorerMenu('filter');
+  if (menu) {
     const active =
       view.showHidden !== defaultShowHidden() ||
       (canToggleExcludes() && view.showExcludes !== defaultShowExcludes()) ||
       view.useIgnore !== defaultUseIgnore() ||
       view.filterExt !== defaultFilterExt() ||
       view.filterGroups.join(',') !== defaultFilterGroups().join(',');
-    toggle.classList.toggle('is-active', active);
+    menu.toggle.classList.toggle('is-active', active);
   }
-  for (const button of document.querySelectorAll(
-    '#ghrm-view-menu .ghrm-view-option',
-  )) {
+  for (const button of menu?.panel.querySelectorAll('.ghrm-view-option') ||
+    []) {
     if (button.dataset.viewToggle === 'excludes' && !canToggleExcludes()) {
       button.hidden = true;
       continue;
@@ -67,15 +84,14 @@ function syncViewMenu(view = currentView()) {
 }
 
 function syncSortControls(view = currentView()) {
-  const sortToggle = document.getElementById('ghrm-sort-menu-toggle');
-  if (sortToggle) {
+  const menu = currentExplorerMenu('sort');
+  if (menu) {
     const active =
       view.sort !== defaultSort() || view.sortDir !== defaultSortDir(view.sort);
-    sortToggle.classList.toggle('is-active', active);
+    menu.toggle.classList.toggle('is-active', active);
   }
-  for (const button of document.querySelectorAll(
-    '#ghrm-sort-menu .ghrm-view-option',
-  )) {
+  for (const button of menu?.panel.querySelectorAll('.ghrm-view-option') ||
+    []) {
     const active = button.dataset.sort === view.sort;
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-checked', active ? 'true' : 'false');
@@ -107,17 +123,16 @@ function syncColumnControls(view = currentView()) {
     article.classList.toggle('ghrm-hide-commit', !view.showCommit);
   }
 
-  const toggle = document.getElementById('ghrm-column-menu-toggle');
-  if (toggle) {
+  const menu = currentExplorerMenu('column');
+  if (menu) {
     const active =
       view.showDate !== defaultShowDate() ||
       view.showCommit !== defaultShowCommit();
-    toggle.classList.toggle('is-active', active);
+    menu.toggle.classList.toggle('is-active', active);
   }
 
-  for (const button of document.querySelectorAll(
-    '#ghrm-column-menu .ghrm-view-option',
-  )) {
+  for (const button of menu?.panel.querySelectorAll('.ghrm-view-option') ||
+    []) {
     const active =
       (button.dataset.columnToggle === 'date' && view.showDate) ||
       (button.dataset.columnToggle === 'commit' && view.showCommit);
@@ -159,24 +174,35 @@ function populateDates() {
 }
 
 function closeExplorerMenus() {
-  for (const [toggleId, panelId] of [
-    ['ghrm-view-menu-toggle', 'ghrm-view-menu'],
-    ['ghrm-sort-menu-toggle', 'ghrm-sort-menu'],
-    ['ghrm-column-menu-toggle', 'ghrm-column-menu'],
-  ]) {
-    const toggle = document.getElementById(toggleId);
-    const panel = document.getElementById(panelId);
-    if (!toggle || !panel) continue;
+  for (const { toggle, panel } of currentExplorerMenus()) {
     panel.hidden = true;
     toggle.setAttribute('aria-expanded', 'false');
   }
 }
 
-function openExplorerMenu(toggle, panel) {
+function currentExplorerMenus() {
+  return EXPLORER_MENUS.map((menu) => ({
+    ...menu,
+    toggle: document.getElementById(menu.toggleId),
+    panel: document.getElementById(menu.panelId),
+  })).filter(({ toggle, panel }) => toggle && panel);
+}
+
+function currentExplorerMenu(name) {
+  return currentExplorerMenus().find((menu) => menu.name === name) || null;
+}
+
+function hasExplorerMenus() {
+  return currentExplorerMenus().length === EXPLORER_MENUS.length;
+}
+
+function openExplorerMenu(name) {
+  const menu = currentExplorerMenu(name);
+  if (!menu) return;
   closeExplorerMenus();
-  panel.hidden = false;
-  toggle.setAttribute('aria-expanded', 'true');
-  positionFloatingPanel(panel, toggle);
+  menu.panel.hidden = false;
+  menu.toggle.setAttribute('aria-expanded', 'true');
+  positionFloatingPanel(menu.panel, menu.toggle);
 }
 
 function applyView(next, { closeMenus = false } = {}) {
@@ -194,68 +220,35 @@ function applyView(next, { closeMenus = false } = {}) {
   navigate(target);
 }
 
-function currentExplorerControls() {
-  return {
-    filterToggle: document.getElementById('ghrm-view-menu-toggle'),
-    filterPanel: document.getElementById('ghrm-view-menu'),
-    sortToggle: document.getElementById('ghrm-sort-menu-toggle'),
-    sortPanel: document.getElementById('ghrm-sort-menu'),
-    dirToggle: document.getElementById('ghrm-sort-dir-toggle'),
-    columnToggle: document.getElementById('ghrm-column-menu-toggle'),
-    columnPanel: document.getElementById('ghrm-column-menu'),
-  };
-}
-
 function setupViewMenu() {
-  const filterToggle = document.getElementById('ghrm-view-menu-toggle');
-  const filterPanel = document.getElementById('ghrm-view-menu');
-  const sortToggle = document.getElementById('ghrm-sort-menu-toggle');
-  const sortPanel = document.getElementById('ghrm-sort-menu');
+  const filter = currentExplorerMenu('filter');
+  const sort = currentExplorerMenu('sort');
+  const column = currentExplorerMenu('column');
   const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
-  const columnToggle = document.getElementById('ghrm-column-menu-toggle');
-  const columnPanel = document.getElementById('ghrm-column-menu');
-  if (
-    !filterToggle ||
-    !filterPanel ||
-    !sortToggle ||
-    !sortPanel ||
-    !dirToggle ||
-    !columnToggle ||
-    !columnPanel
-  )
-    return;
+  if (!filter || !sort || !column || !dirToggle) return;
 
   syncViewMenu();
   syncSortControls();
   syncColumnControls();
-  filterPanel.hidden = true;
-  sortPanel.hidden = true;
-  columnPanel.hidden = true;
-  filterToggle.setAttribute('aria-expanded', 'false');
-  sortToggle.setAttribute('aria-expanded', 'false');
-  columnToggle.setAttribute('aria-expanded', 'false');
+  closeExplorerMenus();
 
-  filterToggle.onclick = () => {
-    if (filterPanel.hidden) {
-      openExplorerMenu(filterToggle, filterPanel);
-    } else {
-      closeExplorerMenus();
-    }
-  };
+  for (const menu of currentExplorerMenus()) {
+    menu.toggle.onclick = () => {
+      if (menu.panel.hidden) {
+        openExplorerMenu(menu.name);
+      } else {
+        closeExplorerMenus();
+      }
+    };
+  }
 
-  sortToggle.onclick = () => {
-    if (sortPanel.hidden) {
-      openExplorerMenu(sortToggle, sortPanel);
+  const reopenMenu = () => {
+    if (reopenExplorerMenu) {
+      const name = reopenExplorerMenu;
+      reopenExplorerMenu = null;
+      openExplorerMenu(name);
     } else {
-      closeExplorerMenus();
-    }
-  };
-
-  columnToggle.onclick = () => {
-    if (columnPanel.hidden) {
-      openExplorerMenu(columnToggle, columnPanel);
-    } else {
-      closeExplorerMenus();
+      reopenExplorerMenu = null;
     }
   };
 
@@ -269,7 +262,7 @@ function setupViewMenu() {
     applyView(next);
   };
 
-  for (const button of filterPanel.querySelectorAll('.ghrm-view-option')) {
+  for (const button of filter.panel.querySelectorAll('.ghrm-view-option')) {
     button.onclick = () => {
       const view = currentView();
       const next = {
@@ -313,13 +306,13 @@ function setupViewMenu() {
           return;
       }
       if (!hasActiveSearch()) {
-        reopenFilterMenu = true;
+        reopenExplorerMenu = 'filter';
       }
       applyView(next);
     };
   }
 
-  for (const button of sortPanel.querySelectorAll('.ghrm-view-option')) {
+  for (const button of sort.panel.querySelectorAll('.ghrm-view-option')) {
     button.onclick = () => {
       const view = currentView();
       const next = {
@@ -335,7 +328,7 @@ function setupViewMenu() {
     };
   }
 
-  for (const button of columnPanel.querySelectorAll('.ghrm-view-option')) {
+  for (const button of column.panel.querySelectorAll('.ghrm-view-option')) {
     button.onclick = () => {
       const view = currentView();
       const next = {
@@ -352,119 +345,49 @@ function setupViewMenu() {
         default:
           return;
       }
+      if (!hasActiveSearch()) {
+        reopenExplorerMenu = 'column';
+      }
       applyView(next);
     };
   }
 
   if (explorerMenusBound) {
-    if (reopenFilterMenu) {
-      reopenFilterMenu = false;
-      openExplorerMenu(filterToggle, filterPanel);
-    }
+    reopenMenu();
     return;
   }
   explorerMenusBound = true;
 
   document.addEventListener('click', (e) => {
-    const {
-      filterToggle,
-      filterPanel,
-      sortToggle,
-      sortPanel,
-      dirToggle,
-      columnToggle,
-      columnPanel,
-    } = currentExplorerControls();
-    if (
-      !filterToggle ||
-      !filterPanel ||
-      !sortToggle ||
-      !sortPanel ||
-      !dirToggle ||
-      !columnToggle ||
-      !columnPanel
-    ) {
-      return;
-    }
-    const insideFilter =
-      filterToggle.contains(e.target) || filterPanel.contains(e.target);
-    const insideSort =
-      sortToggle.contains(e.target) || sortPanel.contains(e.target);
-    const insideDir = dirToggle.contains(e.target);
-    const insideColumn =
-      columnToggle.contains(e.target) || columnPanel.contains(e.target);
-    if (insideFilter || insideSort || insideDir || insideColumn) return;
+    const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
+    if (!hasExplorerMenus() || !dirToggle) return;
+    const insideMenu = currentExplorerMenus().some(({ toggle, panel }) => {
+      return toggle.contains(e.target) || panel.contains(e.target);
+    });
+    if (insideMenu || dirToggle.contains(e.target)) return;
     closeExplorerMenus();
   });
 
   window.addEventListener('resize', () => {
-    const {
-      filterToggle,
-      filterPanel,
-      sortToggle,
-      sortPanel,
-      columnToggle,
-      columnPanel,
-    } = currentExplorerControls();
-    if (
-      !filterToggle ||
-      !filterPanel ||
-      !sortToggle ||
-      !sortPanel ||
-      !columnToggle ||
-      !columnPanel
-    )
-      return;
-    if (!filterPanel.hidden) {
-      positionFloatingPanel(filterPanel, filterToggle);
-    }
-    if (!sortPanel.hidden) {
-      positionFloatingPanel(sortPanel, sortToggle);
-    }
-    if (!columnPanel.hidden) {
-      positionFloatingPanel(columnPanel, columnToggle);
+    if (!hasExplorerMenus()) return;
+    for (const { toggle, panel } of currentExplorerMenus()) {
+      if (!panel.hidden) {
+        positionFloatingPanel(panel, toggle);
+      }
     }
   });
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    const {
-      filterToggle,
-      filterPanel,
-      sortToggle,
-      sortPanel,
-      columnToggle,
-      columnPanel,
-    } = currentExplorerControls();
-    if (
-      !filterToggle ||
-      !filterPanel ||
-      !sortToggle ||
-      !sortPanel ||
-      !columnToggle ||
-      !columnPanel
-    )
-      return;
-    if (!filterPanel.hidden) {
+    if (!hasExplorerMenus()) return;
+    const openMenu = currentExplorerMenus().find(({ panel }) => !panel.hidden);
+    if (openMenu) {
       closeExplorerMenus();
-      filterToggle.focus();
-      return;
-    }
-    if (!sortPanel.hidden) {
-      closeExplorerMenus();
-      sortToggle.focus();
-      return;
-    }
-    if (!columnPanel.hidden) {
-      closeExplorerMenus();
-      columnToggle.focus();
+      openMenu.toggle.focus();
     }
   });
 
-  if (reopenFilterMenu) {
-    reopenFilterMenu = false;
-    openExplorerMenu(filterToggle, filterPanel);
-  }
+  reopenMenu();
 }
 
 function rawText(container) {

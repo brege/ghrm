@@ -10,7 +10,7 @@
           </svg>
         </td>
         <td class="ghrm-nav-name"><a href="{{ parent_href }}">..</a></td>
-        <td class="ghrm-nav-commit-cell"></td>
+        <td class="ghrm-nav-commit-cell ghrm-nav-middle-meta"></td>
         <td class="ghrm-nav-date"></td>
       </tr>
 {% endif %}{% for e in entries %}      <tr>
@@ -20,7 +20,7 @@
           </svg>
         </td>
         <td class="ghrm-nav-name"><a href="{{ e.href }}">{{ e.name }}</a></td>
-        <td class="ghrm-nav-commit-cell">{% if let Some(message) = e.commit_message %}<span class="ghrm-nav-commit">{{ message }}</span>{% endif %}</td>
+        <td class="ghrm-nav-commit-cell ghrm-nav-middle-meta">{% if let Some(message) = e.commit_message %}<span class="ghrm-nav-commit">{{ message }}</span>{% endif %}</td>
         <td class="ghrm-nav-date" data-ts="{% if let Some(ts) = e.modified %}{{ ts }}{% endif %}"></td>
       </tr>
 {% endfor %}    </tbody>
@@ -34,7 +34,7 @@
         </svg>
       </td>
       <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
-      <td class="ghrm-nav-commit-cell"></td>
+      <td class="ghrm-nav-commit-cell ghrm-nav-middle-meta"></td>
       <td class="ghrm-nav-date"></td>
     </tr>
   </template>
@@ -46,7 +46,7 @@
         </svg>
       </td>
       <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
-      <td class="ghrm-nav-commit-cell"></td>
+      <td class="ghrm-nav-commit-cell ghrm-nav-middle-meta"></td>
       <td class="ghrm-nav-date"></td>
     </tr>
   </template>
