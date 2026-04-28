@@ -52,6 +52,7 @@ pub struct ExplorerCtx<'a> {
     pub show_commit: bool,
     pub show_commit_date: bool,
     pub column_defs: &'a [column::Def],
+    pub content_colspan: usize,
     pub filter_groups: &'a [GroupMeta],
     pub entries: &'a [ExplorerEntry],
     pub readme: Option<ExplorerReadme<'a>>,
@@ -61,9 +62,14 @@ pub struct ExplorerEntry {
     pub name: String,
     pub href: String,
     pub is_dir: bool,
-    pub modified: Option<u64>,
-    pub commit_message: Option<String>,
-    pub commit_date: Option<u64>,
+    pub cells: Vec<ExplorerCell>,
+}
+
+pub struct ExplorerCell {
+    pub class: &'static str,
+    pub text_class: Option<&'static str>,
+    pub text: Option<String>,
+    pub timestamp: Option<u64>,
 }
 
 pub struct ExplorerReadme<'a> {

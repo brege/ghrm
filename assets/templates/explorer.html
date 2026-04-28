@@ -10,9 +10,8 @@
           </svg>
         </td>
         <td class="ghrm-nav-name"><a href="{{ parent_href }}">..</a></td>
-        <td class="ghrm-nav-commit-cell ghrm-nav-middle-meta"></td>
-        <td class="ghrm-nav-commit-date"></td>
-        <td class="ghrm-nav-date"></td>
+{% for column in column_defs %}        <td class="{{ column.cell_class }}"></td>
+{% endfor %}
       </tr>
 {% endif %}{% for e in entries %}      <tr>
         <td class="ghrm-nav-icon">
@@ -21,9 +20,8 @@
           </svg>
         </td>
         <td class="ghrm-nav-name"><a href="{{ e.href }}">{{ e.name }}</a></td>
-        <td class="ghrm-nav-commit-cell ghrm-nav-middle-meta">{% if let Some(message) = e.commit_message %}<span class="ghrm-nav-commit">{{ message }}</span>{% endif %}</td>
-        <td class="ghrm-nav-commit-date" data-ts="{% if let Some(ts) = e.commit_date %}{{ ts }}{% endif %}"></td>
-        <td class="ghrm-nav-date" data-ts="{% if let Some(ts) = e.modified %}{{ ts }}{% endif %}"></td>
+{% for cell in e.cells %}        <td class="{{ cell.class }}"{% if let Some(ts) = cell.timestamp %} data-ts="{{ ts }}"{% endif %}>{% if let Some(text) = cell.text %}{% if let Some(class) = cell.text_class %}<span class="{{ class }}">{{ text }}</span>{% else %}{{ text }}{% endif %}{% endif %}</td>
+{% endfor %}
       </tr>
 {% endfor %}    </tbody>
   </table>
@@ -36,9 +34,8 @@
         </svg>
       </td>
       <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
-      <td class="ghrm-nav-commit-cell ghrm-nav-middle-meta"></td>
-      <td class="ghrm-nav-commit-date"></td>
-      <td class="ghrm-nav-date"></td>
+{% for column in column_defs %}      <td class="{{ column.cell_class }}"></td>
+{% endfor %}
     </tr>
   </template>
   <template id="ghrm-search-dir-row">
@@ -49,9 +46,8 @@
         </svg>
       </td>
       <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
-      <td class="ghrm-nav-commit-cell ghrm-nav-middle-meta"></td>
-      <td class="ghrm-nav-commit-date"></td>
-      <td class="ghrm-nav-date"></td>
+{% for column in column_defs %}      <td class="{{ column.cell_class }}"></td>
+{% endfor %}
     </tr>
   </template>
   <template id="ghrm-content-search-row">
@@ -61,7 +57,7 @@
           <use href="#ghrm-icon-file"></use>
         </svg>
       </td>
-      <td class="ghrm-nav-name ghrm-content-cell" colspan="4">
+      <td class="ghrm-nav-name ghrm-content-cell" colspan="{{ content_colspan }}">
         <a class="ghrm-content-path"></a>
         <span class="ghrm-content-text"></span>
       </td>

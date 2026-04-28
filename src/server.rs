@@ -4,8 +4,8 @@ use crate::column;
 use crate::delivery;
 use crate::filter;
 use crate::render::{self, Rendered};
-use crate::repo::{RepoSet, SourceState};
-use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
+use crate::repo::{CommitInfo, RepoSet, SourceState};
+use crate::tmpl::{self, ExplorerCell, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
 use crate::view::{self, ViewConfig, ViewQuery, ViewState};
 use crate::walk::{self, NavSet, ViewOpts};
 use crate::watch;
@@ -612,15 +612,10 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
             name: e.name.clone(),
             href: view::with_view(&e.href, &view, &s.view_cfg),
             is_dir: e.is_dir,
-            modified: e.modified,
-            commit_message: entry_paths
-                .get(idx)
-                .and_then(|path| commits.get(path))
-                .map(|commit| commit.subject.clone()),
-            commit_date: entry_paths
-                .get(idx)
-                .and_then(|path| commits.get(path))
-                .map(|commit| commit.timestamp),
+            cells: explorer_cells(
+                e.modified,
+                entry_paths.get(idx).and_then(|path| commits.get(path)),
+            ),
         })
         .collect();
 
@@ -668,6 +663,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         show_commit: view.columns.is_visible(column::Id::CommitMessage),
         show_commit_date: view.columns.is_visible(column::Id::CommitDate),
         column_defs: column::DEFS,
+        content_colspan: column::DEFS.len() + 1,
         filter_groups: s.filters.groups(),
         entries: &entries,
         readme: readme_tmpl,
@@ -704,6 +700,25 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         &s.view_cfg,
         s.auth.is_some(),
     )
+}
+
+fn explorer_cells(modified: Option<u64>, commit: Option<&CommitInfo>) -> Vec<ExplorerCell> {
+    column::DEFS
+        .iter()
+        .map(|def| {
+            let (text, timestamp) = match def.id {
+                column::Id::ModifiedDate => (None, modified),
+                column::Id::CommitMessage => (commit.map(|commit| commit.subject.clone()), None),
+                column::Id::CommitDate => (None, commit.map(|commit| commit.timestamp)),
+            };
+            ExplorerCell {
+                class: def.cell_class,
+                text_class: def.text_class,
+                text,
+                timestamp,
+            }
+        })
+        .collect()
 }
 
 fn respond_html(

@@ -355,7 +355,7 @@ mod tests {
         };
         assert_eq!(
             with_view("/docs/", &view, &cfg),
-            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp&date=0&commit=0&commit_date=0"
+            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp&commit=0&commit_date=0&date=0"
         );
     }
 

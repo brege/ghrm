@@ -12,22 +12,19 @@ pub(crate) struct Def {
     pub(crate) key: &'static str,
     pub(crate) label: &'static str,
     pub(crate) title: &'static str,
+    pub(crate) cell_class: &'static str,
+    pub(crate) text_class: Option<&'static str>,
     pub(crate) default_visible: bool,
 }
 
 pub(crate) const DEFS: &[Def] = &[
     Def {
-        id: Id::ModifiedDate,
-        key: "date",
-        label: "Date",
-        title: "Show file dates",
-        default_visible: true,
-    },
-    Def {
         id: Id::CommitMessage,
         key: "commit",
         label: "Commit message",
         title: "Show commit messages",
+        cell_class: "ghrm-nav-commit-cell ghrm-nav-middle-meta",
+        text_class: Some("ghrm-nav-commit"),
         default_visible: true,
     },
     Def {
@@ -35,7 +32,18 @@ pub(crate) const DEFS: &[Def] = &[
         key: "commit_date",
         label: "Commit date",
         title: "Show commit dates",
+        cell_class: "ghrm-nav-commit-date",
+        text_class: None,
         default_visible: false,
+    },
+    Def {
+        id: Id::ModifiedDate,
+        key: "date",
+        label: "Modified date",
+        title: "Show file dates",
+        cell_class: "ghrm-nav-date",
+        text_class: None,
+        default_visible: true,
     },
 ];
 
