@@ -767,7 +767,8 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   white-space: nowrap;
 }
 
-.ghrm-nav-date {
+.ghrm-nav-date,
+.ghrm-nav-commit-date {
   width: 120px;
   text-align: right;
   color: var(--fgColor-muted, #636c76);
@@ -781,6 +782,10 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   display: none;
 }
 
+.ghrm-hide-commit-date .ghrm-nav-commit-date {
+  display: none;
+}
+
 .ghrm-hide-commit .ghrm-nav-commit-cell,
 .ghrm-hide-commit .ghrm-nav-commit {
   display: none;
@@ -788,6 +793,10 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
 
 @container ghrm-explorer (max-width: 38rem) {
   .markdown-body:not(.ghrm-hide-date):not(.ghrm-hide-commit)
+    .ghrm-nav-middle-meta,
+  .markdown-body.ghrm-hide-date:not(.ghrm-hide-commit-date):not(
+      .ghrm-hide-commit
+    )
     .ghrm-nav-middle-meta {
     display: none;
   }

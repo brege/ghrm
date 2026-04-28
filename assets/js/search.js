@@ -58,7 +58,7 @@ function ensureNavTable(article) {
 function renderSearchRows(tbody, results, query, view) {
   if (results.length === 0) {
     tbody.innerHTML =
-      '<tr class="ghrm-search-empty"><td colspan="4">No matching paths.</td></tr>';
+      '<tr class="ghrm-search-empty"><td colspan="5">No matching paths.</td></tr>';
     return;
   }
 
@@ -71,6 +71,7 @@ function renderSearchRows(tbody, results, query, view) {
 
     const link = row.querySelector('.ghrm-search-path');
     const commit = row.querySelector('.ghrm-nav-commit-cell');
+    const commitDate = row.querySelector('.ghrm-nav-commit-date');
     const date = row.querySelector('.ghrm-nav-date');
     link.href = withView(entry.href, view);
     link.innerHTML = highlightMatch(entry.display, query);
@@ -83,6 +84,9 @@ function renderSearchRows(tbody, results, query, view) {
     }
     if (entry.modified) {
       date.dataset.ts = String(entry.modified);
+    }
+    if (entry.commit_date && commitDate) {
+      commitDate.dataset.ts = String(entry.commit_date);
     }
     tbody.append(row);
   }
@@ -102,6 +106,7 @@ function buildSearchParams(query, extraParams = {}, view = currentView()) {
   params.set('dir', view.sortDir);
   params.set('date', view.showDate ? '1' : '0');
   params.set('commit', view.showCommit ? '1' : '0');
+  params.set('commit_date', view.showCommitDate ? '1' : '0');
   for (const group of view.filterGroups) {
     params.append('group', group);
   }
@@ -201,7 +206,7 @@ function formatContentSnippet(text, ranges) {
 function renderContentRows(tbody, results, truncated, maxRows, view) {
   if (results.length === 0) {
     tbody.innerHTML =
-      '<tr class="ghrm-search-empty"><td colspan="4">No matches found.</td></tr>';
+      '<tr class="ghrm-search-empty"><td colspan="5">No matches found.</td></tr>';
     return;
   }
 
@@ -226,7 +231,7 @@ function renderContentRows(tbody, results, truncated, maxRows, view) {
   note.className = truncated ? 'ghrm-search-truncated' : 'ghrm-search-summary';
   note.innerHTML =
     '<td class="ghrm-nav-icon"></td>' +
-    `<td class="ghrm-search-summary-cell" colspan="3">` +
+    `<td class="ghrm-search-summary-cell" colspan="4">` +
     `<span>${truncated ? 'Results truncated' : ''}</span>` +
     `<span class="ghrm-search-summary-count">${results.length}/${maxRows}</span>` +
     '</td>';

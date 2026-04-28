@@ -80,6 +80,7 @@ pub(crate) async fn search(
             dir: q.dir.clone(),
             date: None,
             commit: None,
+            commit_date: None,
         },
         raw_query.as_deref(),
         &s.view_cfg,
@@ -114,6 +115,7 @@ struct PathSearchResult {
     is_dir: bool,
     modified: Option<u64>,
     commit_message: Option<String>,
+    commit_date: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -153,16 +155,19 @@ pub(crate) async fn path_search(
         view.sort,
         view.sort_dir,
     );
-    if view.columns.commit {
+    if view.columns.commit || view.columns.commit_date {
         let paths: Vec<_> = resp
             .results
             .iter()
             .map(|row| row.href.trim_matches('/'))
             .map(|rel| s.target.join(rel))
             .collect();
-        let commit_messages = s.repos.commit_messages(&paths);
+        let commits = s.repos.commit_info(&paths);
         for (row, path) in resp.results.iter_mut().zip(paths) {
-            row.commit_message = commit_messages.get(&path).cloned();
+            if let Some(commit) = commits.get(&path) {
+                row.commit_message = Some(commit.subject.clone());
+                row.commit_date = Some(commit.timestamp);
+            }
         }
     }
 
@@ -223,6 +228,7 @@ fn path_search_results(
                 is_dir: entry.is_dir,
                 modified: entry.modified,
                 commit_message: None,
+                commit_date: None,
             });
         }
     }

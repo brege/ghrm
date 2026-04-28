@@ -586,7 +586,8 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     let has_parent = !rel.is_empty();
     let parent_href = view::with_view(&parent_href, &view, &s.view_cfg);
 
-    let entry_paths = if view.columns.commit {
+    let show_commit_meta = view.columns.commit || view.columns.commit_date;
+    let entry_paths = if show_commit_meta {
         dir.entries
             .iter()
             .map(|e| Path::new(rel).join(&e.name))
@@ -595,8 +596,8 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     } else {
         Vec::new()
     };
-    let commit_messages = if view.columns.commit {
-        s.repos.commit_messages(&entry_paths)
+    let commits = if show_commit_meta {
+        s.repos.commit_info(&entry_paths)
     } else {
         Default::default()
     };
@@ -612,8 +613,12 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
             modified: e.modified,
             commit_message: entry_paths
                 .get(idx)
-                .and_then(|path| commit_messages.get(path))
-                .cloned(),
+                .and_then(|path| commits.get(path))
+                .map(|commit| commit.subject.clone()),
+            commit_date: entry_paths
+                .get(idx)
+                .and_then(|path| commits.get(path))
+                .map(|commit| commit.timestamp),
         })
         .collect();
 
@@ -659,6 +664,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         show_excludes: s.view_cfg.can_toggle_excludes,
         show_date: view.columns.date,
         show_commit: view.columns.commit,
+        show_commit_date: view.columns.commit_date,
         filter_groups: s.filters.groups(),
         entries: &entries,
         readme: readme_tmpl,
@@ -724,6 +730,7 @@ fn respond_html(
         default_sort: cfg.default_sort.as_str(),
         default_show_date: cfg.default_columns.date,
         default_show_commit: cfg.default_columns.commit,
+        default_show_commit_date: cfg.default_columns.commit_date,
         can_toggle_excludes: cfg.can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,

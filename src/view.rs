@@ -17,6 +17,7 @@ pub(crate) struct ViewConfig {
 pub(crate) struct ColumnView {
     pub(crate) date: bool,
     pub(crate) commit: bool,
+    pub(crate) commit_date: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -39,6 +40,7 @@ pub(crate) struct ViewQuery {
     pub(crate) dir: Option<String>,
     pub(crate) date: Option<String>,
     pub(crate) commit: Option<String>,
+    pub(crate) commit_date: Option<String>,
 }
 
 pub(crate) fn matcher(view: &ViewState, filters: &filter::Set) -> Option<filter::Matcher> {
@@ -116,6 +118,11 @@ pub(crate) fn from_query(
                 .as_deref()
                 .and_then(parse_bool_param)
                 .unwrap_or(cfg.default_columns.commit),
+            commit_date: q
+                .commit_date
+                .as_deref()
+                .and_then(parse_bool_param)
+                .unwrap_or(cfg.default_columns.commit_date),
         },
     }
 }
@@ -210,6 +217,12 @@ pub(crate) fn with_view(href: &str, view: &ViewState, cfg: &ViewConfig) -> Strin
         "commit",
         view.columns.commit,
         cfg.default_columns.commit,
+    );
+    set_bool_param(
+        &mut pairs,
+        "commit_date",
+        view.columns.commit_date,
+        cfg.default_columns.commit_date,
     );
 
     let mut out = path.to_string();
@@ -315,6 +328,7 @@ mod tests {
             default_columns: ColumnView {
                 date: true,
                 commit: true,
+                commit_date: false,
             },
             can_toggle_excludes: true,
         };
@@ -343,6 +357,7 @@ mod tests {
             default_columns: ColumnView {
                 date: true,
                 commit: true,
+                commit_date: true,
             },
             can_toggle_excludes: true,
         };
@@ -359,11 +374,12 @@ mod tests {
             columns: ColumnView {
                 date: false,
                 commit: false,
+                commit_date: false,
             },
         };
         assert_eq!(
             with_view("/docs/", &view, &cfg),
-            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp&date=0&commit=0"
+            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp&date=0&commit=0&commit_date=0"
         );
     }
 
@@ -382,6 +398,7 @@ mod tests {
             default_columns: ColumnView {
                 date: true,
                 commit: true,
+                commit_date: false,
             },
             can_toggle_excludes: false,
         };
@@ -419,6 +436,7 @@ mod tests {
             default_columns: ColumnView {
                 date: true,
                 commit: true,
+                commit_date: false,
             },
             can_toggle_excludes: false,
         };

@@ -167,6 +167,7 @@ fn main() -> Result<()> {
     let default_columns = view::ColumnView {
         date: cfg.explorer.columns.date.unwrap_or(true),
         commit: cfg.explorer.columns.commit_message.unwrap_or(true),
+        commit_date: cfg.explorer.columns.commit_date.unwrap_or(false),
     };
 
     let runtime = tokio::runtime::Builder::new_multi_thread()

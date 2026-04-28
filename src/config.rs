@@ -64,6 +64,7 @@ pub struct ExplorerConfig {
 pub struct ColumnConfig {
     pub date: Option<bool>,
     pub commit_message: Option<bool>,
+    pub commit_date: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -179,11 +180,13 @@ mod tests {
                 [explorer.columns]
                 date = false
                 commit_message = true
+                commit_date = false
             "#,
         )
         .unwrap();
 
         assert_eq!(config.explorer.columns.date, Some(false));
         assert_eq!(config.explorer.columns.commit_message, Some(true));
+        assert_eq!(config.explorer.columns.commit_date, Some(false));
     }
 }

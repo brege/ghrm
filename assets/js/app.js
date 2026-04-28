@@ -23,6 +23,7 @@ import {
   defaultFilterExt,
   defaultFilterGroups,
   defaultShowCommit,
+  defaultShowCommitDate,
   defaultShowDate,
   defaultShowExcludes,
   defaultShowHidden,
@@ -121,13 +122,15 @@ function syncColumnControls(view = currentView()) {
   if (article) {
     article.classList.toggle('ghrm-hide-date', !view.showDate);
     article.classList.toggle('ghrm-hide-commit', !view.showCommit);
+    article.classList.toggle('ghrm-hide-commit-date', !view.showCommitDate);
   }
 
   const menu = currentExplorerMenu('column');
   if (menu) {
     const active =
       view.showDate !== defaultShowDate() ||
-      view.showCommit !== defaultShowCommit();
+      view.showCommit !== defaultShowCommit() ||
+      view.showCommitDate !== defaultShowCommitDate();
     menu.toggle.classList.toggle('is-active', active);
   }
 
@@ -135,7 +138,8 @@ function syncColumnControls(view = currentView()) {
     []) {
     const active =
       (button.dataset.columnToggle === 'date' && view.showDate) ||
-      (button.dataset.columnToggle === 'commit' && view.showCommit);
+      (button.dataset.columnToggle === 'commit' && view.showCommit) ||
+      (button.dataset.columnToggle === 'commit-date' && view.showCommitDate);
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-checked', active ? 'true' : 'false');
   }
@@ -165,7 +169,9 @@ function formatAbsolute(ts) {
 }
 
 function populateDates() {
-  for (const el of document.querySelectorAll('.ghrm-nav-date[data-ts]')) {
+  for (const el of document.querySelectorAll(
+    '.ghrm-nav-date[data-ts], .ghrm-nav-commit-date[data-ts]',
+  )) {
     const ts = parseInt(el.dataset.ts, 10);
     if (!ts) continue;
     el.textContent = formatRelative(ts);
@@ -341,6 +347,9 @@ function setupViewMenu() {
           break;
         case 'commit':
           next.showCommit = !view.showCommit;
+          break;
+        case 'commit-date':
+          next.showCommitDate = !view.showCommitDate;
           break;
         default:
           return;

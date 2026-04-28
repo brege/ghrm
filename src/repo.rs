@@ -11,6 +11,12 @@ pub struct RepoSet {
     entries: Vec<RepoEntry>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CommitInfo {
+    pub subject: String,
+    pub timestamp: u64,
+}
+
 #[derive(Clone, Debug)]
 struct RepoEntry {
     root: PathBuf,
@@ -80,7 +86,7 @@ impl RepoSet {
             .unwrap_or(SourceState::NoRepo)
     }
 
-    pub fn commit_messages(&self, paths: &[PathBuf]) -> BTreeMap<PathBuf, String> {
+    pub fn commit_info(&self, paths: &[PathBuf]) -> BTreeMap<PathBuf, CommitInfo> {
         let mut out = BTreeMap::new();
         for entry in &self.entries {
             let mut requests = Vec::new();
@@ -100,7 +106,7 @@ impl RepoSet {
                     is_dir: path.is_dir(),
                 });
             }
-            out.extend(commit_messages_for_repo(&entry.root, &requests));
+            out.extend(commit_info_for_repo(&entry.root, &requests));
         }
         out
     }
@@ -212,7 +218,7 @@ fn git_config_path(dot_git: &Path) -> Option<PathBuf> {
     None
 }
 
-fn commit_messages_for_repo(root: &Path, requests: &[LogRequest]) -> BTreeMap<PathBuf, String> {
+fn commit_info_for_repo(root: &Path, requests: &[LogRequest]) -> BTreeMap<PathBuf, CommitInfo> {
     if requests.is_empty() {
         return BTreeMap::new();
     }
@@ -222,7 +228,7 @@ fn commit_messages_for_repo(root: &Path, requests: &[LogRequest]) -> BTreeMap<Pa
         .arg("-C")
         .arg(root)
         .arg("log")
-        .arg("--format=format:%x1f%s")
+        .arg("--format=format:%x1f%ct%x1f%s")
         .arg("--name-only")
         .arg("--")
         .args(requests.iter().map(|request| request.rel.as_str()))
@@ -238,20 +244,28 @@ fn commit_messages_for_repo(root: &Path, requests: &[LogRequest]) -> BTreeMap<Pa
     };
 
     let mut out = BTreeMap::new();
-    let mut subject = String::new();
+    let mut commit = None::<CommitInfo>;
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-        if let Some(next_subject) = line.strip_prefix('\x1f') {
-            subject = next_subject.to_string();
+        if let Some(raw) = line.strip_prefix('\x1f') {
+            commit = raw.split_once('\x1f').and_then(|(timestamp, subject)| {
+                Some(CommitInfo {
+                    subject: subject.to_string(),
+                    timestamp: timestamp.parse().ok()?,
+                })
+            });
             continue;
         }
-        if subject.is_empty() || line.is_empty() {
+        let Some(commit) = &commit else {
+            continue;
+        };
+        if line.is_empty() {
             continue;
         }
         for request in requests {
             if out.contains_key(&request.abs) || !log_path_matches(request, &line) {
                 continue;
             }
-            out.insert(request.abs.clone(), subject.clone());
+            out.insert(request.abs.clone(), commit.clone());
         }
         if out.len() == requests.len() {
             let _ = child.kill();

@@ -75,8 +75,7 @@ rm -r ~/.cache/ghrm
 ## Roadmap
 
 - Add metadata configuration in header-actions (test these out one by one and bench)
-  - last commit message for each file/directory
-  - fs timestamp date or git timestamp cwitch for each file/directory
+  - fs timestamp date or git timestamp switch for each file/directory
   - line count for files
   - size on disk of file or directory
 - Polish

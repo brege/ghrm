@@ -39,6 +39,10 @@ export function defaultShowCommit() {
   return document.body?.dataset.defaultShowCommit === '1';
 }
 
+export function defaultShowCommitDate() {
+  return document.body?.dataset.defaultShowCommitDate === '1';
+}
+
 export function canToggleExcludes() {
   return document.body?.dataset.canToggleExcludes === '1';
 }
@@ -88,6 +92,8 @@ export function currentView() {
     filterGroups: hasGroups ? [...new Set(groups)] : defaultFilterGroups(),
     showDate: parseQueryBool(params.get('date')) ?? defaultShowDate(),
     showCommit: parseQueryBool(params.get('commit')) ?? defaultShowCommit(),
+    showCommitDate:
+      parseQueryBool(params.get('commit_date')) ?? defaultShowCommitDate(),
   };
 }
 
@@ -125,6 +131,12 @@ export function withView(urlLike, view = currentView()) {
     'commit',
     view.showCommit,
     defaultShowCommit(),
+  );
+  setQueryBool(
+    url.searchParams,
+    'commit_date',
+    view.showCommitDate,
+    defaultShowCommitDate(),
   );
   if (view.sort === defaultSort()) {
     url.searchParams.delete('sort');
