@@ -734,6 +734,16 @@ fn respond_html(
         &r.title
     };
     let source = source_html(&source);
+    let column_keys = column::DEFS
+        .iter()
+        .map(|def| def.key)
+        .collect::<Vec<_>>()
+        .join(",");
+    let default_columns = column::DEFS
+        .iter()
+        .filter_map(|def| cfg.default_columns.is_visible(def.id).then_some(def.key))
+        .collect::<Vec<_>>()
+        .join(",");
     let shell = PageShell {
         title,
         body,
@@ -746,9 +756,8 @@ fn respond_html(
         default_filter_ext: cfg.default.filter_ext,
         default_filter_group: cfg.default_groups.first().map(String::as_str),
         default_sort: cfg.default_sort.as_str(),
-        default_show_date: cfg.default_columns.is_visible(column::Id::ModifiedDate),
-        default_show_commit: cfg.default_columns.is_visible(column::Id::CommitMessage),
-        default_show_commit_date: cfg.default_columns.is_visible(column::Id::CommitDate),
+        column_keys: &column_keys,
+        default_columns: &default_columns,
         can_toggle_excludes: cfg.can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,

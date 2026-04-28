@@ -14,6 +14,7 @@ pub(crate) struct Def {
     pub(crate) title: &'static str,
     pub(crate) cell_class: &'static str,
     pub(crate) text_class: Option<&'static str>,
+    pub(crate) hide_class: &'static str,
     pub(crate) default_visible: bool,
 }
 
@@ -25,6 +26,7 @@ pub(crate) const DEFS: &[Def] = &[
         title: "Show commit messages",
         cell_class: "ghrm-nav-commit-cell ghrm-nav-middle-meta",
         text_class: Some("ghrm-nav-commit"),
+        hide_class: "ghrm-hide-commit",
         default_visible: true,
     },
     Def {
@@ -34,6 +36,7 @@ pub(crate) const DEFS: &[Def] = &[
         title: "Show commit dates",
         cell_class: "ghrm-nav-commit-date",
         text_class: None,
+        hide_class: "ghrm-hide-commit-date",
         default_visible: false,
     },
     Def {
@@ -43,6 +46,7 @@ pub(crate) const DEFS: &[Def] = &[
         title: "Show file dates",
         cell_class: "ghrm-nav-date",
         text_class: None,
+        hide_class: "ghrm-hide-date",
         default_visible: true,
     },
 ];

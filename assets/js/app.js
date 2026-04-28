@@ -20,11 +20,9 @@ import { buildToc, setupToc } from './toc.js';
 import {
   canToggleExcludes,
   currentView,
+  defaultColumns,
   defaultFilterExt,
   defaultFilterGroups,
-  defaultShowCommit,
-  defaultShowCommitDate,
-  defaultShowDate,
   defaultShowExcludes,
   defaultShowHidden,
   defaultSort,
@@ -119,29 +117,24 @@ function syncSortControls(view = currentView()) {
 
 function syncColumnControls(view = currentView()) {
   const article = document.querySelector('article[data-explorer]');
-  if (article) {
-    article.classList.toggle('ghrm-hide-date', !view.showDate);
-    article.classList.toggle('ghrm-hide-commit', !view.showCommit);
-    article.classList.toggle('ghrm-hide-commit-date', !view.showCommitDate);
-  }
-
   const menu = currentExplorerMenu('column');
-  if (menu) {
-    const active =
-      view.showDate !== defaultShowDate() ||
-      view.showCommit !== defaultShowCommit() ||
-      view.showCommitDate !== defaultShowCommitDate();
-    menu.toggle.classList.toggle('is-active', active);
-  }
-
   for (const button of menu?.panel.querySelectorAll('.ghrm-view-option') ||
     []) {
-    const active =
-      (button.dataset.columnToggle === 'date' && view.showDate) ||
-      (button.dataset.columnToggle === 'commit' && view.showCommit) ||
-      (button.dataset.columnToggle === 'commit_date' && view.showCommitDate);
+    const key = button.dataset.columnToggle;
+    const active = view.columns.has(key);
+    if (article && button.dataset.columnHideClass) {
+      article.classList.toggle(button.dataset.columnHideClass, !active);
+    }
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-checked', active ? 'true' : 'false');
+  }
+
+  if (menu) {
+    const defaults = defaultColumns();
+    const active =
+      view.columns.size !== defaults.size ||
+      [...view.columns].some((key) => !defaults.has(key));
+    menu.toggle.classList.toggle('is-active', active);
   }
 }
 
@@ -339,20 +332,15 @@ function setupViewMenu() {
       const view = currentView();
       const next = {
         ...view,
+        columns: new Set(view.columns),
         filterGroups: [...view.filterGroups],
       };
-      switch (button.dataset.columnToggle) {
-        case 'date':
-          next.showDate = !view.showDate;
-          break;
-        case 'commit':
-          next.showCommit = !view.showCommit;
-          break;
-        case 'commit_date':
-          next.showCommitDate = !view.showCommitDate;
-          break;
-        default:
-          return;
+      const key = button.dataset.columnToggle;
+      if (!key) return;
+      if (next.columns.has(key)) {
+        next.columns.delete(key);
+      } else {
+        next.columns.add(key);
       }
       if (!hasActiveSearch()) {
         reopenExplorerMenu = 'column';

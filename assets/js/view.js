@@ -31,20 +31,20 @@ export function defaultSortDir(sort = defaultSort()) {
   return sort === 'timestamp' ? 'desc' : 'asc';
 }
 
-export function defaultShowDate() {
-  return document.body?.dataset.defaultShowDate === '1';
-}
-
-export function defaultShowCommit() {
-  return document.body?.dataset.defaultShowCommit === '1';
-}
-
-export function defaultShowCommitDate() {
-  return document.body?.dataset.defaultShowCommitDate === '1';
-}
-
 export function canToggleExcludes() {
   return document.body?.dataset.canToggleExcludes === '1';
+}
+
+function splitSet(raw) {
+  return new Set((raw || '').split(',').filter((value) => value));
+}
+
+export function columnKeys() {
+  return [...splitSet(document.body?.dataset.columnKeys)];
+}
+
+export function defaultColumns() {
+  return splitSet(document.body?.dataset.defaultColumns);
 }
 
 function parseQueryBool(raw) {
@@ -78,6 +78,16 @@ export function currentView() {
   const params = new URLSearchParams(location.search);
   const hasGroups = params.has('group');
   const groups = params.getAll('group').filter((group) => group);
+  const columns = defaultColumns();
+  for (const key of columnKeys()) {
+    const visible = parseQueryBool(params.get(key));
+    if (visible === null) continue;
+    if (visible) {
+      columns.add(key);
+    } else {
+      columns.delete(key);
+    }
+  }
   return {
     showHidden: parseQueryBool(params.get('hidden')) ?? defaultShowHidden(),
     showExcludes: canToggleExcludes()
@@ -90,10 +100,7 @@ export function currentView() {
       parseSortDir(params.get('dir')) ||
       defaultSortDir(parseSort(params.get('sort')) || defaultSort()),
     filterGroups: hasGroups ? [...new Set(groups)] : defaultFilterGroups(),
-    showDate: parseQueryBool(params.get('date')) ?? defaultShowDate(),
-    showCommit: parseQueryBool(params.get('commit')) ?? defaultShowCommit(),
-    showCommitDate:
-      parseQueryBool(params.get('commit_date')) ?? defaultShowCommitDate(),
+    columns,
   };
 }
 
@@ -125,19 +132,15 @@ export function withView(urlLike, view = currentView()) {
   }
   setQueryBool(url.searchParams, 'ignore', view.useIgnore, defaultUseIgnore());
   setQueryBool(url.searchParams, 'filter', view.filterExt, defaultFilterExt());
-  setQueryBool(url.searchParams, 'date', view.showDate, defaultShowDate());
-  setQueryBool(
-    url.searchParams,
-    'commit',
-    view.showCommit,
-    defaultShowCommit(),
-  );
-  setQueryBool(
-    url.searchParams,
-    'commit_date',
-    view.showCommitDate,
-    defaultShowCommitDate(),
-  );
+  const columnDefaults = defaultColumns();
+  for (const key of columnKeys()) {
+    setQueryBool(
+      url.searchParams,
+      key,
+      view.columns.has(key),
+      columnDefaults.has(key),
+    );
+  }
   if (view.sort === defaultSort()) {
     url.searchParams.delete('sort');
   } else {
@@ -150,10 +153,10 @@ export function withView(urlLike, view = currentView()) {
   }
   url.searchParams.delete('group');
   const groups = [...new Set(view.filterGroups)];
-  const defaults = defaultFilterGroups();
+  const groupDefaults = defaultFilterGroups();
   if (
-    groups.length !== defaults.length ||
-    groups.some((group, index) => group !== defaults[index])
+    groups.length !== groupDefaults.length ||
+    groups.some((group, index) => group !== groupDefaults[index])
   ) {
     if (groups.length === 0) {
       url.searchParams.append('group', '');

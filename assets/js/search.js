@@ -1,5 +1,5 @@
 import { escapeHtml } from './dom.js';
-import { currentView, withView } from './view.js';
+import { columnKeys, currentView, withView } from './view.js';
 
 let searchMode = 'path';
 let searchOpen = false;
@@ -57,8 +57,7 @@ function ensureNavTable(article) {
 
 function renderSearchRows(tbody, results, query, view) {
   if (results.length === 0) {
-    tbody.innerHTML =
-      '<tr class="ghrm-search-empty"><td colspan="5">No matching paths.</td></tr>';
+    tbody.innerHTML = `<tr class="ghrm-search-empty"><td colspan="${columnKeys().length + 2}">No matching paths.</td></tr>`;
     return;
   }
 
@@ -104,9 +103,9 @@ function buildSearchParams(query, extraParams = {}, view = currentView()) {
   params.set('filter', view.filterExt ? '1' : '0');
   params.set('sort', view.sort);
   params.set('dir', view.sortDir);
-  params.set('date', view.showDate ? '1' : '0');
-  params.set('commit', view.showCommit ? '1' : '0');
-  params.set('commit_date', view.showCommitDate ? '1' : '0');
+  for (const key of columnKeys()) {
+    params.set(key, view.columns.has(key) ? '1' : '0');
+  }
   for (const group of view.filterGroups) {
     params.append('group', group);
   }
@@ -205,8 +204,7 @@ function formatContentSnippet(text, ranges) {
 
 function renderContentRows(tbody, results, truncated, maxRows, view) {
   if (results.length === 0) {
-    tbody.innerHTML =
-      '<tr class="ghrm-search-empty"><td colspan="5">No matches found.</td></tr>';
+    tbody.innerHTML = `<tr class="ghrm-search-empty"><td colspan="${columnKeys().length + 2}">No matches found.</td></tr>`;
     return;
   }
 
@@ -231,7 +229,7 @@ function renderContentRows(tbody, results, truncated, maxRows, view) {
   note.className = truncated ? 'ghrm-search-truncated' : 'ghrm-search-summary';
   note.innerHTML =
     '<td class="ghrm-nav-icon"></td>' +
-    `<td class="ghrm-search-summary-cell" colspan="4">` +
+    `<td class="ghrm-search-summary-cell" colspan="${columnKeys().length + 1}">` +
     `<span>${truncated ? 'Results truncated' : ''}</span>` +
     `<span class="ghrm-search-summary-count">${results.length}/${maxRows}</span>` +
     '</td>';

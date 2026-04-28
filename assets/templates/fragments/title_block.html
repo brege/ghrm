@@ -82,7 +82,7 @@
           </svg>
         </button>
         <div id="ghrm-column-menu" class="ghrm-view-menu" role="menu" aria-label="Display columns" hidden>
-{% for column in column_defs %}          <button class="ghrm-view-option" type="button" data-column-toggle="{{ column.key }}" role="menuitemcheckbox" aria-checked="false" title="{{ column.title }}">
+{% for column in column_defs %}          <button class="ghrm-view-option" type="button" data-column-toggle="{{ column.key }}" data-column-hide-class="{{ column.hide_class }}" role="menuitemcheckbox" aria-checked="false" title="{{ column.title }}">
             <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
               <use href="#ghrm-icon-check"></use>
             </svg>
