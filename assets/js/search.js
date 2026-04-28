@@ -58,7 +58,7 @@ function ensureNavTable(article) {
 function renderSearchRows(tbody, results, query, view) {
   if (results.length === 0) {
     tbody.innerHTML =
-      '<tr class="ghrm-search-empty"><td colspan="3">No matching paths.</td></tr>';
+      '<tr class="ghrm-search-empty"><td colspan="4">No matching paths.</td></tr>';
     return;
   }
 
@@ -70,9 +70,17 @@ function renderSearchRows(tbody, results, query, view) {
     if (!row) continue;
 
     const link = row.querySelector('.ghrm-search-path');
+    const commit = row.querySelector('.ghrm-nav-commit-cell');
     const date = row.querySelector('.ghrm-nav-date');
     link.href = withView(entry.href, view);
     link.innerHTML = highlightMatch(entry.display, query);
+    if (entry.commit_message && commit) {
+      commit.innerHTML = '';
+      const message = document.createElement('span');
+      message.className = 'ghrm-nav-commit';
+      message.textContent = entry.commit_message;
+      commit.append(message);
+    }
     if (entry.modified) {
       date.dataset.ts = String(entry.modified);
     }
@@ -92,6 +100,8 @@ function buildSearchParams(query, extraParams = {}, view = currentView()) {
   params.set('filter', view.filterExt ? '1' : '0');
   params.set('sort', view.sort);
   params.set('dir', view.sortDir);
+  params.set('date', view.showDate ? '1' : '0');
+  params.set('commit', view.showCommit ? '1' : '0');
   for (const group of view.filterGroups) {
     params.append('group', group);
   }
@@ -191,7 +201,7 @@ function formatContentSnippet(text, ranges) {
 function renderContentRows(tbody, results, truncated, maxRows, view) {
   if (results.length === 0) {
     tbody.innerHTML =
-      '<tr class="ghrm-search-empty"><td colspan="3">No matches found.</td></tr>';
+      '<tr class="ghrm-search-empty"><td colspan="4">No matches found.</td></tr>';
     return;
   }
 
@@ -216,7 +226,7 @@ function renderContentRows(tbody, results, truncated, maxRows, view) {
   note.className = truncated ? 'ghrm-search-truncated' : 'ghrm-search-summary';
   note.innerHTML =
     '<td class="ghrm-nav-icon"></td>' +
-    `<td class="ghrm-search-summary-cell" colspan="2">` +
+    `<td class="ghrm-search-summary-cell" colspan="3">` +
     `<span>${truncated ? 'Results truncated' : ''}</span>` +
     `<span class="ghrm-search-summary-count">${results.length}/${maxRows}</span>` +
     '</td>';

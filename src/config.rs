@@ -16,6 +16,8 @@ pub struct Config {
     #[serde(default)]
     pub search: SearchConfig,
     #[serde(default)]
+    pub explorer: ExplorerConfig,
+    #[serde(default)]
     pub auth: AuthConfig,
 }
 
@@ -49,6 +51,19 @@ pub struct FilterGroupConfig {
 #[derive(Debug, Default, Deserialize)]
 pub struct SearchConfig {
     pub max_rows: Option<usize>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct ExplorerConfig {
+    #[serde(default)]
+    pub columns: ColumnConfig,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ColumnConfig {
+    pub date: Option<bool>,
+    pub commit_message: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -155,5 +170,20 @@ mod tests {
         .to_string();
 
         assert!(err.contains("unknown field `extensions`"));
+    }
+
+    #[test]
+    fn parses_explorer_columns() {
+        let config: Config = toml::from_str(
+            r#"
+                [explorer.columns]
+                date = false
+                commit_message = true
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.explorer.columns.date, Some(false));
+        assert_eq!(config.explorer.columns.commit_message, Some(true));
     }
 }

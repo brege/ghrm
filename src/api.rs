@@ -78,6 +78,8 @@ pub(crate) async fn search(
             filter: q.filter.map(|value| value.to_string()),
             sort: q.sort.clone(),
             dir: q.dir.clone(),
+            date: None,
+            commit: None,
         },
         raw_query.as_deref(),
         &s.view_cfg,
@@ -111,6 +113,7 @@ struct PathSearchResult {
     display: String,
     is_dir: bool,
     modified: Option<u64>,
+    commit_message: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -142,7 +145,7 @@ pub(crate) async fn path_search(
     let current_path = q.path.as_deref().unwrap_or("").trim_matches('/');
     let matcher = view::matcher(&view, &s.filters);
     let tree = s.nav_tree(&view, matcher.as_ref());
-    let resp = path_search_results(
+    let mut resp = path_search_results(
         &tree,
         current_path,
         query,
@@ -150,6 +153,18 @@ pub(crate) async fn path_search(
         view.sort,
         view.sort_dir,
     );
+    if view.columns.commit {
+        let paths: Vec<_> = resp
+            .results
+            .iter()
+            .map(|row| row.href.trim_matches('/'))
+            .map(|rel| s.target.join(rel))
+            .collect();
+        let commit_messages = s.repos.commit_messages(&paths);
+        for (row, path) in resp.results.iter_mut().zip(paths) {
+            row.commit_message = commit_messages.get(&path).cloned();
+        }
+    }
 
     json_response(&resp, "api_path_search")
 }
@@ -207,6 +222,7 @@ fn path_search_results(
                 },
                 is_dir: entry.is_dir,
                 modified: entry.modified,
+                commit_message: None,
             });
         }
     }

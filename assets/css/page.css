@@ -503,6 +503,11 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   display: inline-flex;
 }
 
+.ghrm-column-menu-shell {
+  position: relative;
+  display: inline-flex;
+}
+
 .ghrm-view-menu-toggle {
   width: 32px;
   height: 32px;
@@ -745,6 +750,21 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   text-decoration: none;
 }
 
+.ghrm-nav-commit-cell {
+  width: 50%;
+  max-width: 0;
+}
+
+.ghrm-nav-commit {
+  display: block;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ghrm-nav-date {
   width: 120px;
   text-align: right;
@@ -753,6 +773,15 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   line-height: 16px;
   white-space: nowrap;
   cursor: default;
+}
+
+.ghrm-hide-date .ghrm-nav-date {
+  display: none;
+}
+
+.ghrm-hide-commit .ghrm-nav-commit-cell,
+.ghrm-hide-commit .ghrm-nav-commit {
+  display: none;
 }
 
 @media (max-width: 767px) {
@@ -774,6 +803,11 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   }
 
   .ghrm-nav-date {
+    display: none;
+  }
+
+  .ghrm-nav-commit-cell,
+  .ghrm-nav-commit {
     display: none;
   }
 

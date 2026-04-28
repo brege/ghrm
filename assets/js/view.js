@@ -31,6 +31,14 @@ export function defaultSortDir(sort = defaultSort()) {
   return sort === 'timestamp' ? 'desc' : 'asc';
 }
 
+export function defaultShowDate() {
+  return document.body?.dataset.defaultShowDate === '1';
+}
+
+export function defaultShowCommit() {
+  return document.body?.dataset.defaultShowCommit === '1';
+}
+
 export function canToggleExcludes() {
   return document.body?.dataset.canToggleExcludes === '1';
 }
@@ -78,6 +86,8 @@ export function currentView() {
       parseSortDir(params.get('dir')) ||
       defaultSortDir(parseSort(params.get('sort')) || defaultSort()),
     filterGroups: hasGroups ? [...new Set(groups)] : defaultFilterGroups(),
+    showDate: parseQueryBool(params.get('date')) ?? defaultShowDate(),
+    showCommit: parseQueryBool(params.get('commit')) ?? defaultShowCommit(),
   };
 }
 
@@ -109,6 +119,13 @@ export function withView(urlLike, view = currentView()) {
   }
   setQueryBool(url.searchParams, 'ignore', view.useIgnore, defaultUseIgnore());
   setQueryBool(url.searchParams, 'filter', view.filterExt, defaultFilterExt());
+  setQueryBool(url.searchParams, 'date', view.showDate, defaultShowDate());
+  setQueryBool(
+    url.searchParams,
+    'commit',
+    view.showCommit,
+    defaultShowCommit(),
+  );
   if (view.sort === defaultSort()) {
     url.searchParams.delete('sort');
   } else {

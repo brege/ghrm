@@ -1,4 +1,4 @@
-<article class="markdown-body" data-explorer="true" data-current-path="{{ current_path }}">
+<article class="markdown-body{% if !show_date %} ghrm-hide-date{% endif %}{% if !show_commit %} ghrm-hide-commit{% endif %}" data-explorer="true" data-current-path="{{ current_path }}">
   <section class="ghrm-explorer-shell">
 {% include "fragments/title_block.html" %}{% if entries.is_empty() && !has_parent %}  <p class="ghrm-nav-empty">No files found.</p>
 {% else %}  <table class="ghrm-nav-table">
@@ -10,6 +10,7 @@
           </svg>
         </td>
         <td class="ghrm-nav-name"><a href="{{ parent_href }}">..</a></td>
+        <td class="ghrm-nav-commit-cell"></td>
         <td class="ghrm-nav-date"></td>
       </tr>
 {% endif %}{% for e in entries %}      <tr>
@@ -19,6 +20,7 @@
           </svg>
         </td>
         <td class="ghrm-nav-name"><a href="{{ e.href }}">{{ e.name }}</a></td>
+        <td class="ghrm-nav-commit-cell">{% if let Some(message) = e.commit_message %}<span class="ghrm-nav-commit">{{ message }}</span>{% endif %}</td>
         <td class="ghrm-nav-date" data-ts="{% if let Some(ts) = e.modified %}{{ ts }}{% endif %}"></td>
       </tr>
 {% endfor %}    </tbody>
@@ -32,6 +34,7 @@
         </svg>
       </td>
       <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
+      <td class="ghrm-nav-commit-cell"></td>
       <td class="ghrm-nav-date"></td>
     </tr>
   </template>
@@ -43,6 +46,7 @@
         </svg>
       </td>
       <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
+      <td class="ghrm-nav-commit-cell"></td>
       <td class="ghrm-nav-date"></td>
     </tr>
   </template>
@@ -53,7 +57,7 @@
           <use href="#ghrm-icon-file"></use>
         </svg>
       </td>
-      <td class="ghrm-nav-name ghrm-content-cell" colspan="2">
+      <td class="ghrm-nav-name ghrm-content-cell" colspan="3">
         <a class="ghrm-content-path"></a>
         <span class="ghrm-content-text"></span>
       </td>

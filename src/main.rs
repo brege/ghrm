@@ -164,6 +164,10 @@ fn main() -> Result<()> {
     if max_rows == 0 {
         anyhow::bail!("max search rows must be greater than zero");
     }
+    let default_columns = view::ColumnView {
+        date: cfg.explorer.columns.date.unwrap_or(true),
+        commit: cfg.explorer.columns.commit_message.unwrap_or(true),
+    };
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -176,6 +180,7 @@ fn main() -> Result<()> {
         use_ignore: !no_ignore,
         default_hidden: cli.hidden || cfg.walk.hidden.unwrap_or(false),
         default_filter_ext: has_explicit_ext_filter || filters.default_enabled(),
+        default_columns,
         extensions,
         filters,
         exclude_names,

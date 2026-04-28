@@ -19,6 +19,8 @@ pub struct PageShell<'a> {
     pub default_filter_ext: bool,
     pub default_filter_group: Option<&'a str>,
     pub default_sort: &'a str,
+    pub default_show_date: bool,
+    pub default_show_commit: bool,
     pub can_toggle_excludes: bool,
     pub has_mermaid: bool,
     pub has_math: bool,
@@ -44,6 +46,8 @@ pub struct ExplorerCtx<'a> {
     pub has_parent: bool,
     pub parent_href: &'a str,
     pub show_excludes: bool,
+    pub show_date: bool,
+    pub show_commit: bool,
     pub filter_groups: &'a [GroupMeta],
     pub entries: &'a [ExplorerEntry],
     pub readme: Option<ExplorerReadme<'a>>,
@@ -54,6 +58,7 @@ pub struct ExplorerEntry {
     pub href: String,
     pub is_dir: bool,
     pub modified: Option<u64>,
+    pub commit_message: Option<String>,
 }
 
 pub struct ExplorerReadme<'a> {

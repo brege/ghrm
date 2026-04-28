@@ -75,5 +75,26 @@
           </svg>
         </button>
       </div>
+      <div class="ghrm-column-menu-shell">
+        <button id="ghrm-column-menu-toggle" class="ghrm-view-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Display columns" title="Display columns">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-columns"></use>
+          </svg>
+        </button>
+        <div id="ghrm-column-menu" class="ghrm-view-menu" role="menu" aria-label="Display columns" hidden>
+          <button class="ghrm-view-option" type="button" data-column-toggle="date" role="menuitemcheckbox" aria-checked="false" title="Show file dates">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Date</span>
+          </button>
+          <button class="ghrm-view-option" type="button" data-column-toggle="commit" role="menuitemcheckbox" aria-checked="false" title="Show commit messages">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Commit message</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>

@@ -22,6 +22,8 @@ import {
   currentView,
   defaultFilterExt,
   defaultFilterGroups,
+  defaultShowCommit,
+  defaultShowDate,
   defaultShowExcludes,
   defaultShowHidden,
   defaultSort,
@@ -98,6 +100,32 @@ function syncSortControls(view = currentView()) {
   );
 }
 
+function syncColumnControls(view = currentView()) {
+  const article = document.querySelector('article[data-explorer]');
+  if (article) {
+    article.classList.toggle('ghrm-hide-date', !view.showDate);
+    article.classList.toggle('ghrm-hide-commit', !view.showCommit);
+  }
+
+  const toggle = document.getElementById('ghrm-column-menu-toggle');
+  if (toggle) {
+    const active =
+      view.showDate !== defaultShowDate() ||
+      view.showCommit !== defaultShowCommit();
+    toggle.classList.toggle('is-active', active);
+  }
+
+  for (const button of document.querySelectorAll(
+    '#ghrm-column-menu .ghrm-view-option',
+  )) {
+    const active =
+      (button.dataset.columnToggle === 'date' && view.showDate) ||
+      (button.dataset.columnToggle === 'commit' && view.showCommit);
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-checked', active ? 'true' : 'false');
+  }
+}
+
 function formatRelative(ts) {
   const diff = Date.now() / 1000 - ts;
   const p = (n, u) => `${n} ${u}${n === 1 ? '' : 's'} ago`;
@@ -134,6 +162,7 @@ function closeExplorerMenus() {
   for (const [toggleId, panelId] of [
     ['ghrm-view-menu-toggle', 'ghrm-view-menu'],
     ['ghrm-sort-menu-toggle', 'ghrm-sort-menu'],
+    ['ghrm-column-menu-toggle', 'ghrm-column-menu'],
   ]) {
     const toggle = document.getElementById(toggleId);
     const panel = document.getElementById(panelId);
@@ -157,6 +186,7 @@ function applyView(next, { closeMenus = false } = {}) {
     history.pushState(null, '', target);
     syncViewMenu(next);
     syncSortControls(next);
+    syncColumnControls(next);
     refreshActiveSearch(next);
     return;
   }
@@ -171,6 +201,8 @@ function currentExplorerControls() {
     sortToggle: document.getElementById('ghrm-sort-menu-toggle'),
     sortPanel: document.getElementById('ghrm-sort-menu'),
     dirToggle: document.getElementById('ghrm-sort-dir-toggle'),
+    columnToggle: document.getElementById('ghrm-column-menu-toggle'),
+    columnPanel: document.getElementById('ghrm-column-menu'),
   };
 }
 
@@ -180,15 +212,28 @@ function setupViewMenu() {
   const sortToggle = document.getElementById('ghrm-sort-menu-toggle');
   const sortPanel = document.getElementById('ghrm-sort-menu');
   const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
-  if (!filterToggle || !filterPanel || !sortToggle || !sortPanel || !dirToggle)
+  const columnToggle = document.getElementById('ghrm-column-menu-toggle');
+  const columnPanel = document.getElementById('ghrm-column-menu');
+  if (
+    !filterToggle ||
+    !filterPanel ||
+    !sortToggle ||
+    !sortPanel ||
+    !dirToggle ||
+    !columnToggle ||
+    !columnPanel
+  )
     return;
 
   syncViewMenu();
   syncSortControls();
+  syncColumnControls();
   filterPanel.hidden = true;
   sortPanel.hidden = true;
+  columnPanel.hidden = true;
   filterToggle.setAttribute('aria-expanded', 'false');
   sortToggle.setAttribute('aria-expanded', 'false');
+  columnToggle.setAttribute('aria-expanded', 'false');
 
   filterToggle.onclick = () => {
     if (filterPanel.hidden) {
@@ -201,6 +246,14 @@ function setupViewMenu() {
   sortToggle.onclick = () => {
     if (sortPanel.hidden) {
       openExplorerMenu(sortToggle, sortPanel);
+    } else {
+      closeExplorerMenus();
+    }
+  };
+
+  columnToggle.onclick = () => {
+    if (columnPanel.hidden) {
+      openExplorerMenu(columnToggle, columnPanel);
     } else {
       closeExplorerMenus();
     }
@@ -282,6 +335,27 @@ function setupViewMenu() {
     };
   }
 
+  for (const button of columnPanel.querySelectorAll('.ghrm-view-option')) {
+    button.onclick = () => {
+      const view = currentView();
+      const next = {
+        ...view,
+        filterGroups: [...view.filterGroups],
+      };
+      switch (button.dataset.columnToggle) {
+        case 'date':
+          next.showDate = !view.showDate;
+          break;
+        case 'commit':
+          next.showCommit = !view.showCommit;
+          break;
+        default:
+          return;
+      }
+      applyView(next);
+    };
+  }
+
   if (explorerMenusBound) {
     if (reopenFilterMenu) {
       reopenFilterMenu = false;
@@ -292,14 +366,23 @@ function setupViewMenu() {
   explorerMenusBound = true;
 
   document.addEventListener('click', (e) => {
-    const { filterToggle, filterPanel, sortToggle, sortPanel, dirToggle } =
-      currentExplorerControls();
+    const {
+      filterToggle,
+      filterPanel,
+      sortToggle,
+      sortPanel,
+      dirToggle,
+      columnToggle,
+      columnPanel,
+    } = currentExplorerControls();
     if (
       !filterToggle ||
       !filterPanel ||
       !sortToggle ||
       !sortPanel ||
-      !dirToggle
+      !dirToggle ||
+      !columnToggle ||
+      !columnPanel
     ) {
       return;
     }
@@ -308,27 +391,60 @@ function setupViewMenu() {
     const insideSort =
       sortToggle.contains(e.target) || sortPanel.contains(e.target);
     const insideDir = dirToggle.contains(e.target);
-    if (insideFilter || insideSort || insideDir) return;
+    const insideColumn =
+      columnToggle.contains(e.target) || columnPanel.contains(e.target);
+    if (insideFilter || insideSort || insideDir || insideColumn) return;
     closeExplorerMenus();
   });
 
   window.addEventListener('resize', () => {
-    const { filterToggle, filterPanel, sortToggle, sortPanel } =
-      currentExplorerControls();
-    if (!filterToggle || !filterPanel || !sortToggle || !sortPanel) return;
+    const {
+      filterToggle,
+      filterPanel,
+      sortToggle,
+      sortPanel,
+      columnToggle,
+      columnPanel,
+    } = currentExplorerControls();
+    if (
+      !filterToggle ||
+      !filterPanel ||
+      !sortToggle ||
+      !sortPanel ||
+      !columnToggle ||
+      !columnPanel
+    )
+      return;
     if (!filterPanel.hidden) {
       positionFloatingPanel(filterPanel, filterToggle);
     }
     if (!sortPanel.hidden) {
       positionFloatingPanel(sortPanel, sortToggle);
     }
+    if (!columnPanel.hidden) {
+      positionFloatingPanel(columnPanel, columnToggle);
+    }
   });
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    const { filterToggle, filterPanel, sortToggle, sortPanel } =
-      currentExplorerControls();
-    if (!filterToggle || !filterPanel || !sortToggle || !sortPanel) return;
+    const {
+      filterToggle,
+      filterPanel,
+      sortToggle,
+      sortPanel,
+      columnToggle,
+      columnPanel,
+    } = currentExplorerControls();
+    if (
+      !filterToggle ||
+      !filterPanel ||
+      !sortToggle ||
+      !sortPanel ||
+      !columnToggle ||
+      !columnPanel
+    )
+      return;
     if (!filterPanel.hidden) {
       closeExplorerMenus();
       filterToggle.focus();
@@ -337,6 +453,11 @@ function setupViewMenu() {
     if (!sortPanel.hidden) {
       closeExplorerMenus();
       sortToggle.focus();
+      return;
+    }
+    if (!columnPanel.hidden) {
+      closeExplorerMenus();
+      columnToggle.focus();
     }
   });
 
@@ -604,6 +725,7 @@ async function navigate(path, push = true) {
   setupNavExternalLinks();
   setupViewMenu();
   syncViewMenu();
+  syncColumnControls();
   applyDocChromePref();
   populateDates();
   buildToc();

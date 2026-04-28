@@ -9,7 +9,14 @@ pub(crate) struct ViewConfig {
     pub(crate) default_use_ignore: bool,
     pub(crate) default_groups: Vec<String>,
     pub(crate) default_sort: walk::Sort,
+    pub(crate) default_columns: ColumnView,
     pub(crate) can_toggle_excludes: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ColumnView {
+    pub(crate) date: bool,
+    pub(crate) commit: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -19,6 +26,7 @@ pub(crate) struct ViewState {
     pub(crate) groups: Vec<String>,
     pub(crate) sort: walk::Sort,
     pub(crate) sort_dir: walk::SortDir,
+    pub(crate) columns: ColumnView,
 }
 
 #[derive(Default, Deserialize)]
@@ -29,6 +37,8 @@ pub(crate) struct ViewQuery {
     pub(crate) filter: Option<String>,
     pub(crate) sort: Option<String>,
     pub(crate) dir: Option<String>,
+    pub(crate) date: Option<String>,
+    pub(crate) commit: Option<String>,
 }
 
 pub(crate) fn matcher(view: &ViewState, filters: &filter::Set) -> Option<filter::Matcher> {
@@ -95,6 +105,18 @@ pub(crate) fn from_query(
         groups,
         sort,
         sort_dir,
+        columns: ColumnView {
+            date: q
+                .date
+                .as_deref()
+                .and_then(parse_bool_param)
+                .unwrap_or(cfg.default_columns.date),
+            commit: q
+                .commit
+                .as_deref()
+                .and_then(parse_bool_param)
+                .unwrap_or(cfg.default_columns.commit),
+        },
     }
 }
 
@@ -177,6 +199,18 @@ pub(crate) fn with_view(href: &str, view: &ViewState, cfg: &ViewConfig) -> Strin
         view.sort.default_dir().as_str(),
     );
     set_multi_string_param(&mut pairs, "group", &view.groups, &cfg.default_groups);
+    set_bool_param(
+        &mut pairs,
+        "date",
+        view.columns.date,
+        cfg.default_columns.date,
+    );
+    set_bool_param(
+        &mut pairs,
+        "commit",
+        view.columns.commit,
+        cfg.default_columns.commit,
+    );
 
     let mut out = path.to_string();
     if !pairs.is_empty() {
@@ -278,6 +312,10 @@ mod tests {
             default_use_ignore: true,
             default_groups: Vec::new(),
             default_sort: walk::Sort::Name,
+            default_columns: ColumnView {
+                date: true,
+                commit: true,
+            },
             can_toggle_excludes: true,
         };
         let view = ViewState {
@@ -286,6 +324,7 @@ mod tests {
             groups: Vec::new(),
             sort: cfg.default_sort,
             sort_dir: cfg.default_sort.default_dir(),
+            columns: cfg.default_columns,
         };
         assert_eq!(with_view("/", &view, &cfg), "/");
     }
@@ -301,6 +340,10 @@ mod tests {
             default_use_ignore: true,
             default_groups: Vec::new(),
             default_sort: walk::Sort::Name,
+            default_columns: ColumnView {
+                date: true,
+                commit: true,
+            },
             can_toggle_excludes: true,
         };
         let view = ViewState {
@@ -313,10 +356,14 @@ mod tests {
             groups: Vec::new(),
             sort: walk::Sort::Timestamp,
             sort_dir: walk::Sort::Timestamp.default_dir(),
+            columns: ColumnView {
+                date: false,
+                commit: false,
+            },
         };
         assert_eq!(
             with_view("/docs/", &view, &cfg),
-            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp"
+            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp&date=0&commit=0"
         );
     }
 
@@ -332,6 +379,10 @@ mod tests {
             default_use_ignore: true,
             default_groups: filters.default_groups().to_vec(),
             default_sort: walk::Sort::Name,
+            default_columns: ColumnView {
+                date: true,
+                commit: true,
+            },
             can_toggle_excludes: false,
         };
         let view = ViewState {
@@ -344,6 +395,7 @@ mod tests {
             groups: vec!["docs".to_string(), "web".to_string()],
             sort: walk::Sort::Name,
             sort_dir: walk::Sort::Name.default_dir(),
+            columns: cfg.default_columns,
         };
 
         assert_eq!(
@@ -364,6 +416,10 @@ mod tests {
             default_use_ignore: true,
             default_groups: filters.default_groups().to_vec(),
             default_sort: walk::Sort::Name,
+            default_columns: ColumnView {
+                date: true,
+                commit: true,
+            },
             can_toggle_excludes: false,
         };
         let view = ViewState {
@@ -376,6 +432,7 @@ mod tests {
             groups: Vec::new(),
             sort: walk::Sort::Name,
             sort_dir: walk::Sort::Name.default_dir(),
+            columns: cfg.default_columns,
         };
 
         assert_eq!(with_view("/docs/", &view, &cfg), "/docs/?group=");

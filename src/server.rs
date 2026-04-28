@@ -5,7 +5,7 @@ use crate::filter;
 use crate::render::{self, Rendered};
 use crate::repo::{RepoSet, SourceState};
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
-use crate::view::{self, ViewConfig, ViewQuery, ViewState};
+use crate::view::{self, ColumnView, ViewConfig, ViewQuery, ViewState};
 use crate::walk::{self, NavSet, ViewOpts};
 use crate::watch;
 
@@ -60,6 +60,7 @@ pub struct Options {
     pub use_ignore: bool,
     pub default_hidden: bool,
     pub default_filter_ext: bool,
+    pub default_columns: ColumnView,
     pub extensions: Vec<String>,
     pub filters: filter::Set,
     pub exclude_names: Vec<String>,
@@ -77,6 +78,7 @@ pub async fn run(options: Options) -> Result<()> {
         use_ignore,
         default_hidden,
         default_filter_ext,
+        default_columns,
         extensions,
         filters,
         exclude_names,
@@ -103,6 +105,7 @@ pub async fn run(options: Options) -> Result<()> {
         default_use_ignore: use_ignore,
         default_groups: filters.default_groups().to_vec(),
         default_sort: walk::Sort::Name,
+        default_columns,
         can_toggle_excludes: no_excludes,
     };
     let repo_root_buf = if mode == Mode::Dir {
@@ -583,14 +586,34 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     let has_parent = !rel.is_empty();
     let parent_href = view::with_view(&parent_href, &view, &s.view_cfg);
 
+    let entry_paths = if view.columns.commit {
+        dir.entries
+            .iter()
+            .map(|e| Path::new(rel).join(&e.name))
+            .map(|path| s.target.join(path))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let commit_messages = if view.columns.commit {
+        s.repos.commit_messages(&entry_paths)
+    } else {
+        Default::default()
+    };
+
     let entries: Vec<ExplorerEntry> = dir
         .entries
         .iter()
-        .map(|e| ExplorerEntry {
+        .enumerate()
+        .map(|(idx, e)| ExplorerEntry {
             name: e.name.clone(),
             href: view::with_view(&e.href, &view, &s.view_cfg),
             is_dir: e.is_dir,
             modified: e.modified,
+            commit_message: entry_paths
+                .get(idx)
+                .and_then(|path| commit_messages.get(path))
+                .cloned(),
         })
         .collect();
 
@@ -634,6 +657,8 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         has_parent,
         parent_href: &parent_href,
         show_excludes: s.view_cfg.can_toggle_excludes,
+        show_date: view.columns.date,
+        show_commit: view.columns.commit,
         filter_groups: s.filters.groups(),
         entries: &entries,
         readme: readme_tmpl,
@@ -697,6 +722,8 @@ fn respond_html(
         default_filter_ext: cfg.default.filter_ext,
         default_filter_group: cfg.default_groups.first().map(String::as_str),
         default_sort: cfg.default_sort.as_str(),
+        default_show_date: cfg.default_columns.date,
+        default_show_commit: cfg.default_columns.commit,
         can_toggle_excludes: cfg.can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,

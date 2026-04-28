@@ -1,8 +1,10 @@
 use crate::paths;
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 #[derive(Clone, Debug, Default)]
 pub struct RepoSet {
@@ -77,6 +79,37 @@ impl RepoSet {
             .map(|entry| entry.source.clone())
             .unwrap_or(SourceState::NoRepo)
     }
+
+    pub fn commit_messages(&self, paths: &[PathBuf]) -> BTreeMap<PathBuf, String> {
+        let mut out = BTreeMap::new();
+        for entry in &self.entries {
+            let mut requests = Vec::new();
+            for path in paths {
+                if out.contains_key(path) || !path.starts_with(&entry.root) {
+                    continue;
+                }
+                let Ok(rel) = path.strip_prefix(&entry.root) else {
+                    continue;
+                };
+                if rel.as_os_str().is_empty() {
+                    continue;
+                }
+                requests.push(LogRequest {
+                    abs: path.clone(),
+                    rel: path_key(rel),
+                    is_dir: path.is_dir(),
+                });
+            }
+            out.extend(commit_messages_for_repo(&entry.root, &requests));
+        }
+        out
+    }
+}
+
+struct LogRequest {
+    abs: PathBuf,
+    rel: String,
+    is_dir: bool,
 }
 
 fn push_root(roots: &mut Vec<PathBuf>, seen: &mut HashSet<PathBuf>, root: PathBuf) {
@@ -177,6 +210,70 @@ fn git_config_path(dot_git: &Path) -> Option<PathBuf> {
         return Some(gitdir.join("config"));
     }
     None
+}
+
+fn commit_messages_for_repo(root: &Path, requests: &[LogRequest]) -> BTreeMap<PathBuf, String> {
+    if requests.is_empty() {
+        return BTreeMap::new();
+    }
+
+    let mut cmd = Command::new("git");
+    cmd.arg("--no-pager")
+        .arg("-C")
+        .arg(root)
+        .arg("log")
+        .arg("--format=format:%x1f%s")
+        .arg("--name-only")
+        .arg("--")
+        .args(requests.iter().map(|request| request.rel.as_str()))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let Ok(mut child) = cmd.spawn() else {
+        return BTreeMap::new();
+    };
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.wait();
+        return BTreeMap::new();
+    };
+
+    let mut out = BTreeMap::new();
+    let mut subject = String::new();
+    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        if let Some(next_subject) = line.strip_prefix('\x1f') {
+            subject = next_subject.to_string();
+            continue;
+        }
+        if subject.is_empty() || line.is_empty() {
+            continue;
+        }
+        for request in requests {
+            if out.contains_key(&request.abs) || !log_path_matches(request, &line) {
+                continue;
+            }
+            out.insert(request.abs.clone(), subject.clone());
+        }
+        if out.len() == requests.len() {
+            let _ = child.kill();
+            break;
+        }
+    }
+    let _ = child.wait();
+    out
+}
+
+fn log_path_matches(request: &LogRequest, changed: &str) -> bool {
+    if changed == request.rel {
+        return true;
+    }
+    let Some(rest) = changed.strip_prefix(&request.rel) else {
+        return false;
+    };
+    request.is_dir && rest.starts_with('/')
+}
+
+fn path_key(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 fn parse_remotes(config_path: &Path) -> Vec<(String, String)> {
@@ -384,7 +481,10 @@ fn web_label(host: &str, path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Forge, SourceState, classify_remote, parse_remote_section};
+    use super::{
+        Forge, LogRequest, SourceState, classify_remote, log_path_matches, parse_remote_section,
+    };
+    use std::path::PathBuf;
 
     #[test]
     fn github_scp_maps_to_web() {
@@ -450,5 +550,29 @@ mod tests {
             parse_remote_section(r#"[remote "origin"]"#),
             Some("origin".to_string())
         );
+    }
+
+    #[test]
+    fn log_path_matches_files_exactly() {
+        let request = LogRequest {
+            abs: PathBuf::from("src/view.rs"),
+            rel: "src/view.rs".to_string(),
+            is_dir: false,
+        };
+
+        assert!(log_path_matches(&request, "src/view.rs"));
+        assert!(!log_path_matches(&request, "src/view.rs.bak"));
+    }
+
+    #[test]
+    fn log_path_matches_directory_children() {
+        let request = LogRequest {
+            abs: PathBuf::from("src"),
+            rel: "src".to_string(),
+            is_dir: true,
+        };
+
+        assert!(log_path_matches(&request, "src/view.rs"));
+        assert!(!log_path_matches(&request, "src-old/view.rs"));
     }
 }
