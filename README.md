@@ -2,7 +2,7 @@
 
 Explore your filesystem and render Markdown as if it were on GitHub.
 
-Ghrm supports all **G**it**H**ub-flavored Markdown features, **R**ead**m**e and source code viewing, detects repositories, has instant file retrieval, and works 100% **offline**. It makes file browsing and file reading feel more continuous.
+Ghrm supports all **G**it**H**ub-flavored Markdown features, **R**ead**m**e and source code viewing, detects repositories, has instant file retrieval, and works 100% **offline**. It makes file browsing and file reading feel more continuous and much easier to work on projects mixing images, HTML, large tables and JSON and other assets in your browser. You get both the backend performance of Rust and the multimedia performance of your browser.
 
 ## Supported Features
 
@@ -74,7 +74,12 @@ rm -r ~/.cache/ghrm
 
 ## Roadmap
 
-- No current plans
+- Add metadata configuration in header-actions (test these out one by one and bench)
+  - last commit message for each file/directory
+  - fs timestamp date or git timestamp cwitch for each file/directory
+  - header-action for given search string (content or path search)
+  - line count for files
+  - size on disk of file or directory
 
 ## License
 

@@ -2,6 +2,28 @@ import { escapeHtml } from './dom.js';
 import { currentView, withView } from './view.js';
 
 let searchMode = 'path';
+let searchOpen = false;
+let searchQuery = '';
+let refreshSearch = null;
+let closeDirtySearch = null;
+let searchDirty = false;
+let searchView = null;
+
+export function hasActiveSearch() {
+  return searchOpen && searchQuery.trim().length > 0 && Boolean(refreshSearch);
+}
+
+export function refreshActiveSearch(view = null) {
+  if (!hasActiveSearch()) return false;
+  searchDirty = true;
+  searchView = view;
+  refreshSearch();
+  return true;
+}
+
+export function setSearchCloseHandler(handler) {
+  closeDirtySearch = handler;
+}
 
 function highlightMatch(value, query) {
   const lower = value.toLowerCase();
@@ -33,7 +55,7 @@ function ensureNavTable(article) {
   return next;
 }
 
-function renderSearchRows(tbody, results, query) {
+function renderSearchRows(tbody, results, query, view) {
   if (results.length === 0) {
     tbody.innerHTML =
       '<tr class="ghrm-search-empty"><td colspan="3">No matching paths.</td></tr>';
@@ -49,7 +71,7 @@ function renderSearchRows(tbody, results, query) {
 
     const link = row.querySelector('.ghrm-search-path');
     const date = row.querySelector('.ghrm-nav-date');
-    link.href = withView(entry.href);
+    link.href = withView(entry.href, view);
     link.innerHTML = highlightMatch(entry.display, query);
     if (entry.modified) {
       date.dataset.ts = String(entry.modified);
@@ -58,8 +80,7 @@ function renderSearchRows(tbody, results, query) {
   }
 }
 
-function buildSearchParams(query, extraParams = {}) {
-  const view = currentView();
+function buildSearchParams(query, extraParams = {}, view = currentView()) {
   const params = new URLSearchParams();
   params.set('q', query);
   for (const [k, v] of Object.entries(extraParams)) {
@@ -77,9 +98,9 @@ function buildSearchParams(query, extraParams = {}) {
   return params;
 }
 
-async function pathSearch(query, currentPath) {
+async function pathSearch(query, currentPath, view) {
   const extra = currentPath ? { path: currentPath } : {};
-  const params = buildSearchParams(query, extra);
+  const params = buildSearchParams(query, extra, view);
   const res = await fetch(`/_ghrm/path-search?${params}`).catch(() => null);
   if (!res || !res.ok) return { results: [], truncated: false, max_rows: 0 };
   return res
@@ -87,8 +108,8 @@ async function pathSearch(query, currentPath) {
     .catch(() => ({ results: [], truncated: false, max_rows: 0 }));
 }
 
-async function contentSearch(query) {
-  const params = buildSearchParams(query);
+async function contentSearch(query, view) {
+  const params = buildSearchParams(query, {}, view);
   const res = await fetch(`/_ghrm/search?${params}`).catch(() => null);
   if (!res || !res.ok) return { results: [], truncated: false, max_rows: 0 };
   return res
@@ -167,7 +188,7 @@ function formatContentSnippet(text, ranges) {
   return html;
 }
 
-function renderContentRows(tbody, results, truncated, maxRows) {
+function renderContentRows(tbody, results, truncated, maxRows, view) {
   if (results.length === 0) {
     tbody.innerHTML =
       '<tr class="ghrm-search-empty"><td colspan="3">No matches found.</td></tr>';
@@ -183,7 +204,7 @@ function renderContentRows(tbody, results, truncated, maxRows) {
     const link = row.querySelector('.ghrm-content-path');
     const textEl = row.querySelector('.ghrm-content-text');
 
-    link.href = withView(`/${match.path}`);
+    link.href = withView(`/${match.path}`, view);
     link.innerHTML =
       `<strong>${escapeHtml(match.path)}</strong>` +
       `<span class="ghrm-content-line">:${match.line}</span>`;
@@ -213,19 +234,22 @@ export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
   const tbody = table?.querySelector('tbody');
   if (!search || !input || !button || !status) return;
 
+  const restoredOpen = searchOpen && Boolean(article);
+  searchView = null;
   search.hidden = !article;
-  search.classList.remove('is-open');
+  search.classList.toggle('is-open', restoredOpen);
   search.dataset.mode = searchMode;
-  input.value = '';
+  input.value = restoredOpen ? searchQuery : '';
   input.placeholder =
     searchMode === 'content' ? 'Search content' : 'Search paths';
-  input.tabIndex = -1;
+  input.tabIndex = restoredOpen ? 0 : -1;
   input.oninput = null;
   input.onkeydown = null;
   button.onclick = null;
   if (modeBtn) modeBtn.onclick = null;
-  button.setAttribute('aria-expanded', 'false');
+  button.setAttribute('aria-expanded', restoredOpen ? 'true' : 'false');
   status.textContent = '';
+  refreshSearch = null;
   if (!article || !table || !tbody) return;
 
   const empty = article.querySelector('.ghrm-nav-empty');
@@ -259,9 +283,27 @@ export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
     }
   };
 
+  const closeSearch = () => {
+    search.classList.remove('is-open');
+    searchOpen = false;
+    searchView = null;
+    button.setAttribute('aria-expanded', 'false');
+    input.tabIndex = -1;
+    input.value = '';
+    searchQuery = '';
+    searchSeq += 1;
+    if (searchDirty && closeDirtySearch) {
+      searchDirty = false;
+      closeDirtySearch();
+    } else {
+      resetSearch();
+    }
+  };
+
   if (modeBtn) {
     modeBtn.onclick = () => {
-      const query = input.value.trim();
+      searchQuery = input.value;
+      const query = searchQuery.trim();
       searchMode = searchMode === 'path' ? 'content' : 'path';
       updateMode();
       if (!query) {
@@ -277,45 +319,57 @@ export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
 
   button.onclick = () => {
     const open = !search.classList.contains('is-open');
+    searchOpen = open;
     search.classList.toggle('is-open', open);
     button.setAttribute('aria-expanded', open ? 'true' : 'false');
     input.tabIndex = open ? 0 : -1;
     if (open) {
       input.focus();
     } else {
-      input.value = '';
-      searchSeq += 1;
-      resetSearch();
+      closeSearch();
     }
   };
 
   const doSearch = async () => {
     searchSeq += 1;
     const seq = searchSeq;
-    const query = input.value.trim();
+    searchQuery = input.value;
+    const query = searchQuery.trim();
+    const view = searchView || currentView();
     if (!query) {
-      resetSearch();
+      if (searchDirty && closeDirtySearch) {
+        searchDirty = false;
+        closeDirtySearch();
+      } else {
+        resetSearch();
+      }
       return;
     }
 
     if (searchMode === 'content') {
       status.textContent = 'Searching...';
-      const resp = await contentSearch(query);
+      const resp = await contentSearch(query, view);
       if (seq !== searchSeq) return;
       if (empty) empty.hidden = true;
       table.hidden = false;
-      renderContentRows(tbody, resp.results, resp.truncated, resp.max_rows);
+      renderContentRows(
+        tbody,
+        resp.results,
+        resp.truncated,
+        resp.max_rows,
+        view,
+      );
       const count = resp.results.length;
       const suffix = resp.truncated ? '+' : '';
       status.textContent =
         count === 1 ? '1 match' : `${count}${suffix} matches`;
     } else {
-      const resp = await pathSearch(query, currentPath);
+      const resp = await pathSearch(query, currentPath, view);
       if (seq !== searchSeq) return;
       const results = resp.results ?? [];
       if (empty) empty.hidden = true;
       table.hidden = false;
-      renderSearchRows(tbody, results, query);
+      renderSearchRows(tbody, results, query, view);
       const suffix = resp.truncated ? '+' : '';
       status.textContent =
         results.length === 1
@@ -330,12 +384,12 @@ export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
 
   input.onkeydown = (e) => {
     if (e.key !== 'Escape') return;
-    search.classList.remove('is-open');
-    button.setAttribute('aria-expanded', 'false');
-    input.tabIndex = -1;
-    input.value = '';
-    searchSeq += 1;
-    resetSearch();
+    closeSearch();
     button.focus();
   };
+
+  refreshSearch = doSearch;
+  if (restoredOpen && searchQuery.trim()) {
+    doSearch();
+  }
 }

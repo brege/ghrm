@@ -52,10 +52,8 @@ pub(crate) fn from_query(
     cfg: &ViewConfig,
     filters: &filter::Set,
 ) -> ViewState {
-    let mut groups = parse_group_params(raw_query, filters);
-    if groups.is_empty() {
-        groups = cfg.default_groups.clone();
-    }
+    let groups =
+        parse_group_params(raw_query, filters).unwrap_or_else(|| cfg.default_groups.clone());
     let filter_ext = q
         .filter
         .as_deref()
@@ -100,8 +98,9 @@ pub(crate) fn from_query(
     }
 }
 
-fn parse_group_params(raw_query: Option<&str>, filters: &filter::Set) -> Vec<String> {
+fn parse_group_params(raw_query: Option<&str>, filters: &filter::Set) -> Option<Vec<String>> {
     let mut groups = Vec::new();
+    let mut found = false;
     for pair in raw_query
         .unwrap_or("")
         .split('&')
@@ -111,10 +110,11 @@ fn parse_group_params(raw_query: Option<&str>, filters: &filter::Set) -> Vec<Str
             .split_once('=')
             .map_or((pair, ""), |(key, value)| (key, value));
         if key == "group" {
+            found = true;
             groups.push(decode_query_value(value));
         }
     }
-    filters.normalize_groups(&groups)
+    found.then(|| filters.normalize_groups(&groups))
 }
 
 fn decode_query_value(raw: &str) -> String {
@@ -238,6 +238,10 @@ fn set_multi_string_param(
 ) {
     pairs.retain(|(current, _)| current != key);
     if values != default_values {
+        if values.is_empty() {
+            pairs.push((key.to_string(), String::new()));
+            return;
+        }
         for value in values {
             pairs.push((key.to_string(), value.clone()));
         }
@@ -253,7 +257,14 @@ mod tests {
     fn parse_group_params_accepts_repeated_keys() {
         let filters = group_filters();
         let groups = parse_group_params(Some("filter=1&group=docs&group=web"), &filters);
-        assert_eq!(groups, vec!["docs".to_string(), "web".to_string()]);
+        assert_eq!(groups, Some(vec!["docs".to_string(), "web".to_string()]));
+    }
+
+    #[test]
+    fn parse_group_params_preserves_explicit_empty_groups() {
+        let filters = group_filters();
+        let groups = parse_group_params(Some("group="), &filters);
+        assert_eq!(groups, Some(Vec::new()));
     }
 
     #[test]
@@ -339,5 +350,34 @@ mod tests {
             with_view("/docs/", &view, &cfg),
             "/docs/?filter=1&group=docs&group=web"
         );
+    }
+
+    #[test]
+    fn with_view_preserves_empty_selected_groups() {
+        let filters = group_filters();
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: false,
+            },
+            default_use_ignore: true,
+            default_groups: filters.default_groups().to_vec(),
+            default_sort: walk::Sort::Name,
+            can_toggle_excludes: false,
+        };
+        let view = ViewState {
+            opts: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: false,
+            },
+            use_ignore: true,
+            groups: Vec::new(),
+            sort: walk::Sort::Name,
+            sort_dir: walk::Sort::Name.default_dir(),
+        };
+
+        assert_eq!(with_view("/docs/", &view, &cfg), "/docs/?group=");
     }
 }

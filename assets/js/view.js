@@ -64,7 +64,8 @@ function parseSortDir(raw) {
 
 export function currentView() {
   const params = new URLSearchParams(location.search);
-  const groups = params.getAll('group');
+  const hasGroups = params.has('group');
+  const groups = params.getAll('group').filter((group) => group);
   return {
     showHidden: parseQueryBool(params.get('hidden')) ?? defaultShowHidden(),
     showExcludes: canToggleExcludes()
@@ -76,8 +77,7 @@ export function currentView() {
     sortDir:
       parseSortDir(params.get('dir')) ||
       defaultSortDir(parseSort(params.get('sort')) || defaultSort()),
-    filterGroups:
-      groups.length > 0 ? [...new Set(groups)] : defaultFilterGroups(),
+    filterGroups: hasGroups ? [...new Set(groups)] : defaultFilterGroups(),
   };
 }
 
@@ -126,6 +126,9 @@ export function withView(urlLike, view = currentView()) {
     groups.length !== defaults.length ||
     groups.some((group, index) => group !== defaults[index])
   ) {
+    if (groups.length === 0) {
+      url.searchParams.append('group', '');
+    }
     for (const group of groups) {
       url.searchParams.append('group', group);
     }

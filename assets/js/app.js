@@ -10,7 +10,12 @@ import {
   scrollToHash,
 } from './dom.js';
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
-import { setupPathSearch } from './search.js';
+import {
+  hasActiveSearch,
+  refreshActiveSearch,
+  setSearchCloseHandler,
+  setupPathSearch,
+} from './search.js';
 import { buildToc, setupToc } from './toc.js';
 import {
   canToggleExcludes,
@@ -28,8 +33,7 @@ import {
 let explorerMenusBound = false;
 let reopenFilterMenu = false;
 
-function syncViewMenu() {
-  const view = currentView();
+function syncViewMenu(view = currentView()) {
   const toggle = document.getElementById('ghrm-view-menu-toggle');
   if (toggle) {
     const active =
@@ -52,15 +56,15 @@ function syncViewMenu() {
       (button.dataset.viewToggle === 'excludes' && view.showExcludes) ||
       (button.dataset.viewToggle === 'ignored' && !view.useIgnore) ||
       (button.dataset.viewToggle === 'filter' && view.filterExt) ||
-      (button.dataset.filterGroup &&
+      (view.filterExt &&
+        button.dataset.filterGroup &&
         view.filterGroups.includes(button.dataset.filterGroup));
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-checked', active ? 'true' : 'false');
   }
 }
 
-function syncSortControls() {
-  const view = currentView();
+function syncSortControls(view = currentView()) {
   const sortToggle = document.getElementById('ghrm-sort-menu-toggle');
   if (sortToggle) {
     const active =
@@ -146,6 +150,20 @@ function openExplorerMenu(toggle, panel) {
   positionFloatingPanel(panel, toggle);
 }
 
+function applyView(next, { closeMenus = false } = {}) {
+  const target = withView(location.href, next);
+  if (hasActiveSearch()) {
+    if (closeMenus) closeExplorerMenus();
+    history.pushState(null, '', target);
+    syncViewMenu(next);
+    syncSortControls(next);
+    refreshActiveSearch(next);
+    return;
+  }
+  if (closeMenus) closeExplorerMenus();
+  navigate(target);
+}
+
 function currentExplorerControls() {
   return {
     filterToggle: document.getElementById('ghrm-view-menu-toggle'),
@@ -195,7 +213,7 @@ function setupViewMenu() {
       filterGroups: [...view.filterGroups],
       sortDir: view.sortDir === 'desc' ? 'asc' : 'desc',
     };
-    navigate(withView(location.href, next));
+    applyView(next);
   };
 
   for (const button of filterPanel.querySelectorAll('.ghrm-view-option')) {
@@ -241,8 +259,10 @@ function setupViewMenu() {
           }
           return;
       }
-      reopenFilterMenu = true;
-      navigate(withView(location.href, next));
+      if (!hasActiveSearch()) {
+        reopenFilterMenu = true;
+      }
+      applyView(next);
     };
   }
 
@@ -258,8 +278,7 @@ function setupViewMenu() {
       if (!new URLSearchParams(location.search).has('dir')) {
         next.sortDir = defaultSortDir(next.sort);
       }
-      closeExplorerMenus();
-      navigate(withView(location.href, next));
+      applyView(next, { closeMenus: true });
     };
   }
 
@@ -544,6 +563,10 @@ function setupSpaNav() {
 }
 
 function setupSearch() {
+  setSearchCloseHandler(() => {
+    const target = `${location.pathname}${location.search}${location.hash}`;
+    navigate(target, false);
+  });
   setupPathSearch({ populateDates, setupNavExternalLinks });
 }
 
