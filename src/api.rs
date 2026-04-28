@@ -1,4 +1,3 @@
-use crate::column;
 use crate::render;
 use crate::search as content_search;
 use crate::server::{AppState, Mode};
@@ -146,7 +145,7 @@ pub(crate) async fn path_search(
     let current_path = q.path.as_deref().unwrap_or("").trim_matches('/');
     let matcher = view::matcher(&view, &s.filters);
     let tree = s.nav_tree(&view, matcher.as_ref());
-    let mut resp = path_search_results(
+    let resp = path_search_results(
         &tree,
         current_path,
         query,
@@ -154,23 +153,6 @@ pub(crate) async fn path_search(
         view.sort,
         view.sort_dir,
     );
-    if view.columns.is_visible(column::Id::CommitMessage)
-        || view.columns.is_visible(column::Id::CommitDate)
-    {
-        let paths: Vec<_> = resp
-            .results
-            .iter()
-            .map(|row| row.href.trim_matches('/'))
-            .map(|rel| s.target.join(rel))
-            .collect();
-        let commits = s.repos.commit_info(&paths);
-        for (row, path) in resp.results.iter_mut().zip(paths) {
-            if let Some(commit) = commits.get(&path) {
-                row.commit_message = Some(commit.subject.clone());
-                row.commit_date = Some(commit.timestamp);
-            }
-        }
-    }
 
     json_response(&resp, "api_path_search")
 }
