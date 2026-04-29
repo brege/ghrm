@@ -1,4 +1,5 @@
 import { escapeHtml } from './dom.js';
+import { beginActivity, endActivity } from './status.js';
 import { columnKeys, currentView, withView } from './view.js';
 
 const SEARCH_COLUMN_KEYS = ['date'];
@@ -427,41 +428,46 @@ export function setupPathSearch({
       }
       return;
     }
-    applySearchColumns(article, activeSearchColumnKeys(view));
+    beginActivity();
+    try {
+      applySearchColumns(article, activeSearchColumnKeys(view));
 
-    if (searchMode === 'content') {
-      status.textContent = 'Searching...';
-      const resp = await contentSearch(query, view);
-      if (seq !== searchSeq) return;
-      if (empty) empty.hidden = true;
-      table.hidden = false;
-      renderContentRows(
-        article,
-        tbody,
-        resp.results,
-        resp.truncated,
-        resp.max_rows,
-        view,
-      );
-      const count = resp.results.length;
-      const suffix = resp.truncated ? '+' : '';
-      status.textContent =
-        count === 1 ? '1 match' : `${count}${suffix} matches`;
-      populateDates();
-    } else {
-      const resp = await pathSearch(query, currentPath, view);
-      if (seq !== searchSeq) return;
-      const results = resp.results ?? [];
-      if (empty) empty.hidden = true;
-      table.hidden = false;
-      renderSearchRows(article, tbody, results, query, view);
-      const suffix = resp.truncated ? '+' : '';
-      status.textContent =
-        results.length === 1
-          ? `1${suffix} path`
-          : `${results.length}${suffix} paths`;
-      populateDates();
-      setupNavExternalLinks();
+      if (searchMode === 'content') {
+        status.textContent = 'Searching...';
+        const resp = await contentSearch(query, view);
+        if (seq !== searchSeq) return;
+        if (empty) empty.hidden = true;
+        table.hidden = false;
+        renderContentRows(
+          article,
+          tbody,
+          resp.results,
+          resp.truncated,
+          resp.max_rows,
+          view,
+        );
+        const count = resp.results.length;
+        const suffix = resp.truncated ? '+' : '';
+        status.textContent =
+          count === 1 ? '1 match' : `${count}${suffix} matches`;
+        populateDates();
+      } else {
+        const resp = await pathSearch(query, currentPath, view);
+        if (seq !== searchSeq) return;
+        const results = resp.results ?? [];
+        if (empty) empty.hidden = true;
+        table.hidden = false;
+        renderSearchRows(article, tbody, results, query, view);
+        const suffix = resp.truncated ? '+' : '';
+        status.textContent =
+          results.length === 1
+            ? `1${suffix} path`
+            : `${results.length}${suffix} paths`;
+        populateDates();
+        setupNavExternalLinks();
+      }
+    } finally {
+      endActivity();
     }
   };
 

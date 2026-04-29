@@ -801,16 +801,27 @@ fn source_html(source: &SourceState) -> String {
     match source {
         SourceState::Web { url, label, .. } => web_source_html(url, label),
         SourceState::Transport { raw } => format!(
-            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-disabled\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#ghrm-icon-git\"></use></svg><span class=\"ghrm-source-text\">{text}</span></span>",
+            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-disabled is-muted\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></a><span class=\"ghrm-source-text\">{text}</span></span>",
             raw = html_escape::encode_double_quoted_attribute(raw),
+            project_href = html_escape::encode_double_quoted_attribute(PROJECT_REMOTE_URL),
             text = html_escape::encode_text(raw),
         ),
-        SourceState::NoRemote => "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-disabled\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#ghrm-icon-git\"></use></svg><span class=\"ghrm-source-text\">no remote</span></span>".to_string(),
-        SourceState::NoRepo => String::new(),
+        SourceState::NoRemote => format!(
+            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-disabled is-muted\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></a><span class=\"ghrm-source-text\">no remote</span></span>",
+            project_href = html_escape::encode_double_quoted_attribute(PROJECT_REMOTE_URL),
+        ),
+        SourceState::NoRepo => project_source_html(),
     }
 }
 
 const PROJECT_REMOTE_URL: &str = "https://github.com/brege/ghrm";
+
+fn project_source_html() -> String {
+    let project_href = html_escape::encode_double_quoted_attribute(PROJECT_REMOTE_URL);
+    format!(
+        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></a><span class=\"ghrm-source-text\"><a class=\"ghrm-source-repo\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\">ghrm</a></span></span>",
+    )
+}
 
 fn web_source_html(url: &str, label: &str) -> String {
     let href = html_escape::encode_double_quoted_attribute(url);
@@ -836,7 +847,7 @@ fn web_source_html(url: &str, label: &str) -> String {
     };
 
     format!(
-        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#ghrm-icon-source\"></use></svg></a><span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
+        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></a><span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
     )
 }
 

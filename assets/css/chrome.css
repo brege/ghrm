@@ -107,26 +107,16 @@ body.ghrm-doc-flat #ghrm-source-slot {
 
 .ghrm-source-badge {
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
   display: inline-flex;
   align-self: center;
   align-items: center;
   justify-content: center;
   line-height: 0;
-  color: inherit;
 }
 
 .ghrm-source-link.is-disabled {
   color: var(--fgColor-muted, #636c76);
   cursor: default;
-}
-
-.ghrm-source-link svg {
-  flex: 0 0 auto;
-  display: block;
-  width: 16px;
-  height: 16px;
 }
 
 .ghrm-source-text {
@@ -167,8 +157,7 @@ body.ghrm-doc-flat #ghrm-source-slot {
 }
 
 #doc-chrome-toggle svg,
-#theme-toggle svg,
-.ghrm-source-link svg {
+#theme-toggle svg {
   fill: currentColor;
   stroke: currentColor;
   stroke-width: 0;

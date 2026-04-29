@@ -16,6 +16,12 @@ import {
   setSearchCloseHandler,
   setupPathSearch,
 } from './search.js';
+import {
+  beginActivity,
+  endActivity,
+  setConnected,
+  syncServerStatus,
+} from './status.js';
 import { buildToc, setupToc } from './toc.js';
 import {
   canToggleExcludes,
@@ -588,10 +594,17 @@ function setupLiveReload() {
   const url = `${proto}//${location.host}/_ghrm/ws`;
   function connect() {
     const ws = new WebSocket(url);
+    ws.onopen = () => {
+      setConnected(true);
+    };
     ws.onmessage = (ev) => {
       if (ev.data === 'reload') location.reload();
     };
+    ws.onerror = () => {
+      setConnected(false);
+    };
     ws.onclose = () => {
+      setConnected(false);
       setTimeout(connect, 1000);
     };
   }
@@ -631,48 +644,54 @@ function setupSearch() {
 }
 
 async function navigate(path, push = true) {
-  const url = new URL(path, location.origin);
-  const target = `${url.pathname}${url.search}${url.hash}`;
-  const res = await fetch(target).catch(() => null);
-  if (!res || !res.ok) return;
+  beginActivity();
+  try {
+    const url = new URL(path, location.origin);
+    const target = `${url.pathname}${url.search}${url.hash}`;
+    const res = await fetch(target).catch(() => null);
+    if (!res || !res.ok) return;
 
-  const html = await res.text();
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const newArticle = doc.querySelector('article.markdown-body');
-  if (!newArticle) return;
-  const nextSource = doc.getElementById('ghrm-source-slot');
-  const currentSource = document.getElementById('ghrm-source-slot');
-  if (currentSource && nextSource) {
-    currentSource.replaceWith(nextSource);
-  } else if (currentSource) {
-    currentSource.remove();
-  } else if (nextSource) {
-    document.querySelector('.ghrm-topbar-inner')?.prepend(nextSource);
-  }
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const newArticle = doc.querySelector('article.markdown-body');
+    if (!newArticle) return;
+    const nextSource = doc.getElementById('ghrm-source-slot');
+    const currentSource = document.getElementById('ghrm-source-slot');
+    if (currentSource && nextSource) {
+      currentSource.replaceWith(nextSource);
+    } else if (currentSource) {
+      currentSource.remove();
+    } else if (nextSource) {
+      document.querySelector('.ghrm-topbar-inner')?.prepend(nextSource);
+    }
+    syncServerStatus();
 
-  const existing = document.querySelector('article.markdown-body');
-  if (existing) {
-    existing.replaceWith(newArticle);
-  } else {
-    document.body.appendChild(newArticle);
-  }
+    const existing = document.querySelector('article.markdown-body');
+    if (existing) {
+      existing.replaceWith(newArticle);
+    } else {
+      document.body.appendChild(newArticle);
+    }
 
-  document.title = doc.title;
-  if (push) history.pushState(null, '', target);
-  setupFileViews();
-  setupSearch();
-  setupNavExternalLinks();
-  setupViewMenu();
-  syncViewMenu();
-  syncColumnControls();
-  applyDocChromePref();
-  populateDates();
-  buildToc();
-  const hash = url.hash;
-  if (!hash || !scrollToHash(hash)) {
-    window.scrollTo(0, 0);
+    document.title = doc.title;
+    if (push) history.pushState(null, '', target);
+    setupFileViews();
+    setupSearch();
+    setupNavExternalLinks();
+    setupViewMenu();
+    syncViewMenu();
+    syncColumnControls();
+    applyDocChromePref();
+    populateDates();
+    buildToc();
+    const hash = url.hash;
+    if (!hash || !scrollToHash(hash)) {
+      window.scrollTo(0, 0);
+    }
+    document.dispatchEvent(new CustomEvent('ghrm:contentready'));
+  } finally {
+    endActivity();
   }
-  document.dispatchEvent(new CustomEvent('ghrm:contentready'));
 }
 
 function setupNavExternalLinks() {
