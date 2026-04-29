@@ -62,7 +62,7 @@ function renderColumnCell(cell) {
   td.className = cell.class || '';
   td.dataset.columnKey = cell.key || '';
   td.hidden = Boolean(cell.hidden);
-  if (cell.timestamp) {
+  if (cell.timestamp !== null && cell.timestamp !== undefined) {
     td.dataset.ts = String(cell.timestamp);
   }
   if (cell.text) {
@@ -84,6 +84,12 @@ function searchColspan() {
 
 function fullColspan() {
   return columnKeys().length + 2;
+}
+
+function contentColspan() {
+  const dateIndex = columnKeys().indexOf('date');
+  if (dateIndex === -1) return fullColspan() - 1;
+  return dateIndex + 1;
 }
 
 function applySearchColumns(article) {
@@ -248,7 +254,7 @@ function renderContentRows(article, tbody, results, truncated, maxRows, view) {
     const textEl = row.querySelector('.ghrm-content-text');
     const cell = row.querySelector('.ghrm-content-cell');
     if (cell) {
-      cell.colSpan = fullColspan() - 1;
+      cell.colSpan = contentColspan();
     }
 
     link.href = withView(`/${match.path}`, view);
@@ -256,6 +262,13 @@ function renderContentRows(article, tbody, results, truncated, maxRows, view) {
       `<strong>${escapeHtml(match.path)}</strong>` +
       `<span class="ghrm-content-line">:${match.line}</span>`;
     textEl.innerHTML = formatContentSnippet(match.text, match.ranges);
+    row.append(
+      renderColumnCell({
+        key: 'date',
+        class: 'ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta',
+        timestamp: match.modified,
+      }),
+    );
     tbody.append(row);
   }
 
@@ -417,6 +430,7 @@ export function setupPathSearch({
       const suffix = resp.truncated ? '+' : '';
       status.textContent =
         count === 1 ? '1 match' : `${count}${suffix} matches`;
+      populateDates();
     } else {
       const resp = await pathSearch(query, currentPath, view);
       if (seq !== searchSeq) return;

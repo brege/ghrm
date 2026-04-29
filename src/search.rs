@@ -9,6 +9,7 @@ use ignore::WalkBuilder;
 use serde::Serialize;
 use std::path::Path;
 use std::sync::Mutex;
+use std::time::UNIX_EPOCH;
 
 const MAX_LINE_LEN: usize = 500;
 
@@ -18,6 +19,7 @@ pub struct SearchResult {
     pub line: u64,
     pub text: String,
     pub ranges: Vec<(usize, usize)>,
+    pub modified: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -114,6 +116,12 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
             }
 
             let rel = rel.to_string_lossy().into_owned();
+            let modified = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_secs());
 
             let mut file_matches: Vec<SearchResult> = Vec::new();
             let search_result = searcher.search_path(
@@ -137,6 +145,7 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
                         line: line_num,
                         text,
                         ranges,
+                        modified,
                     });
 
                     Ok(true)
@@ -201,6 +210,8 @@ mod tests {
             group_filter: None,
             max_rows: 10,
         });
+
+        assert!(resp.results.iter().all(|result| result.modified.is_some()));
 
         let paths: Vec<_> = resp.results.into_iter().map(|result| result.path).collect();
         assert_eq!(paths, vec!["src/app.txt"]);
