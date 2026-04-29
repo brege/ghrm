@@ -620,6 +620,15 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   padding-left: 26px;
 }
 
+hr.ghrm-menu-separator {
+  all: unset;
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: var(--borderColor-muted, #d1d9e0b3);
+  margin: 6px 0;
+}
+
 .markdown-body .ghrm-nav-table {
   display: table;
   width: 100%;
@@ -629,6 +638,30 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   border: 0;
   border-radius: 0;
   overflow: visible;
+}
+
+.markdown-body .ghrm-nav-table .ghrm-column-headers {
+  border-bottom: 1px solid var(--borderColor-default, #d0d7de);
+}
+
+.markdown-body .ghrm-nav-table .ghrm-column-headers th {
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--fgColor-muted, #656d76);
+  border: none !important;
+  background: var(--bgColor-muted, #f6f8fa);
+}
+
+.ghrm-nav-icon-col,
+.ghrm-nav-table .ghrm-column-headers .ghrm-nav-icon {
+  width: 34px;
+}
+
+.ghrm-nav-table .ghrm-column-headers .ghrm-nav-meta-number,
+.ghrm-nav-table .ghrm-column-headers .ghrm-nav-meta-time {
+  text-align: right;
 }
 
 .ghrm-readme-box {
@@ -703,6 +736,7 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
 .markdown-body .ghrm-nav-table .ghrm-nav-name {
   min-width: 0;
   padding-left: 6px;
+  text-align: left;
 }
 
 .ghrm-nav-icon {
@@ -754,11 +788,6 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
 
 .ghrm-nav-meta[hidden] {
   display: none;
-}
-
-.ghrm-nav-meta-text {
-  width: clamp(12rem, 40%, 28rem);
-  max-width: 0;
 }
 
 .ghrm-nav-meta-text-value {

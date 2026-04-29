@@ -589,8 +589,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
 
     let show_commit_meta = view.columns.is_visible(column::Id::CommitMessage)
         || view.columns.is_visible(column::Id::CommitDate);
-    let show_line_meta = view.columns.is_visible(column::Id::LineCount);
-    let entry_paths = if show_commit_meta || show_line_meta {
+    let entry_paths: Vec<_> = if show_commit_meta {
         dir.entries
             .iter()
             .map(|e| Path::new(rel).join(&e.name))
@@ -616,13 +615,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
             cells: explorer_cells(
                 e.modified,
                 e.size,
-                if show_line_meta && !e.is_dir {
-                    entry_paths
-                        .get(idx)
-                        .and_then(|path| walk::line_count(path, e.size))
-                } else {
-                    None
-                },
+                e.lines,
                 entry_paths.get(idx).and_then(|path| commits.get(path)),
                 &view.columns,
             ),

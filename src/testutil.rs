@@ -74,5 +74,6 @@ pub(crate) fn nav_entry(name: &str, is_dir: bool, modified: Option<u64>) -> walk
         is_dir,
         modified,
         size: None,
+        lines: None,
     }
 }

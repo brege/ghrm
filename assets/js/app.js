@@ -124,11 +124,15 @@ function syncColumnControls(view = currentView()) {
     for (const cell of article.querySelectorAll('[data-column-key]')) {
       cell.hidden = !view.columns.has(cell.dataset.columnKey);
     }
+    const headers = article.querySelector('.ghrm-column-headers');
+    if (headers) {
+      headers.hidden = !view.showHeaders;
+    }
   }
   for (const button of menu?.panel.querySelectorAll('.ghrm-view-option') ||
     []) {
     const key = button.dataset.columnToggle;
-    const active = view.columns.has(key);
+    const active = key === 'headers' ? view.showHeaders : view.columns.has(key);
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-checked', active ? 'true' : 'false');
   }
@@ -137,7 +141,8 @@ function syncColumnControls(view = currentView()) {
     const defaults = defaultColumns();
     const active =
       view.columns.size !== defaults.size ||
-      [...view.columns].some((key) => !defaults.has(key));
+      [...view.columns].some((key) => !defaults.has(key)) ||
+      view.showHeaders;
     menu.toggle.classList.toggle('is-active', active);
   }
 }
@@ -339,7 +344,9 @@ function setupViewMenu() {
       };
       const key = button.dataset.columnToggle;
       if (!key) return;
-      if (next.columns.has(key)) {
+      if (key === 'headers') {
+        next.showHeaders = !view.showHeaders;
+      } else if (next.columns.has(key)) {
         next.columns.delete(key);
       } else {
         next.columns.add(key);

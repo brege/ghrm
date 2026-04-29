@@ -13,7 +13,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tracing::warn;
 
 #[derive(Serialize)]
@@ -117,7 +117,7 @@ struct PathSearchResult {
     #[serde(skip)]
     size: Option<u64>,
     #[serde(skip)]
-    rel_path: PathBuf,
+    lines: Option<u64>,
     cells: Vec<column::Cell>,
 }
 
@@ -151,7 +151,6 @@ pub(crate) async fn path_search(
     let matcher = view::matcher(&view, &s.filters);
     let tree = s.nav_tree(&view, matcher.as_ref());
     let resp = path_search_results(PathSearchSpec {
-        root: &s.target,
         tree: &tree,
         current_path,
         query,
@@ -165,7 +164,6 @@ pub(crate) async fn path_search(
 }
 
 struct PathSearchSpec<'a> {
-    root: &'a Path,
     tree: &'a walk::NavTree,
     current_path: &'a str,
     query: &'a str,
@@ -212,18 +210,17 @@ fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
             if !rel_path.to_lowercase().contains(&needle) {
                 continue;
             }
-            let rel_path = PathBuf::from(&rel_path);
             rows.push(PathSearchResult {
                 href: entry.href.clone(),
                 display: if entry.is_dir {
-                    format!("{}/", rel_path.to_string_lossy())
+                    format!("{rel_path}/")
                 } else {
-                    rel_path.to_string_lossy().into_owned()
+                    rel_path
                 },
                 is_dir: entry.is_dir,
                 modified: entry.modified,
                 size: entry.size,
-                rel_path,
+                lines: entry.lines,
                 cells: Vec::new(),
             });
         }
@@ -247,14 +244,8 @@ fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
 
     let truncated = rows.len() > spec.max_rows;
     rows.truncate(spec.max_rows);
-    let show_lines = spec.columns.is_visible(column::Id::LineCount);
     for row in &mut rows {
-        let lines = if show_lines && !row.is_dir {
-            walk::line_count(&spec.root.join(&row.rel_path), row.size)
-        } else {
-            None
-        };
-        row.cells = spec.columns.path_cells(row.modified, row.size, lines);
+        row.cells = spec.columns.path_cells(row.modified, row.size, row.lines);
     }
 
     PathSearchResponse {
@@ -286,6 +277,18 @@ fn cmp_path_rows(
             walk::Sort::Timestamp => apply_path_dir(
                 a.modified
                     .cmp(&b.modified)
+                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
+                dir,
+            ),
+            walk::Sort::Size => apply_path_dir(
+                a.size
+                    .cmp(&b.size)
+                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
+                dir,
+            ),
+            walk::Sort::Lines => apply_path_dir(
+                a.lines
+                    .cmp(&b.lines)
                     .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
                 dir,
             ),
@@ -405,6 +408,7 @@ mod tests {
                     walk::NavEntry {
                         href: "/newer.md".to_string(),
                         size: Some(2048),
+                        lines: Some(3),
                         ..nav_entry("newer.md", false, Some(9))
                     },
                 ],
@@ -418,7 +422,6 @@ mod tests {
         });
 
         let resp = path_search_results(PathSearchSpec {
-            root: td.path(),
             tree: &tree,
             current_path: "",
             query: "m",

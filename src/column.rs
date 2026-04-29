@@ -30,7 +30,7 @@ pub(crate) const DEFS: &[Def] = &[
         cell_class: "ghrm-nav-meta ghrm-nav-meta-text ghrm-nav-middle-meta",
         text_class: Some("ghrm-nav-meta-text-value"),
         edge: false,
-        default_visible: true,
+        default_visible: false,
     },
     Def {
         id: Id::CommitDate,

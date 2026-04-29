@@ -340,7 +340,7 @@ mod tests {
             default_use_ignore: true,
             default_groups: Vec::new(),
             default_sort: walk::Sort::Name,
-            default_columns: columns(true, true, true),
+            default_columns: columns(true, false, false),
             can_toggle_excludes: true,
         };
         let view = ViewState {
@@ -353,11 +353,11 @@ mod tests {
             groups: Vec::new(),
             sort: walk::Sort::Timestamp,
             sort_dir: walk::Sort::Timestamp.default_dir(),
-            columns: columns(false, false, false),
+            columns: columns(false, true, true),
         };
         assert_eq!(
             with_view("/docs/", &view, &cfg),
-            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp&commit=0&commit_date=0&date=0"
+            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp&commit=1&commit_date=1&date=0"
         );
     }
 
