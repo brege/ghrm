@@ -1,5 +1,6 @@
 use crate::column;
 use crate::filter::GroupMeta;
+use crate::walk;
 
 use anyhow::Result;
 use askama::Template;
@@ -21,6 +22,7 @@ pub struct PageShell<'a> {
     pub default_filter_group: Option<&'a str>,
     pub default_sort: &'a str,
     pub columns_json: &'a str,
+    pub sorts_json: &'a str,
     pub can_toggle_excludes: bool,
     pub has_mermaid: bool,
     pub has_math: bool,
@@ -47,6 +49,7 @@ pub struct ExplorerCtx<'a> {
     pub has_parent: bool,
     pub parent_href: &'a str,
     pub show_excludes: bool,
+    pub sort_defs: &'a [walk::SortDef],
     pub column_defs: &'a [column::Def],
     pub empty_cells: &'a [column::Cell],
     pub content_colspan: usize,

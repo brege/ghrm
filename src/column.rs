@@ -160,6 +160,10 @@ pub(crate) fn def_for_config_key(key: &str) -> Option<&'static Def> {
     DEFS.iter().find(|def| def.config_key == key)
 }
 
+pub(crate) fn def_for_key(key: &str) -> Option<&'static Def> {
+    DEFS.iter().find(|def| def.key == key)
+}
+
 pub(crate) fn required_meta(columns: &Set) -> MetaReq {
     DEFS.iter()
         .filter(|def| columns.is_visible(def))
@@ -206,6 +210,10 @@ impl Set {
 
     pub(crate) fn is_visible(&self, def: &Def) -> bool {
         self.visible.contains(def.key)
+    }
+
+    pub(crate) fn is_visible_key(&self, key: &str) -> bool {
+        def_for_key(key).is_some_and(|def| self.is_visible(def))
     }
 
     pub(crate) fn set_visible(&mut self, def: &'static Def, visible: bool) {

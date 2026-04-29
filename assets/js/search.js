@@ -1,7 +1,7 @@
 import { escapeHtml } from './dom.js';
 import { columnKeys, currentView, withView } from './view.js';
 
-const SEARCH_COLUMN_KEYS = new Set(['date']);
+const SEARCH_COLUMN_KEYS = ['date'];
 
 let searchMode = 'path';
 let searchOpen = false;
@@ -78,8 +78,22 @@ function renderColumnCell(cell) {
   return td;
 }
 
-function searchColspan() {
-  return SEARCH_COLUMN_KEYS.size + 2;
+function pathSearchColumnKeys(view) {
+  return new Set(view.columns);
+}
+
+function contentSearchColumnKeys() {
+  return new Set(SEARCH_COLUMN_KEYS);
+}
+
+function activeSearchColumnKeys(view) {
+  return searchMode === 'content'
+    ? contentSearchColumnKeys()
+    : pathSearchColumnKeys(view);
+}
+
+function searchColspan(keys) {
+  return keys.size + 2;
 }
 
 function fullColspan() {
@@ -92,16 +106,17 @@ function contentColspan() {
   return dateIndex + 1;
 }
 
-function applySearchColumns(article) {
+function applySearchColumns(article, keys) {
   for (const cell of article.querySelectorAll('[data-column-key]')) {
-    cell.hidden = !SEARCH_COLUMN_KEYS.has(cell.dataset.columnKey);
+    cell.hidden = !keys.has(cell.dataset.columnKey);
   }
 }
 
 function renderSearchRows(article, tbody, results, query, view) {
+  const keys = pathSearchColumnKeys(view);
   if (results.length === 0) {
-    tbody.innerHTML = `<tr class="ghrm-search-empty"><td colspan="${searchColspan()}">No matching paths.</td></tr>`;
-    applySearchColumns(article);
+    tbody.innerHTML = `<tr class="ghrm-search-empty"><td colspan="${searchColspan(keys)}">No matching paths.</td></tr>`;
+    applySearchColumns(article, keys);
     return;
   }
 
@@ -123,7 +138,7 @@ function renderSearchRows(article, tbody, results, query, view) {
     }
     tbody.append(row);
   }
-  applySearchColumns(article);
+  applySearchColumns(article, keys);
 }
 
 function buildSearchParams(query, extraParams = {}, view = currentView()) {
@@ -238,9 +253,10 @@ function formatContentSnippet(text, ranges) {
 }
 
 function renderContentRows(article, tbody, results, truncated, maxRows, view) {
+  const keys = contentSearchColumnKeys();
   if (results.length === 0) {
     tbody.innerHTML = `<tr class="ghrm-search-empty"><td colspan="${fullColspan()}">No matches found.</td></tr>`;
-    applySearchColumns(article);
+    applySearchColumns(article, keys);
     return;
   }
 
@@ -281,7 +297,7 @@ function renderContentRows(article, tbody, results, truncated, maxRows, view) {
     `<span class="ghrm-search-summary-count">${results.length}/${maxRows}</span>` +
     '</td>';
   tbody.append(note);
-  applySearchColumns(article);
+  applySearchColumns(article, keys);
 }
 
 export function setupPathSearch({
@@ -411,6 +427,7 @@ export function setupPathSearch({
       }
       return;
     }
+    applySearchColumns(article, activeSearchColumnKeys(view));
 
     if (searchMode === 'content') {
       status.textContent = 'Searching...';

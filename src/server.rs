@@ -22,6 +22,7 @@ use axum::{
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
+use std::cmp::Ordering;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -603,10 +604,27 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         Default::default()
     };
 
-    let entries: Vec<ExplorerEntry> = dir
-        .entries
-        .iter()
-        .enumerate()
+    let mut entry_order: Vec<_> = dir.entries.iter().enumerate().collect();
+    if matches!(
+        view.sort,
+        walk::Sort::CommitMessage | walk::Sort::CommitDate
+    ) {
+        entry_order.sort_by(|(a_idx, a), (b_idx, b)| {
+            let a_commit = entry_paths.get(*a_idx).and_then(|path| commits.get(path));
+            let b_commit = entry_paths.get(*b_idx).and_then(|path| commits.get(path));
+            cmp_commit_entries(
+                a.name.as_str(),
+                a_commit,
+                b.name.as_str(),
+                b_commit,
+                view.sort,
+                view.sort_dir,
+            )
+        });
+    }
+
+    let entries: Vec<ExplorerEntry> = entry_order
+        .into_iter()
         .map(|(idx, e)| {
             let commit = entry_paths.get(idx).and_then(|path| commits.get(path));
             let meta = column::RowMeta {
@@ -668,6 +686,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         has_parent,
         parent_href: &parent_href,
         show_excludes: s.view_cfg.can_toggle_excludes,
+        sort_defs: walk::SORT_DEFS,
         column_defs: column::DEFS,
         empty_cells: &empty_cells,
         content_colspan: column::DEFS.len() + 1,
@@ -709,6 +728,31 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     )
 }
 
+fn cmp_commit_entries(
+    a_name: &str,
+    a_commit: Option<&crate::repo::CommitInfo>,
+    b_name: &str,
+    b_commit: Option<&crate::repo::CommitInfo>,
+    sort: walk::Sort,
+    dir: walk::SortDir,
+) -> Ordering {
+    let order = match sort {
+        walk::Sort::CommitMessage => a_commit
+            .map(|commit| commit.subject.to_lowercase())
+            .cmp(&b_commit.map(|commit| commit.subject.to_lowercase()))
+            .then_with(|| a_name.to_lowercase().cmp(&b_name.to_lowercase())),
+        walk::Sort::CommitDate => a_commit
+            .map(|commit| commit.timestamp)
+            .cmp(&b_commit.map(|commit| commit.timestamp))
+            .then_with(|| a_name.to_lowercase().cmp(&b_name.to_lowercase())),
+        _ => a_name.to_lowercase().cmp(&b_name.to_lowercase()),
+    };
+    match dir {
+        walk::SortDir::Asc => order,
+        walk::SortDir::Desc => order.reverse(),
+    }
+}
+
 fn respond_html(
     r: &Rendered,
     body: &str,
@@ -723,6 +767,7 @@ fn respond_html(
     };
     let source = source_html(&source);
     let columns_json = column::client_json(&cfg.default_columns);
+    let sorts_json = walk::client_sort_json();
     let shell = PageShell {
         title,
         body,
@@ -736,6 +781,7 @@ fn respond_html(
         default_filter_group: cfg.default_groups.first().map(String::as_str),
         default_sort: cfg.default_sort.as_str(),
         columns_json: &columns_json,
+        sorts_json: &sorts_json,
         can_toggle_excludes: cfg.can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,

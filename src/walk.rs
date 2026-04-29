@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
 
 const VIEW_COMBINATIONS: usize = 8;
-const SORT_VARIANTS: usize = 10;
+const SORT_COUNT: usize = 7;
+const SORT_VARIANTS: usize = SORT_COUNT * 2;
 const LINE_COUNT_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -27,7 +28,78 @@ pub enum Sort {
     Timestamp,
     Size,
     Lines,
+    CommitMessage,
+    CommitDate,
 }
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SortDef {
+    pub(crate) sort: Sort,
+    pub(crate) key: &'static str,
+    pub(crate) label: &'static str,
+    pub(crate) title: &'static str,
+    pub(crate) default_dir: SortDir,
+    pub(crate) column_key: Option<&'static str>,
+}
+
+pub(crate) const SORT_DEFS: &[SortDef] = &[
+    SortDef {
+        sort: Sort::Name,
+        key: "name",
+        label: "Sort by name",
+        title: "Sort explorer entries by name",
+        default_dir: SortDir::Asc,
+        column_key: None,
+    },
+    SortDef {
+        sort: Sort::Type,
+        key: "type",
+        label: "Sort by type",
+        title: "Sort explorer entries by type",
+        default_dir: SortDir::Asc,
+        column_key: None,
+    },
+    SortDef {
+        sort: Sort::Timestamp,
+        key: "timestamp",
+        label: "Sort by modified date",
+        title: "Sort explorer entries by modified date",
+        default_dir: SortDir::Desc,
+        column_key: Some("date"),
+    },
+    SortDef {
+        sort: Sort::Size,
+        key: "size",
+        label: "Sort by size",
+        title: "Sort explorer entries by file size",
+        default_dir: SortDir::Desc,
+        column_key: Some("size"),
+    },
+    SortDef {
+        sort: Sort::Lines,
+        key: "lines",
+        label: "Sort by lines",
+        title: "Sort explorer entries by line count",
+        default_dir: SortDir::Desc,
+        column_key: Some("lines"),
+    },
+    SortDef {
+        sort: Sort::CommitMessage,
+        key: "commit",
+        label: "Sort by commit message",
+        title: "Sort explorer entries by commit message",
+        default_dir: SortDir::Asc,
+        column_key: Some("commit"),
+    },
+    SortDef {
+        sort: Sort::CommitDate,
+        key: "commit_date",
+        label: "Sort by commit date",
+        title: "Sort explorer entries by commit date",
+        default_dir: SortDir::Desc,
+        column_key: Some("commit_date"),
+    },
+];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SortDir {
@@ -38,32 +110,44 @@ pub enum SortDir {
 
 impl Sort {
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Name => "name",
-            Self::Type => "type",
-            Self::Timestamp => "timestamp",
-            Self::Size => "size",
-            Self::Lines => "lines",
-        }
+        self.def().key
     }
 
     pub fn parse(raw: &str) -> Option<Self> {
-        match raw {
-            "name" => Some(Self::Name),
-            "type" => Some(Self::Type),
-            "timestamp" => Some(Self::Timestamp),
-            "size" => Some(Self::Size),
-            "lines" => Some(Self::Lines),
-            _ => None,
-        }
+        SORT_DEFS
+            .iter()
+            .find(|def| def.key == raw)
+            .map(|def| def.sort)
     }
 
     pub fn default_dir(self) -> SortDir {
-        match self {
-            Self::Timestamp | Self::Size | Self::Lines => SortDir::Desc,
-            Self::Name | Self::Type => SortDir::Asc,
-        }
+        self.def().default_dir
     }
+
+    pub(crate) fn column_key(self) -> Option<&'static str> {
+        self.def().column_key
+    }
+
+    fn def(self) -> &'static SortDef {
+        SORT_DEFS
+            .iter()
+            .find(|def| def.sort == self)
+            .expect("sort definition exists")
+    }
+}
+
+pub(crate) fn client_sort_json() -> String {
+    let sorts = SORT_DEFS
+        .iter()
+        .map(|def| {
+            serde_json::json!({
+                "key": def.key,
+                "defaultDir": def.default_dir.as_str(),
+                "columnKey": def.column_key,
+            })
+        })
+        .collect::<Vec<_>>();
+    serde_json::to_string(&sorts).expect("sort config serializes")
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -642,23 +726,14 @@ fn tree_key(opts: ViewOpts, sort: Sort, dir: SortDir) -> usize {
 }
 
 fn sort_index(sort: Sort) -> usize {
-    match sort {
-        Sort::Name => 0,
-        Sort::Type => 1,
-        Sort::Timestamp => 2,
-        Sort::Size => 3,
-        Sort::Lines => 4,
-    }
+    SORT_DEFS
+        .iter()
+        .position(|def| def.sort == sort)
+        .expect("sort definition exists")
 }
 
 fn sort_from_index(idx: usize) -> Sort {
-    match (idx / VIEW_COMBINATIONS) / 2 {
-        0 => Sort::Name,
-        1 => Sort::Type,
-        2 => Sort::Timestamp,
-        3 => Sort::Size,
-        _ => Sort::Lines,
-    }
+    SORT_DEFS[((idx / VIEW_COMBINATIONS) / 2).min(SORT_DEFS.len() - 1)].sort
 }
 
 fn dir_from_index(idx: usize) -> SortDir {
@@ -685,6 +760,7 @@ fn cmp_entries(a: &NavEntry, b: &NavEntry, sort: Sort, dir: SortDir) -> Ordering
         ),
         Sort::Size => apply_dir(cmp_opt(a.size, b.size, &a.name, &b.name), dir),
         Sort::Lines => apply_dir(cmp_opt(a.lines, b.lines, &a.name, &b.name), dir),
+        Sort::CommitMessage | Sort::CommitDate => apply_dir(cmp_names(&a.name, &b.name), dir),
     })
 }
 

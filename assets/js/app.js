@@ -29,6 +29,8 @@ import {
   defaultSortDir,
   defaultUseIgnore,
   hasEdgeColumn,
+  sortAvailable,
+  sortColumnKey,
   withView,
 } from './view.js';
 
@@ -92,6 +94,9 @@ function syncSortControls(view = currentView()) {
   }
   for (const button of menu?.panel.querySelectorAll('.ghrm-view-option') ||
     []) {
+    const available = sortAvailable(button.dataset.sort, view.columns);
+    button.hidden = !available;
+    button.disabled = !available;
     const active = button.dataset.sort === view.sort;
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-checked', active ? 'true' : 'false');
@@ -327,6 +332,7 @@ function setupViewMenu() {
         sort: button.dataset.sort || view.sort,
       };
       if (!button.dataset.sort) return;
+      if (!sortAvailable(next.sort, view.columns)) return;
       if (!new URLSearchParams(location.search).has('dir')) {
         next.sortDir = defaultSortDir(next.sort);
       }
@@ -350,6 +356,10 @@ function setupViewMenu() {
         next.columns.delete(key);
       } else {
         next.columns.add(key);
+      }
+      if (sortColumnKey(next.sort) === key && !next.columns.has(key)) {
+        next.sort = defaultSort();
+        next.sortDir = defaultSortDir(next.sort);
       }
       if (!hasActiveSearch()) {
         reopenExplorerMenu = 'column';

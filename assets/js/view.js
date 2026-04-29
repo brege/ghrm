@@ -28,7 +28,7 @@ export function defaultSort() {
 }
 
 export function defaultSortDir(sort = defaultSort()) {
-  return ['timestamp', 'size', 'lines'].includes(sort) ? 'desc' : 'asc';
+  return sortDefs().find((def) => def.key === sort)?.defaultDir || 'asc';
 }
 
 export function canToggleExcludes() {
@@ -50,6 +50,24 @@ export function columnKeys() {
     .filter((key) => key);
 }
 
+export function sortDefs() {
+  try {
+    const raw = JSON.parse(document.body?.dataset.sorts || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+export function sortColumnKey(sort) {
+  return sortDefs().find((def) => def.key === sort)?.columnKey || null;
+}
+
+export function sortAvailable(sort, columns) {
+  const column = sortColumnKey(sort);
+  return !column || columns.has(column);
+}
+
 export function defaultColumns() {
   return new Set(
     columnDefs()
@@ -69,16 +87,7 @@ function parseQueryBool(raw) {
 }
 
 function parseSort(raw) {
-  switch (raw) {
-    case 'name':
-    case 'type':
-    case 'timestamp':
-    case 'size':
-    case 'lines':
-      return raw;
-    default:
-      return null;
-  }
+  return sortDefs().some((def) => def.key === raw) ? raw : null;
 }
 
 function parseSortDir(raw) {
@@ -105,6 +114,8 @@ export function currentView() {
       columns.delete(key);
     }
   }
+  const parsedSort = parseSort(params.get('sort')) || defaultSort();
+  const sort = sortAvailable(parsedSort, columns) ? parsedSort : defaultSort();
   return {
     showHidden: parseQueryBool(params.get('hidden')) ?? defaultShowHidden(),
     showExcludes: canToggleExcludes()
@@ -112,10 +123,8 @@ export function currentView() {
       : false,
     useIgnore: parseQueryBool(params.get('ignore')) ?? defaultUseIgnore(),
     filterExt: parseQueryBool(params.get('filter')) ?? defaultFilterExt(),
-    sort: parseSort(params.get('sort')) || defaultSort(),
-    sortDir:
-      parseSortDir(params.get('dir')) ||
-      defaultSortDir(parseSort(params.get('sort')) || defaultSort()),
+    sort,
+    sortDir: parseSortDir(params.get('dir')) || defaultSortDir(sort),
     filterGroups: hasGroups ? [...new Set(groups)] : defaultFilterGroups(),
     columns,
     showHeaders: parseQueryBool(params.get('headers')) ?? false,

@@ -49,36 +49,13 @@
             </svg>
           </button>
           <div id="ghrm-sort-menu" class="ghrm-view-menu" role="menu" aria-label="Sort entries" hidden>
-            <button class="ghrm-view-option" type="button" data-sort="name" role="menuitemradio" aria-checked="false" title="Sort explorer entries by name">
+{% for sort in sort_defs %}            <button class="ghrm-view-option" type="button" data-sort="{{ sort.key }}" role="menuitemradio" aria-checked="false" title="{{ sort.title }}">
             <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
               <use href="#ghrm-icon-check"></use>
             </svg>
-            <span class="ghrm-view-option-label">Sort by name</span>
+            <span class="ghrm-view-option-label">{{ sort.label }}</span>
           </button>
-          <button class="ghrm-view-option" type="button" data-sort="type" role="menuitemradio" aria-checked="false" title="Sort explorer entries by type">
-            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-              <use href="#ghrm-icon-check"></use>
-            </svg>
-            <span class="ghrm-view-option-label">Sort by type</span>
-          </button>
-          <button class="ghrm-view-option" type="button" data-sort="timestamp" role="menuitemradio" aria-checked="false" title="Sort explorer entries by modified date">
-            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-              <use href="#ghrm-icon-check"></use>
-            </svg>
-            <span class="ghrm-view-option-label">Sort by modified date</span>
-          </button>
-          <button class="ghrm-view-option" type="button" data-sort="size" role="menuitemradio" aria-checked="false" title="Sort explorer entries by file size">
-            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-              <use href="#ghrm-icon-check"></use>
-            </svg>
-            <span class="ghrm-view-option-label">Sort by size</span>
-          </button>
-          <button class="ghrm-view-option" type="button" data-sort="lines" role="menuitemradio" aria-checked="false" title="Sort explorer entries by line count">
-            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-              <use href="#ghrm-icon-check"></use>
-            </svg>
-            <span class="ghrm-view-option-label">Sort by lines</span>
-          </button>
+{% endfor %}
           </div>
         </div>
         <button id="ghrm-sort-dir-toggle" class="ghrm-view-menu-toggle" type="button" aria-label="Sort descending" title="Sort descending">

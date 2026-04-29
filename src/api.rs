@@ -1,5 +1,6 @@
 use crate::column;
 use crate::render;
+use crate::repo::RepoSet;
 use crate::search as content_search;
 use crate::server::{AppState, Mode};
 use crate::view::{self, ViewQuery};
@@ -13,7 +14,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::warn;
 
 #[derive(Serialize)]
@@ -118,6 +119,10 @@ struct PathSearchResult {
     size: Option<u64>,
     #[serde(skip)]
     lines: Option<u64>,
+    #[serde(skip)]
+    commit_subject: Option<String>,
+    #[serde(skip)]
+    commit_timestamp: Option<u64>,
     cells: Vec<column::Cell>,
 }
 
@@ -157,6 +162,9 @@ pub(crate) async fn path_search(
         max_rows: s.search_max_rows,
         sort: view.sort,
         dir: view.sort_dir,
+        columns: &view.columns,
+        target: Some(&s.target),
+        repos: Some(&s.repos),
     });
 
     json_response(&resp, "api_path_search")
@@ -169,6 +177,9 @@ struct PathSearchSpec<'a> {
     max_rows: usize,
     sort: walk::Sort,
     dir: walk::SortDir,
+    columns: &'a column::Set,
+    target: Option<&'a Path>,
+    repos: Option<&'a RepoSet>,
 }
 
 fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
@@ -219,10 +230,14 @@ fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
                 modified: entry.modified,
                 size: entry.size,
                 lines: entry.lines,
+                commit_subject: None,
+                commit_timestamp: None,
                 cells: Vec::new(),
             });
         }
     }
+
+    load_path_search_commits(&mut rows, spec.target, spec.repos);
 
     rows.sort_by(|a, b| {
         let a_name = a.display.to_lowercase();
@@ -242,16 +257,15 @@ fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
 
     let truncated = rows.len() > spec.max_rows;
     rows.truncate(spec.max_rows);
-    let columns = column::Set::from_defaults(|def| def.key == "date");
     for row in &mut rows {
         row.cells = column::RowMeta {
             modified: row.modified,
             size: row.size,
             lines: row.lines,
-            commit_subject: None,
-            commit_timestamp: None,
+            commit_subject: row.commit_subject.as_deref(),
+            commit_timestamp: row.commit_timestamp,
         }
-        .cells(&columns);
+        .cells(spec.columns);
     }
 
     PathSearchResponse {
@@ -298,8 +312,51 @@ fn cmp_path_rows(
                     .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
                 dir,
             ),
+            walk::Sort::CommitMessage => apply_path_dir(
+                a.commit_subject
+                    .as_ref()
+                    .map(|subject| subject.to_lowercase())
+                    .cmp(
+                        &b.commit_subject
+                            .as_ref()
+                            .map(|subject| subject.to_lowercase()),
+                    )
+                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
+                dir,
+            ),
+            walk::Sort::CommitDate => apply_path_dir(
+                a.commit_timestamp
+                    .cmp(&b.commit_timestamp)
+                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
+                dir,
+            ),
         },
     }
+}
+
+fn load_path_search_commits(
+    rows: &mut [PathSearchResult],
+    target: Option<&Path>,
+    repos: Option<&RepoSet>,
+) {
+    let (Some(target), Some(repos)) = (target, repos) else {
+        return;
+    };
+    let paths = rows
+        .iter()
+        .map(|row| path_search_abs(target, &row.href))
+        .collect::<Vec<_>>();
+    let commits = repos.commit_info(&paths);
+    for (row, path) in rows.iter_mut().zip(paths) {
+        if let Some(commit) = commits.get(&path) {
+            row.commit_subject = Some(commit.subject.clone());
+            row.commit_timestamp = Some(commit.timestamp);
+        }
+    }
+}
+
+fn path_search_abs(target: &Path, href: &str) -> PathBuf {
+    target.join(href.trim_matches('/'))
 }
 
 fn path_ext(display: &str) -> String {
@@ -427,8 +484,11 @@ mod tests {
             current_path: "",
             query: "m",
             max_rows: 10,
-            sort: walk::Sort::Timestamp,
+            sort: walk::Sort::Size,
             dir: walk::SortDir::Desc,
+            columns: &column::Set::from_defaults(|def| def.key == "date" || def.key == "size"),
+            target: None,
+            repos: None,
         });
         let date_cell = resp.results[0]
             .cells
@@ -444,7 +504,7 @@ mod tests {
             .find(|cell| cell.key == "size")
             .unwrap();
         assert_eq!(size_cell.text.as_deref(), Some("2.0 KB"));
-        assert!(size_cell.hidden);
+        assert!(!size_cell.hidden);
 
         let line_cell = resp.results[0]
             .cells

@@ -65,11 +65,20 @@ pub(crate) fn from_query(
         .as_deref()
         .and_then(parse_bool_param)
         .unwrap_or(cfg.default.filter_ext);
+    let columns = columns_from_query(q, &cfg.default_columns);
     let sort = q
         .sort
         .as_deref()
         .and_then(walk::Sort::parse)
         .unwrap_or(cfg.default_sort);
+    let sort = if sort
+        .column_key()
+        .is_some_and(|key| !columns.is_visible_key(key))
+    {
+        walk::Sort::Name
+    } else {
+        sort
+    };
     let sort_dir = q
         .dir
         .as_deref()
@@ -101,7 +110,7 @@ pub(crate) fn from_query(
         groups,
         sort,
         sort_dir,
-        columns: columns_from_query(q, &cfg.default_columns),
+        columns,
     }
 }
 
