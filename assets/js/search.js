@@ -1,6 +1,8 @@
 import { escapeHtml } from './dom.js';
 import { columnKeys, currentView, withView } from './view.js';
 
+const SEARCH_COLUMN_KEYS = new Set(['date']);
+
 let searchMode = 'path';
 let searchOpen = false;
 let searchQuery = '';
@@ -76,9 +78,24 @@ function renderColumnCell(cell) {
   return td;
 }
 
-function renderSearchRows(tbody, results, query, view) {
+function searchColspan() {
+  return SEARCH_COLUMN_KEYS.size + 2;
+}
+
+function fullColspan() {
+  return columnKeys().length + 2;
+}
+
+function applySearchColumns(article) {
+  for (const cell of article.querySelectorAll('[data-column-key]')) {
+    cell.hidden = !SEARCH_COLUMN_KEYS.has(cell.dataset.columnKey);
+  }
+}
+
+function renderSearchRows(article, tbody, results, query, view) {
   if (results.length === 0) {
-    tbody.innerHTML = `<tr class="ghrm-search-empty"><td colspan="${columnKeys().length + 2}">No matching paths.</td></tr>`;
+    tbody.innerHTML = `<tr class="ghrm-search-empty"><td colspan="${searchColspan()}">No matching paths.</td></tr>`;
+    applySearchColumns(article);
     return;
   }
 
@@ -100,6 +117,7 @@ function renderSearchRows(tbody, results, query, view) {
     }
     tbody.append(row);
   }
+  applySearchColumns(article);
 }
 
 function buildSearchParams(query, extraParams = {}, view = currentView()) {
@@ -213,9 +231,10 @@ function formatContentSnippet(text, ranges) {
   return html;
 }
 
-function renderContentRows(tbody, results, truncated, maxRows, view) {
+function renderContentRows(article, tbody, results, truncated, maxRows, view) {
   if (results.length === 0) {
-    tbody.innerHTML = `<tr class="ghrm-search-empty"><td colspan="${columnKeys().length + 2}">No matches found.</td></tr>`;
+    tbody.innerHTML = `<tr class="ghrm-search-empty"><td colspan="${fullColspan()}">No matches found.</td></tr>`;
+    applySearchColumns(article);
     return;
   }
 
@@ -227,6 +246,10 @@ function renderContentRows(tbody, results, truncated, maxRows, view) {
 
     const link = row.querySelector('.ghrm-content-path');
     const textEl = row.querySelector('.ghrm-content-text');
+    const cell = row.querySelector('.ghrm-content-cell');
+    if (cell) {
+      cell.colSpan = fullColspan() - 1;
+    }
 
     link.href = withView(`/${match.path}`, view);
     link.innerHTML =
@@ -240,14 +263,19 @@ function renderContentRows(tbody, results, truncated, maxRows, view) {
   note.className = truncated ? 'ghrm-search-truncated' : 'ghrm-search-summary';
   note.innerHTML =
     '<td class="ghrm-nav-icon"></td>' +
-    `<td class="ghrm-search-summary-cell" colspan="${columnKeys().length + 1}">` +
+    `<td class="ghrm-search-summary-cell" colspan="${fullColspan() - 1}">` +
     `<span>${truncated ? 'Results truncated' : ''}</span>` +
     `<span class="ghrm-search-summary-count">${results.length}/${maxRows}</span>` +
     '</td>';
   tbody.append(note);
+  applySearchColumns(article);
 }
 
-export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
+export function setupPathSearch({
+  populateDates,
+  setupNavExternalLinks,
+  syncColumnControls,
+}) {
   const article = document.querySelector('article[data-explorer]');
   const search = document.getElementById('ghrm-path-search');
   const input = document.getElementById('ghrm-path-search-input');
@@ -286,6 +314,7 @@ export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
 
   const resetSearch = () => {
     tbody.innerHTML = originalRows;
+    syncColumnControls();
     table.hidden = !originalRows.trim();
     if (empty) empty.hidden = false;
     status.textContent = '';
@@ -377,6 +406,7 @@ export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
       if (empty) empty.hidden = true;
       table.hidden = false;
       renderContentRows(
+        article,
         tbody,
         resp.results,
         resp.truncated,
@@ -393,7 +423,7 @@ export function setupPathSearch({ populateDates, setupNavExternalLinks }) {
       const results = resp.results ?? [];
       if (empty) empty.hidden = true;
       table.hidden = false;
-      renderSearchRows(tbody, results, query, view);
+      renderSearchRows(article, tbody, results, query, view);
       const suffix = resp.truncated ? '+' : '';
       status.textContent =
         results.length === 1

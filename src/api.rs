@@ -157,7 +157,6 @@ pub(crate) async fn path_search(
         max_rows: s.search_max_rows,
         sort: view.sort,
         dir: view.sort_dir,
-        columns: &view.columns,
     });
 
     json_response(&resp, "api_path_search")
@@ -170,7 +169,6 @@ struct PathSearchSpec<'a> {
     max_rows: usize,
     sort: walk::Sort,
     dir: walk::SortDir,
-    columns: &'a column::Set,
 }
 
 fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
@@ -244,8 +242,9 @@ fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
 
     let truncated = rows.len() > spec.max_rows;
     rows.truncate(spec.max_rows);
+    let columns = column::Set::from_defaults(|id| id == column::Id::ModifiedDate);
     for row in &mut rows {
-        row.cells = spec.columns.path_cells(row.modified, row.size, row.lines);
+        row.cells = columns.path_cells(row.modified, row.size, row.lines);
     }
 
     PathSearchResponse {
@@ -416,11 +415,6 @@ mod tests {
             },
         );
         let tree = walk::NavTree { dirs };
-        let columns = column::Set::from_defaults(|id| match id {
-            column::Id::ModifiedDate | column::Id::FileSize | column::Id::LineCount => true,
-            column::Id::CommitMessage | column::Id::CommitDate => false,
-        });
-
         let resp = path_search_results(PathSearchSpec {
             tree: &tree,
             current_path: "",
@@ -428,7 +422,6 @@ mod tests {
             max_rows: 10,
             sort: walk::Sort::Timestamp,
             dir: walk::SortDir::Desc,
-            columns: &columns,
         });
         let date_cell = resp.results[0]
             .cells
@@ -444,7 +437,7 @@ mod tests {
             .find(|cell| cell.key == "size")
             .unwrap();
         assert_eq!(size_cell.text.as_deref(), Some("2.0 KB"));
-        assert!(!size_cell.hidden);
+        assert!(size_cell.hidden);
 
         let line_cell = resp.results[0]
             .cells
@@ -452,7 +445,7 @@ mod tests {
             .find(|cell| cell.key == "lines")
             .unwrap();
         assert_eq!(line_cell.text.as_deref(), Some("3"));
-        assert!(!line_cell.hidden);
+        assert!(line_cell.hidden);
 
         let commit_cell = resp.results[0]
             .cells

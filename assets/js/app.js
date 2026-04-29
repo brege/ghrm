@@ -617,7 +617,7 @@ function setupSearch() {
     const target = `${location.pathname}${location.search}${location.hash}`;
     navigate(target, false);
   });
-  setupPathSearch({ populateDates, setupNavExternalLinks });
+  setupPathSearch({ populateDates, setupNavExternalLinks, syncColumnControls });
 }
 
 async function navigate(path, push = true) {
