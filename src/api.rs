@@ -1,3 +1,4 @@
+use crate::column;
 use crate::render;
 use crate::search as content_search;
 use crate::server::{AppState, Mode};
@@ -111,9 +112,9 @@ struct PathSearchResult {
     href: String,
     display: String,
     is_dir: bool,
+    #[serde(skip)]
     modified: Option<u64>,
-    commit_message: Option<String>,
-    commit_date: Option<u64>,
+    cells: Vec<column::Cell>,
 }
 
 #[derive(Serialize)]
@@ -152,6 +153,7 @@ pub(crate) async fn path_search(
         s.search_max_rows,
         view.sort,
         view.sort_dir,
+        &view.columns,
     );
 
     json_response(&resp, "api_path_search")
@@ -164,6 +166,7 @@ fn path_search_results(
     max_rows: usize,
     sort: walk::Sort,
     dir: walk::SortDir,
+    columns: &column::Set,
 ) -> PathSearchResponse {
     let needle = query.trim().to_lowercase();
     if needle.is_empty() {
@@ -210,8 +213,7 @@ fn path_search_results(
                 },
                 is_dir: entry.is_dir,
                 modified: entry.modified,
-                commit_message: None,
-                commit_date: None,
+                cells: columns.path_cells(entry.modified),
             });
         }
     }
@@ -394,7 +396,23 @@ mod tests {
             10,
             walk::Sort::Timestamp,
             walk::SortDir::Desc,
+            &column::Set::from_defaults(column::default_visible),
         );
+        let date_cell = resp.results[0]
+            .cells
+            .iter()
+            .find(|cell| cell.key == "date")
+            .unwrap();
+        assert_eq!(date_cell.timestamp, Some(9));
+        assert!(!date_cell.hidden);
+
+        let commit_cell = resp.results[0]
+            .cells
+            .iter()
+            .find(|cell| cell.key == "commit")
+            .unwrap();
+        assert!(commit_cell.hidden);
+
         let names: Vec<_> = resp.results.into_iter().map(|row| row.display).collect();
         assert_eq!(names, vec!["newer.md", "older.md"]);
     }

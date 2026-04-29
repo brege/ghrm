@@ -32,8 +32,7 @@
   data-default-filter-ext="{% if default_filter_ext %}1{% else %}0{% endif %}"
   data-default-filter-group="{% if let Some(group) = default_filter_group %}{{ group }}{% endif %}"
   data-default-sort="{{ default_sort }}"
-  data-column-keys="{{ column_keys }}"
-  data-default-columns="{{ default_columns }}"
+  data-columns="{{ columns_json }}"
   data-can-toggle-excludes="{% if can_toggle_excludes %}1{% else %}0{% endif %}">
 {% include "fragments/icons.html" %}  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">

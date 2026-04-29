@@ -752,12 +752,16 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   text-decoration: none;
 }
 
-.ghrm-nav-commit-cell {
+.ghrm-nav-meta[hidden] {
+  display: none;
+}
+
+.ghrm-nav-meta-text {
   width: clamp(12rem, 40%, 28rem);
   max-width: 0;
 }
 
-.ghrm-nav-commit {
+.ghrm-nav-meta-text-value {
   display: block;
   color: var(--fgColor-muted, #636c76);
   font-size: 12px;
@@ -767,8 +771,7 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   white-space: nowrap;
 }
 
-.ghrm-nav-date,
-.ghrm-nav-commit-date {
+.ghrm-nav-meta-time {
   width: 120px;
   text-align: right;
   color: var(--fgColor-muted, #636c76);
@@ -778,26 +781,8 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   cursor: default;
 }
 
-.ghrm-hide-date .ghrm-nav-date {
-  display: none;
-}
-
-.ghrm-hide-commit-date .ghrm-nav-commit-date {
-  display: none;
-}
-
-.ghrm-hide-commit .ghrm-nav-commit-cell,
-.ghrm-hide-commit .ghrm-nav-commit {
-  display: none;
-}
-
 @container ghrm-explorer (max-width: 38rem) {
-  .markdown-body:not(.ghrm-hide-date):not(.ghrm-hide-commit)
-    .ghrm-nav-middle-meta,
-  .markdown-body.ghrm-hide-date:not(.ghrm-hide-commit-date):not(
-      .ghrm-hide-commit
-    )
-    .ghrm-nav-middle-meta {
+  .ghrm-has-edge-meta .ghrm-nav-middle-meta {
     display: none;
   }
 }

@@ -55,6 +55,27 @@ function ensureNavTable(article) {
   return next;
 }
 
+function renderColumnCell(cell) {
+  const td = document.createElement('td');
+  td.className = cell.class || '';
+  td.dataset.columnKey = cell.key || '';
+  td.hidden = Boolean(cell.hidden);
+  if (cell.timestamp) {
+    td.dataset.ts = String(cell.timestamp);
+  }
+  if (cell.text) {
+    if (cell.text_class) {
+      const span = document.createElement('span');
+      span.className = cell.text_class;
+      span.textContent = cell.text;
+      td.append(span);
+    } else {
+      td.textContent = cell.text;
+    }
+  }
+  return td;
+}
+
 function renderSearchRows(tbody, results, query, view) {
   if (results.length === 0) {
     tbody.innerHTML = `<tr class="ghrm-search-empty"><td colspan="${columnKeys().length + 2}">No matching paths.</td></tr>`;
@@ -69,23 +90,13 @@ function renderSearchRows(tbody, results, query, view) {
     if (!row) continue;
 
     const link = row.querySelector('.ghrm-search-path');
-    const commit = row.querySelector('.ghrm-nav-commit-cell');
-    const commitDate = row.querySelector('.ghrm-nav-commit-date');
-    const date = row.querySelector('.ghrm-nav-date');
     link.href = withView(entry.href, view);
     link.innerHTML = highlightMatch(entry.display, query);
-    if (entry.commit_message && commit) {
-      commit.innerHTML = '';
-      const message = document.createElement('span');
-      message.className = 'ghrm-nav-commit';
-      message.textContent = entry.commit_message;
-      commit.append(message);
+    for (const cell of row.querySelectorAll('[data-column-key]')) {
+      cell.remove();
     }
-    if (entry.modified) {
-      date.dataset.ts = String(entry.modified);
-    }
-    if (entry.commit_date && commitDate) {
-      commitDate.dataset.ts = String(entry.commit_date);
+    for (const cell of entry.cells || []) {
+      row.append(renderColumnCell(cell));
     }
     tbody.append(row);
   }

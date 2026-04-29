@@ -35,16 +35,31 @@ export function canToggleExcludes() {
   return document.body?.dataset.canToggleExcludes === '1';
 }
 
-function splitSet(raw) {
-  return new Set((raw || '').split(',').filter((value) => value));
+export function columnDefs() {
+  try {
+    const raw = JSON.parse(document.body?.dataset.columns || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
 }
 
 export function columnKeys() {
-  return [...splitSet(document.body?.dataset.columnKeys)];
+  return columnDefs()
+    .map((column) => column.key)
+    .filter((key) => key);
 }
 
 export function defaultColumns() {
-  return splitSet(document.body?.dataset.defaultColumns);
+  return new Set(
+    columnDefs()
+      .filter((column) => column.defaultVisible)
+      .map((column) => column.key),
+  );
+}
+
+export function hasEdgeColumn(keys) {
+  return columnDefs().some((column) => column.edge && keys.has(column.key));
 }
 
 function parseQueryBool(raw) {

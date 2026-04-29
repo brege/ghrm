@@ -20,8 +20,7 @@ pub struct PageShell<'a> {
     pub default_filter_ext: bool,
     pub default_filter_group: Option<&'a str>,
     pub default_sort: &'a str,
-    pub column_keys: &'a str,
-    pub default_columns: &'a str,
+    pub columns_json: &'a str,
     pub can_toggle_excludes: bool,
     pub has_mermaid: bool,
     pub has_math: bool,
@@ -42,15 +41,14 @@ pub struct PageCtx<'a> {
 #[derive(Template)]
 #[template(path = "explorer.html")]
 pub struct ExplorerCtx<'a> {
+    pub article_class: &'a str,
     pub crumbs: &'a str,
     pub current_path: &'a str,
     pub has_parent: bool,
     pub parent_href: &'a str,
     pub show_excludes: bool,
-    pub show_date: bool,
-    pub show_commit: bool,
-    pub show_commit_date: bool,
     pub column_defs: &'a [column::Def],
+    pub empty_cells: &'a [column::Cell],
     pub content_colspan: usize,
     pub filter_groups: &'a [GroupMeta],
     pub entries: &'a [ExplorerEntry],
@@ -61,14 +59,7 @@ pub struct ExplorerEntry {
     pub name: String,
     pub href: String,
     pub is_dir: bool,
-    pub cells: Vec<ExplorerCell>,
-}
-
-pub struct ExplorerCell {
-    pub class: &'static str,
-    pub text_class: Option<&'static str>,
-    pub text: Option<String>,
-    pub timestamp: Option<u64>,
+    pub cells: Vec<column::Cell>,
 }
 
 pub struct ExplorerReadme<'a> {

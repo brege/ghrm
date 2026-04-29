@@ -1,4 +1,4 @@
-<article class="markdown-body{% if !show_date %} ghrm-hide-date{% endif %}{% if !show_commit %} ghrm-hide-commit{% endif %}{% if !show_commit_date %} ghrm-hide-commit-date{% endif %}" data-explorer="true" data-current-path="{{ current_path }}">
+<article class="{{ article_class }}" data-explorer="true" data-current-path="{{ current_path }}">
   <section class="ghrm-explorer-shell">
 {% include "fragments/title_block.html" %}{% if entries.is_empty() && !has_parent %}  <p class="ghrm-nav-empty">No files found.</p>
 {% else %}  <table class="ghrm-nav-table">
@@ -10,7 +10,7 @@
           </svg>
         </td>
         <td class="ghrm-nav-name"><a href="{{ parent_href }}">..</a></td>
-{% for column in column_defs %}        <td class="{{ column.cell_class }}"></td>
+{% for cell in empty_cells %}        <td class="{{ cell.class }}" data-column-key="{{ cell.key }}"{% if cell.hidden %} hidden{% endif %}></td>
 {% endfor %}
       </tr>
 {% endif %}{% for e in entries %}      <tr>
@@ -20,7 +20,7 @@
           </svg>
         </td>
         <td class="ghrm-nav-name"><a href="{{ e.href }}">{{ e.name }}</a></td>
-{% for cell in e.cells %}        <td class="{{ cell.class }}"{% if let Some(ts) = cell.timestamp %} data-ts="{{ ts }}"{% endif %}>{% if let Some(text) = cell.text %}{% if let Some(class) = cell.text_class %}<span class="{{ class }}">{{ text }}</span>{% else %}{{ text }}{% endif %}{% endif %}</td>
+{% for cell in e.cells %}        <td class="{{ cell.class }}" data-column-key="{{ cell.key }}"{% if cell.hidden %} hidden{% endif %}{% if let Some(ts) = cell.timestamp %} data-ts="{{ ts }}"{% endif %}>{% if let Some(text) = cell.text %}{% if let Some(class) = cell.text_class %}<span class="{{ class }}">{{ text }}</span>{% else %}{{ text }}{% endif %}{% endif %}</td>
 {% endfor %}
       </tr>
 {% endfor %}    </tbody>
@@ -34,7 +34,7 @@
         </svg>
       </td>
       <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
-{% for column in column_defs %}      <td class="{{ column.cell_class }}"></td>
+{% for cell in empty_cells %}      <td class="{{ cell.class }}" data-column-key="{{ cell.key }}"{% if cell.hidden %} hidden{% endif %}></td>
 {% endfor %}
     </tr>
   </template>
@@ -46,7 +46,7 @@
         </svg>
       </td>
       <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
-{% for column in column_defs %}      <td class="{{ column.cell_class }}"></td>
+{% for cell in empty_cells %}      <td class="{{ cell.class }}" data-column-key="{{ cell.key }}"{% if cell.hidden %} hidden{% endif %}></td>
 {% endfor %}
     </tr>
   </template>

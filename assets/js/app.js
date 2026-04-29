@@ -28,6 +28,7 @@ import {
   defaultSort,
   defaultSortDir,
   defaultUseIgnore,
+  hasEdgeColumn,
   withView,
 } from './view.js';
 
@@ -118,13 +119,16 @@ function syncSortControls(view = currentView()) {
 function syncColumnControls(view = currentView()) {
   const article = document.querySelector('article[data-explorer]');
   const menu = currentExplorerMenu('column');
+  if (article) {
+    article.classList.toggle('ghrm-has-edge-meta', hasEdgeColumn(view.columns));
+    for (const cell of article.querySelectorAll('[data-column-key]')) {
+      cell.hidden = !view.columns.has(cell.dataset.columnKey);
+    }
+  }
   for (const button of menu?.panel.querySelectorAll('.ghrm-view-option') ||
     []) {
     const key = button.dataset.columnToggle;
     const active = view.columns.has(key);
-    if (article && button.dataset.columnHideClass) {
-      article.classList.toggle(button.dataset.columnHideClass, !active);
-    }
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-checked', active ? 'true' : 'false');
   }
@@ -162,9 +166,7 @@ function formatAbsolute(ts) {
 }
 
 function populateDates() {
-  for (const el of document.querySelectorAll(
-    '.ghrm-nav-date[data-ts], .ghrm-nav-commit-date[data-ts]',
-  )) {
+  for (const el of document.querySelectorAll('.ghrm-nav-meta-time[data-ts]')) {
     const ts = parseInt(el.dataset.ts, 10);
     if (!ts) continue;
     el.textContent = formatRelative(ts);

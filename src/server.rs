@@ -5,7 +5,7 @@ use crate::delivery;
 use crate::filter;
 use crate::render::{self, Rendered};
 use crate::repo::{CommitInfo, RepoSet, SourceState};
-use crate::tmpl::{self, ExplorerCell, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
+use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
 use crate::view::{self, ViewConfig, ViewQuery, ViewState};
 use crate::walk::{self, NavSet, ViewOpts};
 use crate::watch;
@@ -615,6 +615,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
             cells: explorer_cells(
                 e.modified,
                 entry_paths.get(idx).and_then(|path| commits.get(path)),
+                &view.columns,
             ),
         })
         .collect();
@@ -653,16 +654,17 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         html: &r.html,
     });
     let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, &view, &s.view_cfg);
+    let article_class = view.columns.article_class("markdown-body");
+    let empty_cells = view.columns.empty_cells();
     let body = match tmpl::explorer(ExplorerCtx {
+        article_class: &article_class,
         crumbs: &crumbs,
         current_path: rel,
         has_parent,
         parent_href: &parent_href,
         show_excludes: s.view_cfg.can_toggle_excludes,
-        show_date: view.columns.is_visible(column::Id::ModifiedDate),
-        show_commit: view.columns.is_visible(column::Id::CommitMessage),
-        show_commit_date: view.columns.is_visible(column::Id::CommitDate),
         column_defs: column::DEFS,
+        empty_cells: &empty_cells,
         content_colspan: column::DEFS.len() + 1,
         filter_groups: s.filters.groups(),
         entries: &entries,
@@ -702,7 +704,11 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     )
 }
 
-fn explorer_cells(modified: Option<u64>, commit: Option<&CommitInfo>) -> Vec<ExplorerCell> {
+fn explorer_cells(
+    modified: Option<u64>,
+    commit: Option<&CommitInfo>,
+    columns: &column::Set,
+) -> Vec<column::Cell> {
     column::DEFS
         .iter()
         .map(|def| {
@@ -711,12 +717,7 @@ fn explorer_cells(modified: Option<u64>, commit: Option<&CommitInfo>) -> Vec<Exp
                 column::Id::CommitMessage => (commit.map(|commit| commit.subject.clone()), None),
                 column::Id::CommitDate => (None, commit.map(|commit| commit.timestamp)),
             };
-            ExplorerCell {
-                class: def.cell_class,
-                text_class: def.text_class,
-                text,
-                timestamp,
-            }
+            columns.cell(def, text, timestamp)
         })
         .collect()
 }
@@ -734,16 +735,7 @@ fn respond_html(
         &r.title
     };
     let source = source_html(&source);
-    let column_keys = column::DEFS
-        .iter()
-        .map(|def| def.key)
-        .collect::<Vec<_>>()
-        .join(",");
-    let default_columns = column::DEFS
-        .iter()
-        .filter_map(|def| cfg.default_columns.is_visible(def.id).then_some(def.key))
-        .collect::<Vec<_>>()
-        .join(",");
+    let columns_json = column::client_json(&cfg.default_columns);
     let shell = PageShell {
         title,
         body,
@@ -756,8 +748,7 @@ fn respond_html(
         default_filter_ext: cfg.default.filter_ext,
         default_filter_group: cfg.default_groups.first().map(String::as_str),
         default_sort: cfg.default_sort.as_str(),
-        column_keys: &column_keys,
-        default_columns: &default_columns,
+        columns_json: &columns_json,
         can_toggle_excludes: cfg.can_toggle_excludes,
         has_mermaid: r.has_mermaid,
         has_math: r.has_math,
