@@ -10,6 +10,7 @@ use std::time::UNIX_EPOCH;
 
 const VIEW_COMBINATIONS: usize = 8;
 const SORT_VARIANTS: usize = 6;
+const LINE_COUNT_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ViewOpts {
@@ -72,6 +73,30 @@ pub struct ListSpec<'a> {
     pub matcher: Option<&'a crate::filter::Matcher>,
     pub opts: ViewOpts,
     pub order: SortSpec,
+}
+
+pub fn line_count(path: &Path, size: Option<u64>) -> Option<u64> {
+    if size.is_some_and(|size| size > LINE_COUNT_MAX_BYTES) {
+        return None;
+    }
+    if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| crate::delivery::is_binary_ext(&ext.to_lowercase()))
+    {
+        return None;
+    }
+
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.contains(&0) {
+        return None;
+    }
+    if bytes.is_empty() {
+        return Some(0);
+    }
+
+    let newlines = bytes.iter().filter(|&&b| b == b'\n').count() as u64;
+    Some(newlines + u64::from(bytes.last() != Some(&b'\n')))
 }
 
 impl SortDir {

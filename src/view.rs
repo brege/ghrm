@@ -286,6 +286,7 @@ mod tests {
             column::Id::CommitMessage => commit,
             column::Id::CommitDate => commit_date,
             column::Id::FileSize => false,
+            column::Id::LineCount => false,
         })
     }
 

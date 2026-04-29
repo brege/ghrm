@@ -6,6 +6,7 @@ pub(crate) enum Id {
     CommitMessage,
     CommitDate,
     FileSize,
+    LineCount,
     ModifiedDate,
 }
 
@@ -46,6 +47,16 @@ pub(crate) const DEFS: &[Def] = &[
         key: "size",
         label: "Size",
         title: "Show file sizes",
+        cell_class: "ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta",
+        text_class: None,
+        edge: true,
+        default_visible: false,
+    },
+    Def {
+        id: Id::LineCount,
+        key: "lines",
+        label: "Lines",
+        title: "Show line counts",
         cell_class: "ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta",
         text_class: None,
         edge: true,
@@ -143,11 +154,17 @@ impl Set {
         DEFS.iter().map(|def| self.cell(def, None, None)).collect()
     }
 
-    pub(crate) fn path_cells(&self, modified: Option<u64>, size: Option<u64>) -> Vec<Cell> {
+    pub(crate) fn path_cells(
+        &self,
+        modified: Option<u64>,
+        size: Option<u64>,
+        lines: Option<u64>,
+    ) -> Vec<Cell> {
         DEFS.iter()
             .map(|def| match def.id {
                 Id::ModifiedDate => self.cell(def, None, modified),
                 Id::FileSize => self.cell(def, size_text(size), None),
+                Id::LineCount => self.cell(def, count_text(lines), None),
                 Id::CommitMessage | Id::CommitDate => Cell {
                     hidden: true,
                     ..self.cell(def, None, None)
@@ -155,6 +172,10 @@ impl Set {
             })
             .collect()
     }
+}
+
+pub(crate) fn count_text(count: Option<u64>) -> Option<String> {
+    count.map(|count| count.to_string())
 }
 
 pub(crate) fn size_text(size: Option<u64>) -> Option<String> {

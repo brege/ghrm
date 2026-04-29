@@ -13,7 +13,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::warn;
 
 #[derive(Serialize)]
@@ -114,6 +114,10 @@ struct PathSearchResult {
     is_dir: bool,
     #[serde(skip)]
     modified: Option<u64>,
+    #[serde(skip)]
+    size: Option<u64>,
+    #[serde(skip)]
+    rel_path: PathBuf,
     cells: Vec<column::Cell>,
 }
 
@@ -146,48 +150,52 @@ pub(crate) async fn path_search(
     let current_path = q.path.as_deref().unwrap_or("").trim_matches('/');
     let matcher = view::matcher(&view, &s.filters);
     let tree = s.nav_tree(&view, matcher.as_ref());
-    let resp = path_search_results(
-        &tree,
+    let resp = path_search_results(PathSearchSpec {
+        root: &s.target,
+        tree: &tree,
         current_path,
         query,
-        s.search_max_rows,
-        view.sort,
-        view.sort_dir,
-        &view.columns,
-    );
+        max_rows: s.search_max_rows,
+        sort: view.sort,
+        dir: view.sort_dir,
+        columns: &view.columns,
+    });
 
     json_response(&resp, "api_path_search")
 }
 
-fn path_search_results(
-    tree: &walk::NavTree,
-    current_path: &str,
-    query: &str,
+struct PathSearchSpec<'a> {
+    root: &'a Path,
+    tree: &'a walk::NavTree,
+    current_path: &'a str,
+    query: &'a str,
     max_rows: usize,
     sort: walk::Sort,
     dir: walk::SortDir,
-    columns: &column::Set,
-) -> PathSearchResponse {
-    let needle = query.trim().to_lowercase();
+    columns: &'a column::Set,
+}
+
+fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
+    let needle = spec.query.trim().to_lowercase();
     if needle.is_empty() {
         return PathSearchResponse {
             results: Vec::new(),
             truncated: false,
-            max_rows,
+            max_rows: spec.max_rows,
         };
     }
 
-    let prefix = (!current_path.is_empty()).then(|| format!("{current_path}/"));
+    let prefix = (!spec.current_path.is_empty()).then(|| format!("{}/", spec.current_path));
     let mut rows: Vec<PathSearchResult> = Vec::new();
 
-    for (dir, nav_dir) in &tree.dirs {
+    for (dir, nav_dir) in &spec.tree.dirs {
         if let Some(prefix) = &prefix {
-            if dir != current_path && !dir.starts_with(prefix) {
+            if dir != spec.current_path && !dir.starts_with(prefix) {
                 continue;
             }
         }
 
-        let rel_dir = if dir == current_path {
+        let rel_dir = if dir == spec.current_path {
             ""
         } else if let Some(prefix) = &prefix {
             dir.strip_prefix(prefix).unwrap_or(dir.as_str())
@@ -204,16 +212,19 @@ fn path_search_results(
             if !rel_path.to_lowercase().contains(&needle) {
                 continue;
             }
+            let rel_path = PathBuf::from(&rel_path);
             rows.push(PathSearchResult {
                 href: entry.href.clone(),
                 display: if entry.is_dir {
-                    format!("{rel_path}/")
+                    format!("{}/", rel_path.to_string_lossy())
                 } else {
-                    rel_path
+                    rel_path.to_string_lossy().into_owned()
                 },
                 is_dir: entry.is_dir,
                 modified: entry.modified,
-                cells: columns.path_cells(entry.modified, entry.size),
+                size: entry.size,
+                rel_path,
+                cells: Vec::new(),
             });
         }
     }
@@ -231,16 +242,25 @@ fn path_search_results(
             .is_some_and(|name| name.contains(&needle)) as u8;
         b_base
             .cmp(&a_base)
-            .then_with(|| cmp_path_rows(a, b, sort, dir))
+            .then_with(|| cmp_path_rows(a, b, spec.sort, spec.dir))
     });
 
-    let truncated = rows.len() > max_rows;
-    rows.truncate(max_rows);
+    let truncated = rows.len() > spec.max_rows;
+    rows.truncate(spec.max_rows);
+    let show_lines = spec.columns.is_visible(column::Id::LineCount);
+    for row in &mut rows {
+        let lines = if show_lines && !row.is_dir {
+            walk::line_count(&spec.root.join(&row.rel_path), row.size)
+        } else {
+            None
+        };
+        row.cells = spec.columns.path_cells(row.modified, row.size, lines);
+    }
 
     PathSearchResponse {
         results: rows,
         truncated,
-        max_rows,
+        max_rows: spec.max_rows,
     }
 }
 
@@ -362,10 +382,13 @@ fn not_found() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::nav_entry;
+    use crate::testutil::{TempDir, nav_entry};
+    use std::fs;
 
     #[test]
     fn path_search_uses_selected_sort() {
+        let td = TempDir::new("ghrm-path-search");
+        fs::write(td.path().join("newer.md"), "one\ntwo\nthree\n").unwrap();
         let mut dirs = BTreeMap::new();
         dirs.insert(
             String::new(),
@@ -390,19 +413,20 @@ mod tests {
         );
         let tree = walk::NavTree { dirs };
         let columns = column::Set::from_defaults(|id| match id {
-            column::Id::ModifiedDate | column::Id::FileSize => true,
+            column::Id::ModifiedDate | column::Id::FileSize | column::Id::LineCount => true,
             column::Id::CommitMessage | column::Id::CommitDate => false,
         });
 
-        let resp = path_search_results(
-            &tree,
-            "",
-            "m",
-            10,
-            walk::Sort::Timestamp,
-            walk::SortDir::Desc,
-            &columns,
-        );
+        let resp = path_search_results(PathSearchSpec {
+            root: td.path(),
+            tree: &tree,
+            current_path: "",
+            query: "m",
+            max_rows: 10,
+            sort: walk::Sort::Timestamp,
+            dir: walk::SortDir::Desc,
+            columns: &columns,
+        });
         let date_cell = resp.results[0]
             .cells
             .iter()
@@ -418,6 +442,14 @@ mod tests {
             .unwrap();
         assert_eq!(size_cell.text.as_deref(), Some("2.0 KB"));
         assert!(!size_cell.hidden);
+
+        let line_cell = resp.results[0]
+            .cells
+            .iter()
+            .find(|cell| cell.key == "lines")
+            .unwrap();
+        assert_eq!(line_cell.text.as_deref(), Some("3"));
+        assert!(!line_cell.hidden);
 
         let commit_cell = resp.results[0]
             .cells

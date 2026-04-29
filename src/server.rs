@@ -589,7 +589,8 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
 
     let show_commit_meta = view.columns.is_visible(column::Id::CommitMessage)
         || view.columns.is_visible(column::Id::CommitDate);
-    let entry_paths = if show_commit_meta {
+    let show_line_meta = view.columns.is_visible(column::Id::LineCount);
+    let entry_paths = if show_commit_meta || show_line_meta {
         dir.entries
             .iter()
             .map(|e| Path::new(rel).join(&e.name))
@@ -615,6 +616,13 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
             cells: explorer_cells(
                 e.modified,
                 e.size,
+                if show_line_meta && !e.is_dir {
+                    entry_paths
+                        .get(idx)
+                        .and_then(|path| walk::line_count(path, e.size))
+                } else {
+                    None
+                },
                 entry_paths.get(idx).and_then(|path| commits.get(path)),
                 &view.columns,
             ),
@@ -708,6 +716,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
 fn explorer_cells(
     modified: Option<u64>,
     size: Option<u64>,
+    lines: Option<u64>,
     commit: Option<&CommitInfo>,
     columns: &column::Set,
 ) -> Vec<column::Cell> {
@@ -717,6 +726,7 @@ fn explorer_cells(
             let (text, timestamp) = match def.id {
                 column::Id::ModifiedDate => (None, modified),
                 column::Id::FileSize => (column::size_text(size), None),
+                column::Id::LineCount => (column::count_text(lines), None),
                 column::Id::CommitMessage => (commit.map(|commit| commit.subject.clone()), None),
                 column::Id::CommitDate => (None, commit.map(|commit| commit.timestamp)),
             };

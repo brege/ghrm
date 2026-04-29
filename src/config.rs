@@ -68,6 +68,7 @@ pub struct ColumnConfig {
     pub commit_message: Option<bool>,
     pub commit_date: Option<bool>,
     pub size: Option<bool>,
+    pub lines: Option<bool>,
 }
 
 impl ColumnConfig {
@@ -77,6 +78,7 @@ impl ColumnConfig {
             column::Id::CommitMessage => self.commit_message,
             column::Id::CommitDate => self.commit_date,
             column::Id::FileSize => self.size,
+            column::Id::LineCount => self.lines,
         }
         .unwrap_or_else(|| column::default_visible(id))
     }
@@ -197,6 +199,7 @@ mod tests {
                 commit_message = true
                 commit_date = false
                 size = true
+                lines = true
             "#,
         )
         .unwrap();
@@ -205,5 +208,6 @@ mod tests {
         assert_eq!(config.explorer.columns.commit_message, Some(true));
         assert_eq!(config.explorer.columns.commit_date, Some(false));
         assert_eq!(config.explorer.columns.size, Some(true));
+        assert_eq!(config.explorer.columns.lines, Some(true));
     }
 }
