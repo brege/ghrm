@@ -237,7 +237,12 @@ fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
         }
     }
 
-    load_path_search_commits(&mut rows, spec.target, spec.repos);
+    if matches!(
+        spec.sort,
+        walk::Sort::CommitMessage | walk::Sort::CommitDate
+    ) {
+        load_path_search_commits(&mut rows, spec.target, spec.repos);
+    }
 
     rows.sort_by(|a, b| {
         let a_name = a.display.to_lowercase();
@@ -257,6 +262,14 @@ fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
 
     let truncated = rows.len() > spec.max_rows;
     rows.truncate(spec.max_rows);
+    if column::required_meta(spec.columns).contains(column::MetaReq::COMMIT)
+        && !matches!(
+            spec.sort,
+            walk::Sort::CommitMessage | walk::Sort::CommitDate
+        )
+    {
+        load_path_search_commits(&mut rows, spec.target, spec.repos);
+    }
     for row in &mut rows {
         row.cells = column::RowMeta {
             modified: row.modified,
