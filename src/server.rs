@@ -614,6 +614,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
             is_dir: e.is_dir,
             cells: explorer_cells(
                 e.modified,
+                e.size,
                 entry_paths.get(idx).and_then(|path| commits.get(path)),
                 &view.columns,
             ),
@@ -706,6 +707,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
 
 fn explorer_cells(
     modified: Option<u64>,
+    size: Option<u64>,
     commit: Option<&CommitInfo>,
     columns: &column::Set,
 ) -> Vec<column::Cell> {
@@ -714,6 +716,7 @@ fn explorer_cells(
         .map(|def| {
             let (text, timestamp) = match def.id {
                 column::Id::ModifiedDate => (None, modified),
+                column::Id::FileSize => (column::size_text(size), None),
                 column::Id::CommitMessage => (commit.map(|commit| commit.subject.clone()), None),
                 column::Id::CommitDate => (None, commit.map(|commit| commit.timestamp)),
             };

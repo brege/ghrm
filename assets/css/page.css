@@ -781,6 +781,16 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   cursor: default;
 }
 
+.ghrm-nav-meta-number {
+  width: 64px;
+  text-align: right;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: default;
+}
+
 @container ghrm-explorer (max-width: 38rem) {
   .ghrm-has-edge-meta .ghrm-nav-middle-meta {
     display: none;

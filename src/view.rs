@@ -285,6 +285,7 @@ mod tests {
             column::Id::ModifiedDate => date,
             column::Id::CommitMessage => commit,
             column::Id::CommitDate => commit_date,
+            column::Id::FileSize => false,
         })
     }
 

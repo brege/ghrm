@@ -97,6 +97,7 @@ pub struct NavEntry {
     pub href: String,
     pub is_dir: bool,
     pub modified: Option<u64>,
+    pub size: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -162,6 +163,7 @@ struct Snapshot {
     direct_files: BTreeMap<PathBuf, Vec<PathBuf>>,
     files: Vec<PathBuf>,
     modified: BTreeMap<PathBuf, u64>,
+    sizes: BTreeMap<PathBuf, u64>,
 }
 
 pub fn build_all(
@@ -221,6 +223,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
         Arc::new(Mutex::new(BTreeMap::new()));
     let files: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
     let modified: Arc<Mutex<BTreeMap<PathBuf, u64>>> = Arc::new(Mutex::new(BTreeMap::new()));
+    let sizes: Arc<Mutex<BTreeMap<PathBuf, u64>>> = Arc::new(Mutex::new(BTreeMap::new()));
 
     let mut builder = WalkBuilder::new(&root_buf);
     builder
@@ -244,6 +247,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
         let direct_files = direct_files.clone();
         let files = files.clone();
         let modified = modified.clone();
+        let sizes = sizes.clone();
         let excludes = check_excludes.clone();
         Box::new(move |res| {
             let entry = match res {
@@ -262,9 +266,9 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
                 Err(_) => return WalkState::Continue,
             };
             let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
-            let mtime = entry
-                .metadata()
-                .ok()
+            let metadata = entry.metadata().ok();
+            let mtime = metadata
+                .as_ref()
                 .and_then(|m| m.modified().ok())
                 .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                 .map(|d| d.as_secs());
@@ -287,6 +291,9 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
                 }
             }
             if file_type.is_file() {
+                if let Some(metadata) = metadata {
+                    sizes.lock().unwrap().insert(rel.clone(), metadata.len());
+                }
                 files.lock().unwrap().push(rel.clone());
                 direct_files
                     .lock()
@@ -303,6 +310,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
     let mut direct_files = Arc::try_unwrap(direct_files).unwrap().into_inner().unwrap();
     let files = Arc::try_unwrap(files).unwrap().into_inner().unwrap();
     let modified = Arc::try_unwrap(modified).unwrap().into_inner().unwrap();
+    let sizes = Arc::try_unwrap(sizes).unwrap().into_inner().unwrap();
 
     let mut dirs: Vec<PathBuf> = dirs_seen.into_iter().collect();
     dirs.sort_by_key(|path| path.to_string_lossy().to_lowercase());
@@ -336,6 +344,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
         direct_files,
         files,
         modified,
+        sizes,
     }
 }
 
@@ -378,6 +387,7 @@ fn build_tree(
                 href: dir_href(child_dir),
                 is_dir: true,
                 modified: snap.modified.get(child_dir).copied(),
+                size: None,
             });
         }
 
@@ -397,6 +407,7 @@ fn build_tree(
                 href: file_href(file_rel),
                 is_dir: false,
                 modified: snap.modified.get(file_rel).copied(),
+                size: snap.sizes.get(file_rel).copied(),
             });
         }
 
@@ -536,9 +547,9 @@ pub fn list_dir(root: &Path, rel: &Path, spec: ListSpec<'_>) -> Option<NavDir> {
         if !allow_path(&entry_rel, spec.exclude_names, spec.opts) {
             continue;
         }
-        let mtime = entry
-            .metadata()
-            .ok()
+        let metadata = entry.metadata().ok();
+        let mtime = metadata
+            .as_ref()
             .and_then(|m| m.modified().ok())
             .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
             .map(|d| d.as_secs());
@@ -549,6 +560,7 @@ pub fn list_dir(root: &Path, rel: &Path, spec: ListSpec<'_>) -> Option<NavDir> {
                 href: dir_href(&entry_rel),
                 is_dir: true,
                 modified: mtime,
+                size: None,
             });
         } else if file_type.is_file() {
             if spec.opts.filter_ext && !matches_filter(&entry_rel, spec.extensions, spec.matcher) {
@@ -562,6 +574,7 @@ pub fn list_dir(root: &Path, rel: &Path, spec: ListSpec<'_>) -> Option<NavDir> {
                 href: file_href(&entry_rel),
                 is_dir: false,
                 modified: mtime,
+                size: metadata.map(|m| m.len()),
             });
         }
     }

@@ -213,7 +213,7 @@ fn path_search_results(
                 },
                 is_dir: entry.is_dir,
                 modified: entry.modified,
-                cells: columns.path_cells(entry.modified),
+                cells: columns.path_cells(entry.modified, entry.size),
             });
         }
     }
@@ -381,6 +381,7 @@ mod tests {
                     },
                     walk::NavEntry {
                         href: "/newer.md".to_string(),
+                        size: Some(2048),
                         ..nav_entry("newer.md", false, Some(9))
                     },
                 ],
@@ -388,6 +389,10 @@ mod tests {
             },
         );
         let tree = walk::NavTree { dirs };
+        let columns = column::Set::from_defaults(|id| match id {
+            column::Id::ModifiedDate | column::Id::FileSize => true,
+            column::Id::CommitMessage | column::Id::CommitDate => false,
+        });
 
         let resp = path_search_results(
             &tree,
@@ -396,7 +401,7 @@ mod tests {
             10,
             walk::Sort::Timestamp,
             walk::SortDir::Desc,
-            &column::Set::from_defaults(column::default_visible),
+            &columns,
         );
         let date_cell = resp.results[0]
             .cells
@@ -405,6 +410,14 @@ mod tests {
             .unwrap();
         assert_eq!(date_cell.timestamp, Some(9));
         assert!(!date_cell.hidden);
+
+        let size_cell = resp.results[0]
+            .cells
+            .iter()
+            .find(|cell| cell.key == "size")
+            .unwrap();
+        assert_eq!(size_cell.text.as_deref(), Some("2.0 KB"));
+        assert!(!size_cell.hidden);
 
         let commit_cell = resp.results[0]
             .cells
