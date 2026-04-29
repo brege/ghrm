@@ -61,11 +61,23 @@
             </svg>
             <span class="ghrm-view-option-label">Sort by type</span>
           </button>
-          <button class="ghrm-view-option" type="button" data-sort="timestamp" role="menuitemradio" aria-checked="false" title="Sort explorer entries by timestamp">
+          <button class="ghrm-view-option" type="button" data-sort="timestamp" role="menuitemradio" aria-checked="false" title="Sort explorer entries by modified date">
             <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
               <use href="#ghrm-icon-check"></use>
             </svg>
-            <span class="ghrm-view-option-label">Sort by timestamp</span>
+            <span class="ghrm-view-option-label">Sort by modified date</span>
+          </button>
+          <button class="ghrm-view-option" type="button" data-sort="size" role="menuitemradio" aria-checked="false" title="Sort explorer entries by file size">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Sort by size</span>
+          </button>
+          <button class="ghrm-view-option" type="button" data-sort="lines" role="menuitemradio" aria-checked="false" title="Sort explorer entries by line count">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Sort by lines</span>
           </button>
           </div>
         </div>
@@ -88,7 +100,13 @@
             </svg>
             <span class="ghrm-view-option-label">{{ column.label }}</span>
           </button>
-{% endfor %}
+{% endfor %}          <hr class="ghrm-menu-separator" />
+          <button class="ghrm-view-option" type="button" data-column-toggle="headers" role="menuitemcheckbox" aria-checked="false" title="Show column headers in explorer">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Show column headers</span>
+          </button>
         </div>
       </div>
     </div>

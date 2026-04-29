@@ -28,7 +28,7 @@ export function defaultSort() {
 }
 
 export function defaultSortDir(sort = defaultSort()) {
-  return sort === 'timestamp' ? 'desc' : 'asc';
+  return ['timestamp', 'size', 'lines'].includes(sort) ? 'desc' : 'asc';
 }
 
 export function canToggleExcludes() {
@@ -73,6 +73,8 @@ function parseSort(raw) {
     case 'name':
     case 'type':
     case 'timestamp':
+    case 'size':
+    case 'lines':
       return raw;
     default:
       return null;
@@ -116,6 +118,7 @@ export function currentView() {
       defaultSortDir(parseSort(params.get('sort')) || defaultSort()),
     filterGroups: hasGroups ? [...new Set(groups)] : defaultFilterGroups(),
     columns,
+    showHeaders: parseQueryBool(params.get('headers')) ?? false,
   };
 }
 
@@ -156,6 +159,7 @@ export function withView(urlLike, view = currentView()) {
       columnDefaults.has(key),
     );
   }
+  setQueryBool(url.searchParams, 'headers', view.showHeaders, false);
   if (view.sort === defaultSort()) {
     url.searchParams.delete('sort');
   } else {

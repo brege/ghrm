@@ -73,5 +73,7 @@ pub(crate) fn nav_entry(name: &str, is_dir: bool, modified: Option<u64>) -> walk
         href: String::new(),
         is_dir,
         modified,
+        size: None,
+        lines: None,
     }
 }

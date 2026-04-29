@@ -2,6 +2,18 @@
   <section class="ghrm-explorer-shell">
 {% include "fragments/title_block.html" %}{% if entries.is_empty() && !has_parent %}  <p class="ghrm-nav-empty">No files found.</p>
 {% else %}  <table class="ghrm-nav-table">
+    <colgroup>
+      <col class="ghrm-nav-icon-col">
+      <col class="ghrm-nav-name-col">
+{% for cell in empty_cells %}      <col class="ghrm-nav-col" data-column-key="{{ cell.key }}"{% if cell.hidden %} hidden{% endif %}>
+{% endfor %}    </colgroup>
+    <thead class="ghrm-column-headers" hidden>
+      <tr>
+        <th class="ghrm-nav-name" colspan="2">Name</th>
+{% for column in column_defs %}        <th class="{{ column.cell_class }}" data-column-key="{{ column.key }}">{{ column.label }}</th>
+{% endfor %}
+      </tr>
+    </thead>
     <tbody>
 {% if has_parent %}      <tr>
         <td class="ghrm-nav-icon">

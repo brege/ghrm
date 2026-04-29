@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
 
 const VIEW_COMBINATIONS: usize = 8;
-const SORT_VARIANTS: usize = 6;
+const SORT_VARIANTS: usize = 10;
+const LINE_COUNT_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ViewOpts {
@@ -24,6 +25,8 @@ pub enum Sort {
     Name,
     Type,
     Timestamp,
+    Size,
+    Lines,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -39,6 +42,8 @@ impl Sort {
             Self::Name => "name",
             Self::Type => "type",
             Self::Timestamp => "timestamp",
+            Self::Size => "size",
+            Self::Lines => "lines",
         }
     }
 
@@ -47,13 +52,15 @@ impl Sort {
             "name" => Some(Self::Name),
             "type" => Some(Self::Type),
             "timestamp" => Some(Self::Timestamp),
+            "size" => Some(Self::Size),
+            "lines" => Some(Self::Lines),
             _ => None,
         }
     }
 
     pub fn default_dir(self) -> SortDir {
         match self {
-            Self::Timestamp => SortDir::Desc,
+            Self::Timestamp | Self::Size | Self::Lines => SortDir::Desc,
             Self::Name | Self::Type => SortDir::Asc,
         }
     }
@@ -72,6 +79,30 @@ pub struct ListSpec<'a> {
     pub matcher: Option<&'a crate::filter::Matcher>,
     pub opts: ViewOpts,
     pub order: SortSpec,
+}
+
+pub fn line_count(path: &Path, size: Option<u64>) -> Option<u64> {
+    if size.is_some_and(|size| size > LINE_COUNT_MAX_BYTES) {
+        return None;
+    }
+    if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| crate::delivery::is_binary_ext(&ext.to_lowercase()))
+    {
+        return None;
+    }
+
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.contains(&0) {
+        return None;
+    }
+    if bytes.is_empty() {
+        return Some(0);
+    }
+
+    let newlines = bytes.iter().filter(|&&b| b == b'\n').count() as u64;
+    Some(newlines + u64::from(bytes.last() != Some(&b'\n')))
 }
 
 impl SortDir {
@@ -97,6 +128,8 @@ pub struct NavEntry {
     pub href: String,
     pub is_dir: bool,
     pub modified: Option<u64>,
+    pub size: Option<u64>,
+    pub lines: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -162,6 +195,8 @@ struct Snapshot {
     direct_files: BTreeMap<PathBuf, Vec<PathBuf>>,
     files: Vec<PathBuf>,
     modified: BTreeMap<PathBuf, u64>,
+    sizes: BTreeMap<PathBuf, u64>,
+    lines: BTreeMap<PathBuf, u64>,
 }
 
 pub fn build_all(
@@ -221,6 +256,8 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
         Arc::new(Mutex::new(BTreeMap::new()));
     let files: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
     let modified: Arc<Mutex<BTreeMap<PathBuf, u64>>> = Arc::new(Mutex::new(BTreeMap::new()));
+    let sizes: Arc<Mutex<BTreeMap<PathBuf, u64>>> = Arc::new(Mutex::new(BTreeMap::new()));
+    let lines: Arc<Mutex<BTreeMap<PathBuf, u64>>> = Arc::new(Mutex::new(BTreeMap::new()));
 
     let mut builder = WalkBuilder::new(&root_buf);
     builder
@@ -244,6 +281,8 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
         let direct_files = direct_files.clone();
         let files = files.clone();
         let modified = modified.clone();
+        let sizes = sizes.clone();
+        let lines = lines.clone();
         let excludes = check_excludes.clone();
         Box::new(move |res| {
             let entry = match res {
@@ -262,9 +301,9 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
                 Err(_) => return WalkState::Continue,
             };
             let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
-            let mtime = entry
-                .metadata()
-                .ok()
+            let metadata = entry.metadata().ok();
+            let mtime = metadata
+                .as_ref()
                 .and_then(|m| m.modified().ok())
                 .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                 .map(|d| d.as_secs());
@@ -287,6 +326,13 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
                 }
             }
             if file_type.is_file() {
+                let size = metadata.as_ref().map(|m| m.len());
+                if let Some(s) = size {
+                    sizes.lock().unwrap().insert(rel.clone(), s);
+                }
+                if let Some(count) = line_count(path, size) {
+                    lines.lock().unwrap().insert(rel.clone(), count);
+                }
                 files.lock().unwrap().push(rel.clone());
                 direct_files
                     .lock()
@@ -303,6 +349,8 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
     let mut direct_files = Arc::try_unwrap(direct_files).unwrap().into_inner().unwrap();
     let files = Arc::try_unwrap(files).unwrap().into_inner().unwrap();
     let modified = Arc::try_unwrap(modified).unwrap().into_inner().unwrap();
+    let sizes = Arc::try_unwrap(sizes).unwrap().into_inner().unwrap();
+    let lines = Arc::try_unwrap(lines).unwrap().into_inner().unwrap();
 
     let mut dirs: Vec<PathBuf> = dirs_seen.into_iter().collect();
     dirs.sort_by_key(|path| path.to_string_lossy().to_lowercase());
@@ -336,6 +384,8 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
         direct_files,
         files,
         modified,
+        sizes,
+        lines,
     }
 }
 
@@ -378,6 +428,8 @@ fn build_tree(
                 href: dir_href(child_dir),
                 is_dir: true,
                 modified: snap.modified.get(child_dir).copied(),
+                size: None,
+                lines: None,
             });
         }
 
@@ -397,6 +449,8 @@ fn build_tree(
                 href: file_href(file_rel),
                 is_dir: false,
                 modified: snap.modified.get(file_rel).copied(),
+                size: snap.sizes.get(file_rel).copied(),
+                lines: snap.lines.get(file_rel).copied(),
             });
         }
 
@@ -536,9 +590,9 @@ pub fn list_dir(root: &Path, rel: &Path, spec: ListSpec<'_>) -> Option<NavDir> {
         if !allow_path(&entry_rel, spec.exclude_names, spec.opts) {
             continue;
         }
-        let mtime = entry
-            .metadata()
-            .ok()
+        let metadata = entry.metadata().ok();
+        let mtime = metadata
+            .as_ref()
             .and_then(|m| m.modified().ok())
             .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
             .map(|d| d.as_secs());
@@ -549,6 +603,8 @@ pub fn list_dir(root: &Path, rel: &Path, spec: ListSpec<'_>) -> Option<NavDir> {
                 href: dir_href(&entry_rel),
                 is_dir: true,
                 modified: mtime,
+                size: None,
+                lines: None,
             });
         } else if file_type.is_file() {
             if spec.opts.filter_ext && !matches_filter(&entry_rel, spec.extensions, spec.matcher) {
@@ -557,11 +613,14 @@ pub fn list_dir(root: &Path, rel: &Path, spec: ListSpec<'_>) -> Option<NavDir> {
             if is_readme(&entry_rel) {
                 readme = Some(path_key(&entry_rel));
             }
+            let size = metadata.map(|m| m.len());
             entries.push(NavEntry {
                 name,
                 href: file_href(&entry_rel),
                 is_dir: false,
                 modified: mtime,
+                size,
+                lines: line_count(path, size),
             });
         }
     }
@@ -587,6 +646,8 @@ fn sort_index(sort: Sort) -> usize {
         Sort::Name => 0,
         Sort::Type => 1,
         Sort::Timestamp => 2,
+        Sort::Size => 3,
+        Sort::Lines => 4,
     }
 }
 
@@ -594,7 +655,9 @@ fn sort_from_index(idx: usize) -> Sort {
     match (idx / VIEW_COMBINATIONS) / 2 {
         0 => Sort::Name,
         1 => Sort::Type,
-        _ => Sort::Timestamp,
+        2 => Sort::Timestamp,
+        3 => Sort::Size,
+        _ => Sort::Lines,
     }
 }
 
@@ -620,6 +683,8 @@ fn cmp_entries(a: &NavEntry, b: &NavEntry, sort: Sort, dir: SortDir) -> Ordering
             cmp_timestamps(a.modified, b.modified, &a.name, &b.name),
             dir,
         ),
+        Sort::Size => apply_dir(cmp_opt(a.size, b.size, &a.name, &b.name), dir),
+        Sort::Lines => apply_dir(cmp_opt(a.lines, b.lines, &a.name, &b.name), dir),
     })
 }
 
@@ -643,6 +708,10 @@ fn cmp_types(a: &str, b: &str, a_is_dir: bool, b_is_dir: bool) -> Ordering {
 }
 
 fn cmp_timestamps(a: Option<u64>, b: Option<u64>, a_name: &str, b_name: &str) -> Ordering {
+    a.cmp(&b).then_with(|| cmp_names(a_name, b_name))
+}
+
+fn cmp_opt(a: Option<u64>, b: Option<u64>, a_name: &str, b_name: &str) -> Ordering {
     a.cmp(&b).then_with(|| cmp_names(a_name, b_name))
 }
 
