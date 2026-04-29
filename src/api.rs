@@ -242,9 +242,16 @@ fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
 
     let truncated = rows.len() > spec.max_rows;
     rows.truncate(spec.max_rows);
-    let columns = column::Set::from_defaults(|id| id == column::Id::ModifiedDate);
+    let columns = column::Set::from_defaults(|def| def.key == "date");
     for row in &mut rows {
-        row.cells = columns.path_cells(row.modified, row.size, row.lines);
+        row.cells = column::RowMeta {
+            modified: row.modified,
+            size: row.size,
+            lines: row.lines,
+            commit_subject: None,
+            commit_timestamp: None,
+        }
+        .cells(&columns);
     }
 
     PathSearchResponse {

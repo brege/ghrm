@@ -4,7 +4,7 @@ use crate::column;
 use crate::delivery;
 use crate::filter;
 use crate::render::{self, Rendered};
-use crate::repo::{CommitInfo, RepoSet, SourceState};
+use crate::repo::{RepoSet, SourceState};
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
 use crate::view::{self, ViewConfig, ViewQuery, ViewState};
 use crate::walk::{self, NavSet, ViewOpts};
@@ -587,9 +587,8 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     let has_parent = !rel.is_empty();
     let parent_href = view::with_view(&parent_href, &view, &s.view_cfg);
 
-    let show_commit_meta = view.columns.is_visible(column::Id::CommitMessage)
-        || view.columns.is_visible(column::Id::CommitDate);
-    let entry_paths: Vec<_> = if show_commit_meta {
+    let meta_req = column::required_meta(&view.columns);
+    let entry_paths: Vec<_> = if meta_req.contains(column::MetaReq::COMMIT) {
         dir.entries
             .iter()
             .map(|e| Path::new(rel).join(&e.name))
@@ -598,7 +597,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     } else {
         Vec::new()
     };
-    let commits = if show_commit_meta {
+    let commits = if meta_req.contains(column::MetaReq::COMMIT) {
         s.repos.commit_info(&entry_paths)
     } else {
         Default::default()
@@ -608,17 +607,21 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         .entries
         .iter()
         .enumerate()
-        .map(|(idx, e)| ExplorerEntry {
-            name: e.name.clone(),
-            href: view::with_view(&e.href, &view, &s.view_cfg),
-            is_dir: e.is_dir,
-            cells: explorer_cells(
-                e.modified,
-                e.size,
-                e.lines,
-                entry_paths.get(idx).and_then(|path| commits.get(path)),
-                &view.columns,
-            ),
+        .map(|(idx, e)| {
+            let commit = entry_paths.get(idx).and_then(|path| commits.get(path));
+            let meta = column::RowMeta {
+                modified: e.modified,
+                size: e.size,
+                lines: e.lines,
+                commit_subject: commit.map(|commit| commit.subject.as_str()),
+                commit_timestamp: commit.map(|commit| commit.timestamp),
+            };
+            ExplorerEntry {
+                name: e.name.clone(),
+                href: view::with_view(&e.href, &view, &s.view_cfg),
+                is_dir: e.is_dir,
+                cells: meta.cells(&view.columns),
+            }
         })
         .collect();
 
@@ -704,28 +707,6 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         &s.view_cfg,
         s.auth.is_some(),
     )
-}
-
-fn explorer_cells(
-    modified: Option<u64>,
-    size: Option<u64>,
-    lines: Option<u64>,
-    commit: Option<&CommitInfo>,
-    columns: &column::Set,
-) -> Vec<column::Cell> {
-    column::DEFS
-        .iter()
-        .map(|def| {
-            let (text, timestamp) = match def.id {
-                column::Id::ModifiedDate => (None, modified),
-                column::Id::FileSize => (column::size_text(size), None),
-                column::Id::LineCount => (column::count_text(lines), None),
-                column::Id::CommitMessage => (commit.map(|commit| commit.subject.clone()), None),
-                column::Id::CommitDate => (None, commit.map(|commit| commit.timestamp)),
-            };
-            columns.cell(def, text, timestamp)
-        })
-        .collect()
 }
 
 fn respond_html(

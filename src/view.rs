@@ -111,7 +111,7 @@ fn columns_from_query(q: &ViewQuery, defaults: &column::Set) -> column::Set {
         let Some(visible) = q.extra.get(def.key).and_then(|raw| parse_bool_param(raw)) else {
             continue;
         };
-        columns.set_visible(def.id, visible);
+        columns.set_visible(def, visible);
     }
     columns
 }
@@ -199,8 +199,8 @@ pub(crate) fn with_view(href: &str, view: &ViewState, cfg: &ViewConfig) -> Strin
         set_bool_param(
             &mut pairs,
             def.key,
-            view.columns.is_visible(def.id),
-            cfg.default_columns.is_visible(def.id),
+            view.columns.is_visible(def),
+            cfg.default_columns.is_visible(def),
         );
     }
 
@@ -281,12 +281,12 @@ mod tests {
     use crate::testutil::group_filters;
 
     fn columns(date: bool, commit: bool, commit_date: bool) -> column::Set {
-        column::Set::from_defaults(|id| match id {
-            column::Id::ModifiedDate => date,
-            column::Id::CommitMessage => commit,
-            column::Id::CommitDate => commit_date,
-            column::Id::FileSize => false,
-            column::Id::LineCount => false,
+        column::Set::from_defaults(|def| match def.key {
+            "date" => date,
+            "commit" => commit,
+            "commit_date" => commit_date,
+            "size" | "lines" => false,
+            _ => false,
         })
     }
 

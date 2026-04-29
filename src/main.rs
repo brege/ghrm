@@ -165,7 +165,7 @@ fn main() -> Result<()> {
     if max_rows == 0 {
         anyhow::bail!("max search rows must be greater than zero");
     }
-    let default_columns = column::Set::from_defaults(|id| cfg.explorer.columns.default_for(id));
+    let default_columns = column::Set::from_defaults(|def| cfg.explorer.columns.default_for(def));
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

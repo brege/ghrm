@@ -1,7 +1,7 @@
 use crate::column;
 
 use anyhow::{Result, bail};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::{
     collections::BTreeMap,
     env, fs,
@@ -61,26 +61,35 @@ pub struct ExplorerConfig {
     pub columns: ColumnConfig,
 }
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Default)]
 pub struct ColumnConfig {
-    pub date: Option<bool>,
-    pub commit_message: Option<bool>,
-    pub commit_date: Option<bool>,
-    pub size: Option<bool>,
-    pub lines: Option<bool>,
+    overrides: BTreeMap<String, bool>,
+}
+
+impl<'de> Deserialize<'de> for ColumnConfig {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let overrides = BTreeMap::<String, bool>::deserialize(deserializer)?;
+        if let Some(key) = overrides
+            .keys()
+            .find(|key| column::def_for_config_key(key).is_none())
+        {
+            return Err(serde::de::Error::custom(format!(
+                "unknown explorer column `{key}`"
+            )));
+        }
+        Ok(Self { overrides })
+    }
 }
 
 impl ColumnConfig {
-    pub(crate) fn default_for(&self, id: column::Id) -> bool {
-        match id {
-            column::Id::ModifiedDate => self.date,
-            column::Id::CommitMessage => self.commit_message,
-            column::Id::CommitDate => self.commit_date,
-            column::Id::FileSize => self.size,
-            column::Id::LineCount => self.lines,
-        }
-        .unwrap_or_else(|| column::default_visible(id))
+    pub(crate) fn default_for(&self, def: &column::Def) -> bool {
+        self.overrides
+            .get(def.config_key)
+            .copied()
+            .unwrap_or(def.default_visible)
     }
 }
 
@@ -204,10 +213,59 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(config.explorer.columns.date, Some(false));
-        assert_eq!(config.explorer.columns.commit_message, Some(true));
-        assert_eq!(config.explorer.columns.commit_date, Some(false));
-        assert_eq!(config.explorer.columns.size, Some(true));
-        assert_eq!(config.explorer.columns.lines, Some(true));
+        assert!(
+            !config.explorer.columns.default_for(
+                column::DEFS
+                    .iter()
+                    .find(|def| def.config_key == "date")
+                    .unwrap()
+            )
+        );
+        assert!(
+            config.explorer.columns.default_for(
+                column::DEFS
+                    .iter()
+                    .find(|def| def.config_key == "commit_message")
+                    .unwrap()
+            )
+        );
+        assert!(
+            !config.explorer.columns.default_for(
+                column::DEFS
+                    .iter()
+                    .find(|def| def.config_key == "commit_date")
+                    .unwrap()
+            )
+        );
+        assert!(
+            config.explorer.columns.default_for(
+                column::DEFS
+                    .iter()
+                    .find(|def| def.config_key == "size")
+                    .unwrap()
+            )
+        );
+        assert!(
+            config.explorer.columns.default_for(
+                column::DEFS
+                    .iter()
+                    .find(|def| def.config_key == "lines")
+                    .unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_explorer_columns() {
+        let err = toml::from_str::<Config>(
+            r#"
+                [explorer.columns]
+                bogus = true
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(err.contains("unknown explorer column `bogus`"));
     }
 }
