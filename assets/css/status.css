@@ -20,7 +20,7 @@
 }
 
 .ghrm-source-link.is-muted .ghrm-status-dot {
-  color: var(--fgColor-muted, #636c76);
+  color: var(--fgColor-danger, #d1242f);
 }
 
 .ghrm-source-link.is-active .ghrm-status-dot {
@@ -46,16 +46,38 @@
 }
 
 .ghrm-about-peek {
-  border-block: 1px solid var(--borderColor-muted, #d0d7deb3);
-  background: var(--bgColor-muted, #f6f8fa);
+  width: min(980px, calc(100% - 32px));
+  min-height: 92px;
+  margin: 0 auto;
+  display: flex;
+  align-items: stretch;
+  border-inline: 1px solid var(--borderColor-default, #d0d7de);
+  background-color: var(--bgColor-muted, #f6f8fa);
+  background-image:
+    linear-gradient(rgba(9, 105, 218, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(9, 105, 218, 0.16) 1px, transparent 1px),
+    radial-gradient(
+      circle at 75% 50%,
+      rgba(9, 105, 218, 0.15) 0 1px,
+      transparent 1px
+    );
+  background-size:
+    56px 56px,
+    56px 56px,
+    14px 14px;
+}
+
+.ghrm-about-peek[hidden] {
+  display: none;
 }
 
 .ghrm-about-peek-inner {
-  width: min(980px, 100%);
-  margin: 0 auto;
-  padding: 10px 20px;
+  width: min(420px, 100%);
+  min-height: 92px;
+  padding: 22px 24px;
   display: grid;
-  gap: 6px;
+  align-content: center;
+  gap: 8px;
 }
 
 .ghrm-about-project {
@@ -77,6 +99,23 @@
   height: 18px;
   fill: currentColor;
   color: var(--fgColor-muted, #636c76);
+}
+
+:root[data-theme="dark"] .ghrm-about-peek {
+  background-image:
+    linear-gradient(rgba(88, 166, 255, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 166, 255, 0.16) 1px, transparent 1px),
+    radial-gradient(
+      circle at 75% 50%,
+      rgba(88, 166, 255, 0.15) 0 1px,
+      transparent 1px
+    );
+}
+
+@media (max-width: 620px) {
+  .ghrm-about-peek-inner {
+    width: 100%;
+  }
 }
 
 @keyframes ghrm-status-pulse {
