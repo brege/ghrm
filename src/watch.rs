@@ -9,9 +9,14 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tracing::{info, warn};
 
+pub struct NavCache {
+    pub current: Arc<RwLock<NavSet>>,
+    pub alternate: Arc<RwLock<Option<NavSet>>>,
+}
+
 pub fn spawn_dir(
     root: PathBuf,
-    nav: Arc<RwLock<NavSet>>,
+    nav: NavCache,
     reload_tx: broadcast::Sender<()>,
     use_ignore: bool,
     exclude_names: Vec<String>,
@@ -47,10 +52,18 @@ pub fn spawn_dir(
                 .iter()
                 .any(|e| is_nav_event(&root, e, use_ignore, &exclude_names));
             if nav_dirty {
+                if let Ok(mut guard) = nav.alternate.write() {
+                    *guard = None;
+                }
                 let fresh =
                     walk::build_all(&root, use_ignore, &exclude_names, &extensions, no_excludes);
-                if let Ok(mut guard) = nav.write() {
+                if let Ok(mut guard) = nav.current.write() {
                     *guard = fresh;
+                }
+                let alternate =
+                    walk::build_all(&root, !use_ignore, &exclude_names, &extensions, no_excludes);
+                if let Ok(mut guard) = nav.alternate.write() {
+                    *guard = Some(alternate);
                 }
             }
             for p in changed {

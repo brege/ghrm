@@ -35,6 +35,7 @@ pub struct AppState {
     pub target: PathBuf,
     pub mode: Mode,
     pub nav: Arc<RwLock<NavSet>>,
+    pub alternate_nav: Arc<RwLock<Option<NavSet>>>,
     pub repos: RepoSet,
     pub reload: broadcast::Sender<()>,
     pub use_ignore: bool,
@@ -94,6 +95,7 @@ pub async fn run(options: Options) -> Result<()> {
 
     let (reload_tx, _) = broadcast::channel::<()>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
+    let alternate_nav = Arc::new(RwLock::new(None));
     let auth = auth
         .map(|auth| auth::AuthState::new(auth, port))
         .transpose()?
@@ -123,8 +125,9 @@ pub async fn run(options: Options) -> Result<()> {
             let repo_h =
                 tokio::task::spawn_blocking(move || RepoSet::discover(&repo_root2, &repo_excludes));
 
-            // Build nav tree in background - don't block startup
+            // Build nav trees in background - don't block startup
             let nav_bg = nav.clone();
+            let alternate_nav_bg = alternate_nav.clone();
             let target_bg = target.clone();
             let walk_excludes = exclude_names.clone();
             let walk_extensions = extensions.clone();
@@ -139,12 +142,27 @@ pub async fn run(options: Options) -> Result<()> {
                 if let Ok(mut guard) = nav_bg.write() {
                     *guard = fresh;
                 }
+                let alternate = walk::build_all(
+                    &target_bg,
+                    !use_ignore,
+                    &walk_excludes,
+                    &walk_extensions,
+                    no_excludes,
+                );
+                if let Ok(mut guard) = alternate_nav_bg.write() {
+                    if guard.is_none() {
+                        *guard = Some(alternate);
+                    }
+                }
             });
 
             // Watcher failure shouldn't kill the server
             if let Err(e) = watch::spawn_dir(
                 target.clone(),
-                nav.clone(),
+                watch::NavCache {
+                    current: nav.clone(),
+                    alternate: alternate_nav.clone(),
+                },
                 reload_tx.clone(),
                 use_ignore,
                 exclude_names.clone(),
@@ -169,6 +187,7 @@ pub async fn run(options: Options) -> Result<()> {
         target: target.clone(),
         mode,
         nav,
+        alternate_nav,
         repos,
         reload: reload_tx,
         use_ignore,
@@ -239,27 +258,50 @@ pub async fn run(options: Options) -> Result<()> {
 }
 
 impl AppState {
+    fn cached_nav_tree(
+        &self,
+        view: &ViewState,
+        matcher: Option<&filter::Matcher>,
+    ) -> Option<Arc<walk::NavTree>> {
+        if view.use_ignore == self.use_ignore {
+            return Some(self.nav.read().unwrap().get(
+                view.opts,
+                view.sort,
+                view.sort_dir,
+                matcher,
+            ));
+        }
+
+        self.alternate_nav
+            .read()
+            .unwrap()
+            .as_ref()
+            .map(|nav| nav.get(view.opts, view.sort, view.sort_dir, matcher))
+    }
+
     pub(crate) fn nav_tree(
         &self,
         view: &ViewState,
         matcher: Option<&filter::Matcher>,
     ) -> Arc<walk::NavTree> {
-        if view.use_ignore == self.use_ignore {
-            return self
-                .nav
-                .read()
-                .unwrap()
-                .get(view.opts, view.sort, view.sort_dir, matcher);
+        if let Some(tree) = self.cached_nav_tree(view, matcher) {
+            return tree;
         }
 
-        walk::build_all(
-            &self.target,
-            view.use_ignore,
-            &self.exclude_names,
-            &self.filter_exts,
-            self.no_excludes,
-        )
-        .get(view.opts, view.sort, view.sort_dir, matcher)
+        let mut guard = self.alternate_nav.write().unwrap();
+        if guard.is_none() {
+            *guard = Some(walk::build_all(
+                &self.target,
+                view.use_ignore,
+                &self.exclude_names,
+                &self.filter_exts,
+                self.no_excludes,
+            ));
+        }
+        guard
+            .as_ref()
+            .unwrap()
+            .get(view.opts, view.sort, view.sort_dir, matcher)
     }
 }
 
@@ -532,8 +574,8 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewS
 async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     let matcher = view::matcher(&view, &s.filters);
     let filter_exts = view::filter_exts(&view, &s.filter_exts);
-    let tree = s.nav_tree(&view, matcher.as_ref());
-    let dir_opt = tree.dirs.get(rel).cloned();
+    let tree = s.cached_nav_tree(&view, matcher.as_ref());
+    let dir_opt = tree.as_ref().and_then(|tree| tree.dirs.get(rel).cloned());
 
     let dir = match dir_opt {
         Some(d) if d.entries.is_empty() => walk::list_dir(
