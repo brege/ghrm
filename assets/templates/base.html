@@ -81,6 +81,22 @@
 {% endif %}
     </div>
   </header>
+  <section id="ghrm-about-peek" class="ghrm-about-peek" hidden>
+    <div class="ghrm-about-peek-inner">
+      <a class="ghrm-about-project" href="{{ project_href }}" target="_blank" rel="noopener noreferrer">
+        <svg aria-hidden="true">
+          <use href="#ghrm-icon-github"></use>
+        </svg>
+        <span>github.com/brege/ghrm</span>
+      </a>
+      <a class="ghrm-about-project" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer">
+        <svg aria-hidden="true">
+          <use href="#ghrm-icon-fork"></use>
+        </svg>
+        <span>v{{ project_version }}</span>
+      </a>
+    </div>
+  </section>
   <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
 {{ body|safe }}{% if has_mermaid %}  <script defer src="/vendor/mermaid.js"></script>
   <script defer src="/vendor/svg-pan-zoom.min.js"></script>{% endif %}

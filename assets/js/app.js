@@ -20,6 +20,7 @@ import {
   beginActivity,
   endActivity,
   setConnected,
+  setupStatusPeek,
   syncServerStatus,
 } from './status.js';
 import { buildToc, setupToc } from './toc.js';
@@ -727,6 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
   populateDates();
   setupToc();
   setupThemeToggle();
+  setupStatusPeek();
   setupLiveReload();
   setupSpaNav();
   setupNavExternalLinks();

@@ -129,6 +129,16 @@ html {
   margin-top: 12px;
 }
 
+.markdown-body code,
+.markdown-body tt {
+  background-color: var(--bgColor-muted, #f6f8fa);
+}
+
+.markdown-body pre code,
+.markdown-body pre tt {
+  background-color: transparent;
+}
+
 .ghrm-explorer-shell,
 .ghrm-page-shell {
   border: 1px solid var(--borderColor-default, #d0d7de);

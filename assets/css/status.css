@@ -1,8 +1,12 @@
 .ghrm-source-badge {
+  appearance: none;
   width: 18px;
   height: 18px;
+  padding: 0;
+  border: 0;
   color: var(--fgColor-accent, #0969da);
-  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
 }
 
 .ghrm-status-dot {
@@ -39,6 +43,40 @@
 
 .ghrm-source-badge:hover .ghrm-status-dot {
   color: var(--borderColor-accent-emphasis, #0969da);
+}
+
+.ghrm-about-peek {
+  border-block: 1px solid var(--borderColor-muted, #d0d7deb3);
+  background: var(--bgColor-muted, #f6f8fa);
+}
+
+.ghrm-about-peek-inner {
+  width: min(980px, 100%);
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: grid;
+  gap: 6px;
+}
+
+.ghrm-about-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fgColor-default, #1f2328);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ghrm-about-project:hover {
+  color: var(--fgColor-accent, #0969da);
+}
+
+.ghrm-about-project svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  color: var(--fgColor-muted, #636c76);
 }
 
 @keyframes ghrm-status-pulse {

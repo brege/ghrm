@@ -768,10 +768,15 @@ fn respond_html(
     let source = source_html(&source);
     let columns_json = column::client_json(&cfg.default_columns);
     let sorts_json = walk::client_sort_json();
+    let project_version = env!("CARGO_PKG_VERSION");
+    let project_release_href = format!("{PROJECT_REMOTE_URL}/releases/tag/v{project_version}");
     let shell = PageShell {
         title,
         body,
         source: &source,
+        project_href: PROJECT_REMOTE_URL,
+        project_release_href: &project_release_href,
+        project_version,
         favicon: tmpl::FAVICON_SVG_URL,
         show_logout,
         default_show_hidden: cfg.default.show_hidden,
@@ -801,14 +806,14 @@ fn source_html(source: &SourceState) -> String {
     match source {
         SourceState::Web { url, label, .. } => web_source_html(url, label),
         SourceState::Transport { raw } => format!(
-            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-disabled is-muted\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></a><span class=\"ghrm-source-text\">{text}</span></span>",
+            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\">{badge}<span class=\"ghrm-source-text\">{text}</span></span>",
             raw = html_escape::encode_double_quoted_attribute(raw),
-            project_href = html_escape::encode_double_quoted_attribute(PROJECT_REMOTE_URL),
+            badge = status_badge_html(),
             text = html_escape::encode_text(raw),
         ),
         SourceState::NoRemote => format!(
-            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-disabled is-muted\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></a><span class=\"ghrm-source-text\">no remote</span></span>",
-            project_href = html_escape::encode_double_quoted_attribute(PROJECT_REMOTE_URL),
+            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\">{badge}<span class=\"ghrm-source-text\">no remote</span></span>",
+            badge = status_badge_html(),
         ),
         SourceState::NoRepo => project_source_html(),
     }
@@ -816,10 +821,14 @@ fn source_html(source: &SourceState) -> String {
 
 const PROJECT_REMOTE_URL: &str = "https://github.com/brege/ghrm";
 
+fn status_badge_html() -> &'static str {
+    "<button type=\"button\" class=\"ghrm-source-badge\" aria-expanded=\"false\" aria-controls=\"ghrm-about-peek\" aria-label=\"Show ghrm status\" title=\"Show ghrm status\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></button>"
+}
+
 fn project_source_html() -> String {
-    let project_href = html_escape::encode_double_quoted_attribute(PROJECT_REMOTE_URL);
     format!(
-        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></a><span class=\"ghrm-source-text\"><a class=\"ghrm-source-repo\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\">ghrm</a></span></span>",
+        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\"><span class=\"ghrm-source-repo\">ghrm</span></span></span>",
+        badge = status_badge_html(),
     )
 }
 
@@ -834,7 +843,6 @@ fn web_source_html(url: &str, label: &str) -> String {
     };
     let host = html_escape::encode_text(&host);
     let repo = html_escape::encode_text(&repo);
-    let project_href = html_escape::encode_double_quoted_attribute(PROJECT_REMOTE_URL);
 
     let host_html = match host_href {
         Some(host_href) => {
@@ -847,7 +855,8 @@ fn web_source_html(url: &str, label: &str) -> String {
     };
 
     format!(
-        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\"><a class=\"ghrm-source-badge\" href=\"{project_href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"ghrm source code\" title=\"ghrm source code\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></a><span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
+        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
+        badge = status_badge_html(),
     )
 }
 
