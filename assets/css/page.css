@@ -838,7 +838,7 @@ hr.ghrm-menu-separator {
 
 @media (max-width: 767px) {
   .markdown-body {
-    padding: 15px;
+    padding: 0 15px 15px;
   }
 
   .markdown-body > h1:first-child {
