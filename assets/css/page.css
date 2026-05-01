@@ -762,7 +762,7 @@ hr.ghrm-menu-separator {
 
 .ghrm-nav-name {
   font-size: 14px;
-  line-height: 16px;
+  line-height: 20px;
 }
 
 .ghrm-nav-name a {
@@ -774,7 +774,7 @@ hr.ghrm-menu-separator {
   white-space: nowrap;
   color: var(--fgColor-default, #1f2328);
   font-weight: 400;
-  line-height: 16px;
+  line-height: 20px;
   text-decoration: none;
 }
 
