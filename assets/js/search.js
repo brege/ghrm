@@ -167,10 +167,14 @@ async function pathSearch(query, currentPath, view) {
   const extra = currentPath ? { path: currentPath } : {};
   const params = buildSearchParams(query, extra, view);
   const res = await fetch(`/_ghrm/path-search?${params}`).catch(() => null);
-  if (!res || !res.ok) return { results: [], truncated: false, max_rows: 0 };
-  return res
-    .json()
-    .catch(() => ({ results: [], truncated: false, max_rows: 0 }));
+  if (!res || !res.ok)
+    return { results: [], truncated: false, max_rows: 0, pending: false };
+  return res.json().catch(() => ({
+    results: [],
+    truncated: false,
+    max_rows: 0,
+    pending: false,
+  }));
 }
 
 async function contentSearch(query, view) {
@@ -454,6 +458,10 @@ export function setupPathSearch({
       } else {
         const resp = await pathSearch(query, currentPath, view);
         if (seq !== searchSeq) return;
+        if (resp.pending) {
+          status.textContent = 'Indexing paths...';
+          return;
+        }
         const results = resp.results ?? [];
         if (empty) empty.hidden = true;
         table.hidden = false;

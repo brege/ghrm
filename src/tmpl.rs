@@ -5,8 +5,6 @@ use crate::walk;
 use anyhow::Result;
 use askama::Template;
 
-pub(crate) const FAVICON_SVG_URL: &str = "%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20512%20512%22%20fill%3D%22%232ea043%22%3E%3Cpath%20d%3D%22M240%20216V32H92a12%2012%200%200%200-12%2012v424a12%2012%200%200%200%2012%2012h328a12%2012%200%200%200%2012-12V224H248a8%208%200%200%201-8-8z%22%2F%3E%3Cpath%20d%3D%22M272%2041.69V188a4%204%200%200%200%204%204h146.31a2%202%200%200%200%201.42-3.41L275.41%2040.27a2%202%200%200%200-3.41%201.42z%22%2F%3E%3C%2Fsvg%3E";
-
 #[derive(Template)]
 #[template(path = "base.html")]
 pub struct PageShell<'a> {
@@ -16,7 +14,6 @@ pub struct PageShell<'a> {
     pub project_href: &'a str,
     pub project_release_href: &'a str,
     pub project_version: &'static str,
-    pub favicon: &'static str,
     pub show_logout: bool,
     pub default_show_hidden: bool,
     pub default_show_excludes: bool,

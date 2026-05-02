@@ -37,7 +37,7 @@ pub struct AppState {
     pub nav: Arc<RwLock<NavSet>>,
     pub alternate_nav: Arc<RwLock<Option<NavSet>>>,
     pub repos: RepoSet,
-    pub reload: broadcast::Sender<()>,
+    pub reload: broadcast::Sender<&'static str>,
     pub use_ignore: bool,
     pub no_excludes: bool,
     pub view_cfg: ViewConfig,
@@ -93,7 +93,7 @@ pub async fn run(options: Options) -> Result<()> {
     let meta = std::fs::metadata(&target)?;
     let mode = if meta.is_dir() { Mode::Dir } else { Mode::File };
 
-    let (reload_tx, _) = broadcast::channel::<()>(32);
+    let (reload_tx, _) = broadcast::channel::<&'static str>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
     let alternate_nav = Arc::new(RwLock::new(None));
     let auth = auth
@@ -127,10 +127,10 @@ pub async fn run(options: Options) -> Result<()> {
 
             // Build nav trees in background - don't block startup
             let nav_bg = nav.clone();
-            let alternate_nav_bg = alternate_nav.clone();
             let target_bg = target.clone();
             let walk_excludes = exclude_names.clone();
             let walk_extensions = extensions.clone();
+            let nav_ready_tx = reload_tx.clone();
             tokio::task::spawn_blocking(move || {
                 let fresh = walk::build_all(
                     &target_bg,
@@ -141,18 +141,7 @@ pub async fn run(options: Options) -> Result<()> {
                 );
                 if let Ok(mut guard) = nav_bg.write() {
                     *guard = fresh;
-                }
-                let alternate = walk::build_all(
-                    &target_bg,
-                    !use_ignore,
-                    &walk_excludes,
-                    &walk_extensions,
-                    no_excludes,
-                );
-                if let Ok(mut guard) = alternate_nav_bg.write() {
-                    if guard.is_none() {
-                        *guard = Some(alternate);
-                    }
+                    let _ = nav_ready_tx.send("nav-ready");
                 }
             });
 
@@ -258,17 +247,22 @@ pub async fn run(options: Options) -> Result<()> {
 }
 
 impl AppState {
-    fn cached_nav_tree(
+    pub(crate) fn cached_nav_tree(
         &self,
         view: &ViewState,
         matcher: Option<&filter::Matcher>,
     ) -> Option<Arc<walk::NavTree>> {
         if view.use_ignore == self.use_ignore {
-            return Some(self.nav.read().unwrap().get(
+            let nav = self.nav.read().unwrap();
+            if !nav.is_ready() {
+                return None;
+            }
+            return Some(nav.get(
                 view.opts,
                 view.sort,
                 view.sort_dir,
                 matcher,
+                load_lines_for_view(view),
             ));
         }
 
@@ -276,7 +270,16 @@ impl AppState {
             .read()
             .unwrap()
             .as_ref()
-            .map(|nav| nav.get(view.opts, view.sort, view.sort_dir, matcher))
+            .filter(|nav| nav.is_ready())
+            .map(|nav| {
+                nav.get(
+                    view.opts,
+                    view.sort,
+                    view.sort_dir,
+                    matcher,
+                    load_lines_for_view(view),
+                )
+            })
     }
 
     pub(crate) fn nav_tree(
@@ -298,11 +301,19 @@ impl AppState {
                 self.no_excludes,
             ));
         }
-        guard
-            .as_ref()
-            .unwrap()
-            .get(view.opts, view.sort, view.sort_dir, matcher)
+        guard.as_ref().unwrap().get(
+            view.opts,
+            view.sort,
+            view.sort_dir,
+            matcher,
+            load_lines_for_view(view),
+        )
     }
+}
+
+fn load_lines_for_view(view: &ViewState) -> bool {
+    view.sort == walk::Sort::Lines
+        || column::required_meta(&view.columns).contains(column::MetaReq::LINES)
 }
 
 async fn find_addr(bind: &str, start_port: u16) -> Result<SocketAddr> {
@@ -819,7 +830,6 @@ fn respond_html(
         project_href: PROJECT_REMOTE_URL,
         project_release_href: &project_release_href,
         project_version,
-        favicon: tmpl::FAVICON_SVG_URL,
         show_logout,
         default_show_hidden: cfg.default.show_hidden,
         default_show_excludes: cfg.default.show_excludes,
@@ -981,9 +991,9 @@ async fn ws_handler(State(s): State<AppState>, ws: WebSocketUpgrade) -> Response
     ws.on_upgrade(|socket| async move {
         let (mut sink, mut stream) = socket.split();
         let send_task = tokio::spawn(async move {
-            while rx.recv().await.is_ok() {
+            while let Ok(message) = rx.recv().await {
                 if sink
-                    .send(axum::extract::ws::Message::Text("reload".into()))
+                    .send(axum::extract::ws::Message::Text(message.into()))
                     .await
                     .is_err()
                 {

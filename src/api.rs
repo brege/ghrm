@@ -21,6 +21,7 @@ use tracing::warn;
 struct TreeResponse {
     mode: &'static str,
     root: String,
+    ready: bool,
     dirs: BTreeMap<String, crate::walk::NavDir>,
 }
 
@@ -29,14 +30,12 @@ pub(crate) async fn tree(
     RawQuery(raw_query): RawQuery,
     Query(q): Query<ViewQuery>,
 ) -> Response {
-    let nav = s.nav.read().unwrap();
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let matcher = view::matcher(&view, &s.filters);
     let tree = if view.use_ignore == s.use_ignore {
-        nav.get(view.opts, view.sort, view.sort_dir, matcher.as_ref())
+        s.cached_nav_tree(&view, matcher.as_ref())
     } else {
-        drop(nav);
-        s.nav_tree(&view, matcher.as_ref())
+        Some(s.nav_tree(&view, matcher.as_ref()))
     };
     let root = s
         .target
@@ -46,7 +45,8 @@ pub(crate) async fn tree(
     let resp = TreeResponse {
         mode: if s.mode == Mode::Dir { "dir" } else { "file" },
         root,
-        dirs: tree.dirs.clone(),
+        ready: tree.is_some(),
+        dirs: tree.map(|tree| tree.dirs.clone()).unwrap_or_default(),
     };
     json_response(&resp, "api_tree")
 }
@@ -113,16 +113,6 @@ struct PathSearchResult {
     href: String,
     display: String,
     is_dir: bool,
-    #[serde(skip)]
-    modified: Option<u64>,
-    #[serde(skip)]
-    size: Option<u64>,
-    #[serde(skip)]
-    lines: Option<u64>,
-    #[serde(skip)]
-    commit_subject: Option<String>,
-    #[serde(skip)]
-    commit_timestamp: Option<u64>,
     cells: Vec<column::Cell>,
 }
 
@@ -131,6 +121,7 @@ struct PathSearchResponse {
     results: Vec<PathSearchResult>,
     truncated: bool,
     max_rows: usize,
+    pending: bool,
 }
 
 #[derive(Default, Deserialize)]
@@ -154,22 +145,70 @@ pub(crate) async fn path_search(
     let view = view::from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let current_path = q.path.as_deref().unwrap_or("").trim_matches('/');
     let matcher = view::matcher(&view, &s.filters);
-    let tree = s.nav_tree(&view, matcher.as_ref());
-    let resp = path_search_results(PathSearchSpec {
-        tree: &tree,
-        current_path,
-        query,
-        max_rows: s.search_max_rows,
-        sort: view.sort,
-        dir: view.sort_dir,
-        columns: &view.columns,
-        target: Some(&s.target),
-        repos: Some(&s.repos),
-    });
+    let load_lines = view.sort == walk::Sort::Lines
+        || column::required_meta(&view.columns).contains(column::MetaReq::LINES);
+    let load_commit_meta = column::required_meta(&view.columns).contains(column::MetaReq::COMMIT);
+    let rows = if view.use_ignore == s.use_ignore {
+        let nav = s.nav.read().unwrap();
+        if !nav.is_ready() {
+            return json_response(
+                &PathSearchResponse {
+                    results: Vec::new(),
+                    truncated: false,
+                    max_rows: s.search_max_rows,
+                    pending: true,
+                },
+                "api_path_search",
+            );
+        }
+        walk::path_search_nav(
+            &nav,
+            walk::NavPathSearchSpec {
+                current_path,
+                query,
+                max_rows: s.search_max_rows,
+                sort: view.sort,
+                dir: view.sort_dir,
+                opts: view.opts,
+                matcher: matcher.as_ref(),
+                load_lines,
+                load_commit_meta,
+            },
+            |rows| load_path_search_commits(rows, Some(&s.target), Some(&s.repos)),
+        )
+    } else {
+        let mut guard = s.alternate_nav.write().unwrap();
+        if guard.is_none() {
+            *guard = Some(walk::build_all(
+                &s.target,
+                view.use_ignore,
+                &s.exclude_names,
+                &s.filter_exts,
+                s.no_excludes,
+            ));
+        }
+        walk::path_search_nav(
+            guard.as_ref().unwrap(),
+            walk::NavPathSearchSpec {
+                current_path,
+                query,
+                max_rows: s.search_max_rows,
+                sort: view.sort,
+                dir: view.sort_dir,
+                opts: view.opts,
+                matcher: matcher.as_ref(),
+                load_lines,
+                load_commit_meta,
+            },
+            |rows| load_path_search_commits(rows, Some(&s.target), Some(&s.repos)),
+        )
+    };
+    let resp = path_search_response(rows, &view.columns);
 
     json_response(&resp, "api_path_search")
 }
 
+#[cfg(test)]
 struct PathSearchSpec<'a> {
     tree: &'a walk::NavTree,
     current_path: &'a str,
@@ -182,173 +221,25 @@ struct PathSearchSpec<'a> {
     repos: Option<&'a RepoSet>,
 }
 
+#[cfg(test)]
 fn path_search_results(spec: PathSearchSpec<'_>) -> PathSearchResponse {
-    let needle = spec.query.trim().to_lowercase();
-    if needle.is_empty() {
-        return PathSearchResponse {
-            results: Vec::new(),
-            truncated: false,
+    let rows = walk::path_search(
+        walk::PathSearchSpec {
+            tree: spec.tree,
+            current_path: spec.current_path,
+            query: spec.query,
             max_rows: spec.max_rows,
-        };
-    }
-
-    let prefix = (!spec.current_path.is_empty()).then(|| format!("{}/", spec.current_path));
-    let mut rows: Vec<PathSearchResult> = Vec::new();
-
-    for (dir, nav_dir) in &spec.tree.dirs {
-        if let Some(prefix) = &prefix {
-            if dir != spec.current_path && !dir.starts_with(prefix) {
-                continue;
-            }
-        }
-
-        let rel_dir = if dir == spec.current_path {
-            ""
-        } else if let Some(prefix) = &prefix {
-            dir.strip_prefix(prefix).unwrap_or(dir.as_str())
-        } else {
-            dir.as_str()
-        };
-
-        for entry in &nav_dir.entries {
-            let rel_path = if rel_dir.is_empty() {
-                entry.name.clone()
-            } else {
-                format!("{rel_dir}/{}", entry.name)
-            };
-            if !rel_path.to_lowercase().contains(&needle) {
-                continue;
-            }
-            rows.push(PathSearchResult {
-                href: entry.href.clone(),
-                display: if entry.is_dir {
-                    format!("{rel_path}/")
-                } else {
-                    rel_path
-                },
-                is_dir: entry.is_dir,
-                modified: entry.modified,
-                size: entry.size,
-                lines: entry.lines,
-                commit_subject: None,
-                commit_timestamp: None,
-                cells: Vec::new(),
-            });
-        }
-    }
-
-    if matches!(
-        spec.sort,
-        walk::Sort::CommitMessage | walk::Sort::CommitDate
-    ) {
-        load_path_search_commits(&mut rows, spec.target, spec.repos);
-    }
-
-    rows.sort_by(|a, b| {
-        let a_name = a.display.to_lowercase();
-        let b_name = b.display.to_lowercase();
-        let a_base = a_name
-            .rsplit('/')
-            .next()
-            .is_some_and(|name| name.contains(&needle)) as u8;
-        let b_base = b_name
-            .rsplit('/')
-            .next()
-            .is_some_and(|name| name.contains(&needle)) as u8;
-        b_base
-            .cmp(&a_base)
-            .then_with(|| cmp_path_rows(a, b, spec.sort, spec.dir))
-    });
-
-    let truncated = rows.len() > spec.max_rows;
-    rows.truncate(spec.max_rows);
-    if column::required_meta(spec.columns).contains(column::MetaReq::COMMIT)
-        && !matches!(
-            spec.sort,
-            walk::Sort::CommitMessage | walk::Sort::CommitDate
-        )
-    {
-        load_path_search_commits(&mut rows, spec.target, spec.repos);
-    }
-    for row in &mut rows {
-        row.cells = column::RowMeta {
-            modified: row.modified,
-            size: row.size,
-            lines: row.lines,
-            commit_subject: row.commit_subject.as_deref(),
-            commit_timestamp: row.commit_timestamp,
-        }
-        .cells(spec.columns);
-    }
-
-    PathSearchResponse {
-        results: rows,
-        truncated,
-        max_rows: spec.max_rows,
-    }
-}
-
-fn cmp_path_rows(
-    a: &PathSearchResult,
-    b: &PathSearchResult,
-    sort: walk::Sort,
-    dir: walk::SortDir,
-) -> std::cmp::Ordering {
-    match (a.is_dir, b.is_dir) {
-        (true, false) => std::cmp::Ordering::Less,
-        (false, true) => std::cmp::Ordering::Greater,
-        _ => match sort {
-            walk::Sort::Name => {
-                apply_path_dir(a.display.to_lowercase().cmp(&b.display.to_lowercase()), dir)
-            }
-            walk::Sort::Type => apply_path_dir(
-                path_ext(&a.display)
-                    .cmp(&path_ext(&b.display))
-                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
-                dir,
-            ),
-            walk::Sort::Timestamp => apply_path_dir(
-                a.modified
-                    .cmp(&b.modified)
-                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
-                dir,
-            ),
-            walk::Sort::Size => apply_path_dir(
-                a.size
-                    .cmp(&b.size)
-                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
-                dir,
-            ),
-            walk::Sort::Lines => apply_path_dir(
-                a.lines
-                    .cmp(&b.lines)
-                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
-                dir,
-            ),
-            walk::Sort::CommitMessage => apply_path_dir(
-                a.commit_subject
-                    .as_ref()
-                    .map(|subject| subject.to_lowercase())
-                    .cmp(
-                        &b.commit_subject
-                            .as_ref()
-                            .map(|subject| subject.to_lowercase()),
-                    )
-                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
-                dir,
-            ),
-            walk::Sort::CommitDate => apply_path_dir(
-                a.commit_timestamp
-                    .cmp(&b.commit_timestamp)
-                    .then_with(|| a.display.to_lowercase().cmp(&b.display.to_lowercase())),
-                dir,
-            ),
+            sort: spec.sort,
+            dir: spec.dir,
+            load_commit_meta: column::required_meta(spec.columns).contains(column::MetaReq::COMMIT),
         },
-    }
+        |rows| load_path_search_commits(rows, spec.target, spec.repos),
+    );
+    path_search_response(rows, spec.columns)
 }
 
 fn load_path_search_commits(
-    rows: &mut [PathSearchResult],
+    rows: &mut [walk::PathSearchRow],
     target: Option<&Path>,
     repos: Option<&RepoSet>,
 ) {
@@ -372,18 +263,32 @@ fn path_search_abs(target: &Path, href: &str) -> PathBuf {
     target.join(href.trim_matches('/'))
 }
 
-fn path_ext(display: &str) -> String {
-    Path::new(display.trim_end_matches('/'))
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or("")
-        .to_lowercase()
-}
-
-fn apply_path_dir(order: std::cmp::Ordering, dir: walk::SortDir) -> std::cmp::Ordering {
-    match dir {
-        walk::SortDir::Asc => order,
-        walk::SortDir::Desc => order.reverse(),
+fn path_search_response(rows: walk::PathSearchRows, columns: &column::Set) -> PathSearchResponse {
+    let results = rows
+        .rows
+        .into_iter()
+        .map(|row| {
+            let cells = column::RowMeta {
+                modified: row.modified,
+                size: row.size,
+                lines: row.lines,
+                commit_subject: row.commit_subject.as_deref(),
+                commit_timestamp: row.commit_timestamp,
+            }
+            .cells(columns);
+            PathSearchResult {
+                href: row.href,
+                display: row.display,
+                is_dir: row.is_dir,
+                cells,
+            }
+        })
+        .collect();
+    PathSearchResponse {
+        results,
+        truncated: rows.truncated,
+        max_rows: rows.max_rows,
+        pending: false,
     }
 }
 
@@ -536,5 +441,50 @@ mod tests {
 
         let names: Vec<_> = resp.results.into_iter().map(|row| row.display).collect();
         assert_eq!(names, vec!["newer.md", "older.md"]);
+    }
+
+    #[test]
+    fn path_search_truncates_after_ranking() {
+        let mut dirs = BTreeMap::new();
+        dirs.insert(
+            String::new(),
+            walk::NavDir {
+                entries: vec![
+                    walk::NavEntry {
+                        href: "/match-small.md".to_string(),
+                        size: Some(1),
+                        ..nav_entry("match-small.md", false, Some(1))
+                    },
+                    walk::NavEntry {
+                        href: "/match-large.md".to_string(),
+                        size: Some(3000),
+                        ..nav_entry("match-large.md", false, Some(1))
+                    },
+                    walk::NavEntry {
+                        href: "/match-mid.md".to_string(),
+                        size: Some(2000),
+                        ..nav_entry("match-mid.md", false, Some(1))
+                    },
+                ],
+                readme: None,
+            },
+        );
+        let tree = walk::NavTree { dirs };
+
+        let resp = path_search_results(PathSearchSpec {
+            tree: &tree,
+            current_path: "",
+            query: "match",
+            max_rows: 2,
+            sort: walk::Sort::Size,
+            dir: walk::SortDir::Desc,
+            columns: &column::Set::from_defaults(|_| false),
+            target: None,
+            repos: None,
+        });
+
+        assert!(resp.truncated);
+        let names: Vec<_> = resp.results.into_iter().map(|row| row.display).collect();
+        assert_eq!(names, vec!["match-large.md", "match-mid.md"]);
     }
 }

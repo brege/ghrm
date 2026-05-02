@@ -2,15 +2,14 @@ use crate::paths;
 
 use ignore::{WalkBuilder, WalkState};
 use serde::Serialize;
+use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BinaryHeap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
 
 const VIEW_COMBINATIONS: usize = 8;
-const SORT_COUNT: usize = 7;
-const SORT_VARIANTS: usize = SORT_COUNT * 2;
 const LINE_COUNT_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -165,6 +164,15 @@ pub struct ListSpec<'a> {
     pub order: SortSpec,
 }
 
+struct TreeBuildSpec<'a> {
+    exclude_names: &'a [String],
+    extensions: &'a [String],
+    matcher: Option<&'a crate::filter::Matcher>,
+    opts: ViewOpts,
+    order: SortSpec,
+    load_lines: bool,
+}
+
 pub fn line_count(path: &Path, size: Option<u64>) -> Option<u64> {
     if size.is_some_and(|size| size > LINE_COUNT_MAX_BYTES) {
         return None;
@@ -227,60 +235,130 @@ pub struct NavTree {
     pub dirs: BTreeMap<String, NavDir>,
 }
 
-type TreeSet = [Arc<NavTree>; VIEW_COMBINATIONS * SORT_VARIANTS];
+#[derive(Clone, Debug)]
+pub struct PathSearchRow {
+    pub href: String,
+    pub display: String,
+    pub is_dir: bool,
+    pub modified: Option<u64>,
+    pub size: Option<u64>,
+    pub lines: Option<u64>,
+    pub commit_subject: Option<String>,
+    pub commit_timestamp: Option<u64>,
+}
+
+#[cfg(test)]
+pub struct PathSearchSpec<'a> {
+    pub tree: &'a NavTree,
+    pub current_path: &'a str,
+    pub query: &'a str,
+    pub max_rows: usize,
+    pub sort: Sort,
+    pub dir: SortDir,
+    pub load_commit_meta: bool,
+}
+
+pub struct NavPathSearchSpec<'a> {
+    pub current_path: &'a str,
+    pub query: &'a str,
+    pub max_rows: usize,
+    pub sort: Sort,
+    pub dir: SortDir,
+    pub opts: ViewOpts,
+    pub matcher: Option<&'a crate::filter::Matcher>,
+    pub load_lines: bool,
+    pub load_commit_meta: bool,
+}
+
+pub struct PathSearchRows {
+    pub rows: Vec<PathSearchRow>,
+    pub truncated: bool,
+    pub max_rows: usize,
+}
 
 #[derive(Clone, Debug)]
 pub struct NavSet {
-    trees: TreeSet,
+    trees: Arc<Mutex<BTreeMap<usize, Arc<NavTree>>>>,
     snapshot: Arc<Snapshot>,
     exclude_names: Arc<Vec<String>>,
     extensions: Arc<Vec<String>>,
+    ready: bool,
 }
 
 impl NavSet {
+    pub fn is_ready(&self) -> bool {
+        self.ready
+    }
+
     pub fn get(
         &self,
         opts: ViewOpts,
         sort: Sort,
         dir: SortDir,
         matcher: Option<&crate::filter::Matcher>,
+        load_lines: bool,
     ) -> Arc<NavTree> {
-        let idx = tree_key(opts, sort, dir);
-        if opts.filter_ext && matcher.is_some() {
-            return Arc::new(build_tree(
-                &self.snapshot,
-                &self.exclude_names,
-                &self.extensions,
+        let load_lines = load_lines || sort == Sort::Lines;
+        let key = tree_cache_key(opts, sort, dir, load_lines);
+        if matcher.is_none() {
+            if let Some(tree) = self.trees.lock().unwrap().get(&key).cloned() {
+                return tree;
+            }
+        }
+        let tree = Arc::new(build_tree(
+            &self.snapshot,
+            TreeBuildSpec {
+                exclude_names: &self.exclude_names,
+                extensions: &self.extensions,
                 matcher,
                 opts,
-                sort,
-                dir,
-            ));
+                order: SortSpec { sort, dir },
+                load_lines,
+            },
+        ));
+        if matcher.is_none() {
+            let mut guard = self.trees.lock().unwrap();
+            if guard.len() >= 4 {
+                guard.clear();
+            }
+            return guard.entry(key).or_insert_with(|| tree.clone()).clone();
         }
-        self.trees[idx].clone()
+        tree
     }
 }
 
 impl Default for NavSet {
     fn default() -> Self {
         Self {
-            trees: build_trees(&Snapshot::default(), &[], &[], None),
+            trees: Arc::new(Mutex::new(BTreeMap::new())),
             snapshot: Arc::new(Snapshot::default()),
             exclude_names: Arc::new(Vec::new()),
             extensions: Arc::new(Vec::new()),
+            ready: false,
         }
     }
 }
 
 #[derive(Debug, Default)]
 struct Snapshot {
+    root: PathBuf,
     dirs: Vec<PathBuf>,
     direct_dirs: BTreeMap<PathBuf, Vec<PathBuf>>,
     direct_files: BTreeMap<PathBuf, Vec<PathBuf>>,
     files: Vec<PathBuf>,
+    entries: Vec<SnapshotEntry>,
     modified: BTreeMap<PathBuf, u64>,
     sizes: BTreeMap<PathBuf, u64>,
-    lines: BTreeMap<PathBuf, u64>,
+}
+
+#[derive(Debug)]
+struct SnapshotEntry {
+    path: PathBuf,
+    key: String,
+    key_lower: String,
+    is_dir: bool,
+    modified: Option<u64>,
+    size: Option<u64>,
 }
 
 pub fn build_all(
@@ -291,40 +369,13 @@ pub fn build_all(
     no_excludes: bool,
 ) -> NavSet {
     let snapshot = Arc::new(scan(root, use_ignore, exclude_names, no_excludes));
-    let trees = build_trees(&snapshot, exclude_names, extensions, None);
     NavSet {
-        trees,
+        trees: Arc::new(Mutex::new(BTreeMap::new())),
         snapshot,
         exclude_names: Arc::new(exclude_names.to_vec()),
         extensions: Arc::new(extensions.to_vec()),
+        ready: true,
     }
-}
-
-fn build_trees(
-    snap: &Snapshot,
-    exclude_names: &[String],
-    extensions: &[String],
-    matcher: Option<&crate::filter::Matcher>,
-) -> TreeSet {
-    std::array::from_fn(|idx| {
-        let sort = sort_from_index(idx);
-        let dir = dir_from_index(idx);
-        let view = idx % VIEW_COMBINATIONS;
-        let opts = ViewOpts {
-            show_hidden: (view & 1) != 0,
-            show_excludes: (view & 2) != 0,
-            filter_ext: (view & 4) != 0,
-        };
-        Arc::new(build_tree(
-            snap,
-            exclude_names,
-            extensions,
-            matcher,
-            opts,
-            sort,
-            dir,
-        ))
-    })
 }
 
 fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bool) -> Snapshot {
@@ -341,7 +392,6 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
     let files: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
     let modified: Arc<Mutex<BTreeMap<PathBuf, u64>>> = Arc::new(Mutex::new(BTreeMap::new()));
     let sizes: Arc<Mutex<BTreeMap<PathBuf, u64>>> = Arc::new(Mutex::new(BTreeMap::new()));
-    let lines: Arc<Mutex<BTreeMap<PathBuf, u64>>> = Arc::new(Mutex::new(BTreeMap::new()));
 
     let mut builder = WalkBuilder::new(&root_buf);
     builder
@@ -366,7 +416,6 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
         let files = files.clone();
         let modified = modified.clone();
         let sizes = sizes.clone();
-        let lines = lines.clone();
         let excludes = check_excludes.clone();
         Box::new(move |res| {
             let entry = match res {
@@ -414,9 +463,6 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
                 if let Some(s) = size {
                     sizes.lock().unwrap().insert(rel.clone(), s);
                 }
-                if let Some(count) = line_count(path, size) {
-                    lines.lock().unwrap().insert(rel.clone(), count);
-                }
                 files.lock().unwrap().push(rel.clone());
                 direct_files
                     .lock()
@@ -434,7 +480,6 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
     let files = Arc::try_unwrap(files).unwrap().into_inner().unwrap();
     let modified = Arc::try_unwrap(modified).unwrap().into_inner().unwrap();
     let sizes = Arc::try_unwrap(sizes).unwrap().into_inner().unwrap();
-    let lines = Arc::try_unwrap(lines).unwrap().into_inner().unwrap();
 
     let mut dirs: Vec<PathBuf> = dirs_seen.into_iter().collect();
     dirs.sort_by_key(|path| path.to_string_lossy().to_lowercase());
@@ -462,26 +507,51 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
         });
     }
 
+    let mut entries = Vec::with_capacity(dirs.len().saturating_sub(1) + files.len());
+    for dir in dirs.iter().filter(|dir| !dir.as_os_str().is_empty()) {
+        let key = path_key(dir);
+        entries.push(SnapshotEntry {
+            path: dir.clone(),
+            key_lower: key.to_lowercase(),
+            key,
+            is_dir: true,
+            modified: modified.get(dir).copied(),
+            size: None,
+        });
+    }
+    for file in &files {
+        let key = path_key(file);
+        entries.push(SnapshotEntry {
+            path: file.clone(),
+            key_lower: key.to_lowercase(),
+            key,
+            is_dir: false,
+            modified: modified.get(file).copied(),
+            size: sizes.get(file).copied(),
+        });
+    }
+
     Snapshot {
+        root: root.to_path_buf(),
         dirs,
         direct_dirs,
         direct_files,
         files,
+        entries,
         modified,
         sizes,
-        lines,
     }
 }
 
-fn build_tree(
-    snap: &Snapshot,
-    exclude_names: &[String],
-    extensions: &[String],
-    matcher: Option<&crate::filter::Matcher>,
-    opts: ViewOpts,
-    sort: Sort,
-    dir: SortDir,
-) -> NavTree {
+fn build_tree(snap: &Snapshot, spec: TreeBuildSpec<'_>) -> NavTree {
+    let TreeBuildSpec {
+        exclude_names,
+        extensions,
+        matcher,
+        opts,
+        order,
+        load_lines,
+    } = spec;
     let prune_empty = opts.filter_ext;
     let dirs_with_files = if prune_empty {
         compute_dirs_with_files(snap, exclude_names, extensions, matcher, opts)
@@ -528,17 +598,22 @@ fn build_tree(
             if is_readme(file_rel) {
                 readme = Some(path_key(file_rel));
             }
+            let size = snap.sizes.get(file_rel).copied();
             entries.push(NavEntry {
                 name: file_name(file_rel),
                 href: file_href(file_rel),
                 is_dir: false,
                 modified: snap.modified.get(file_rel).copied(),
-                size: snap.sizes.get(file_rel).copied(),
-                lines: snap.lines.get(file_rel).copied(),
+                size,
+                lines: if load_lines {
+                    line_count(&snap.root.join(file_rel), size)
+                } else {
+                    None
+                },
             });
         }
 
-        sort_entries(&mut entries, sort, dir);
+        sort_entries(&mut entries, order.sort, order.dir);
         dirs.insert(path_key(dir_rel), NavDir { entries, readme });
     }
 
@@ -713,12 +788,402 @@ pub fn list_dir(root: &Path, rel: &Path, spec: ListSpec<'_>) -> Option<NavDir> {
     Some(NavDir { entries, readme })
 }
 
+#[cfg(test)]
+pub fn path_search(
+    spec: PathSearchSpec<'_>,
+    mut load_commits: impl FnMut(&mut [PathSearchRow]),
+) -> PathSearchRows {
+    let needle = spec.query.trim().to_lowercase();
+    if needle.is_empty() {
+        return PathSearchRows {
+            rows: Vec::new(),
+            truncated: false,
+            max_rows: spec.max_rows,
+        };
+    }
+
+    if matches!(spec.sort, Sort::CommitMessage | Sort::CommitDate) {
+        let mut rows = Vec::new();
+        visit_path_search_rows(&spec, &needle, |row| rows.push(row));
+        load_commits(&mut rows);
+        let mut rows = sort_path_search_rows(rows, &needle, spec.sort, spec.dir);
+        let truncated = rows.len() > spec.max_rows;
+        rows.truncate(spec.max_rows);
+        return PathSearchRows {
+            rows,
+            truncated,
+            max_rows: spec.max_rows,
+        };
+    }
+
+    let mut selector = PathSearchSelector::new(spec.max_rows, &needle, spec.sort, spec.dir);
+    visit_path_search_rows(&spec, &needle, |row| selector.push(row));
+    let (mut rows, truncated) = selector.finish();
+    if spec.load_commit_meta {
+        load_commits(&mut rows);
+    }
+    PathSearchRows {
+        rows,
+        truncated,
+        max_rows: spec.max_rows,
+    }
+}
+
+pub fn path_search_nav(
+    nav: &NavSet,
+    spec: NavPathSearchSpec<'_>,
+    mut load_commits: impl FnMut(&mut [PathSearchRow]),
+) -> PathSearchRows {
+    let needle = spec.query.trim().to_lowercase();
+    if needle.is_empty() {
+        return PathSearchRows {
+            rows: Vec::new(),
+            truncated: false,
+            max_rows: spec.max_rows,
+        };
+    }
+
+    if matches!(spec.sort, Sort::CommitMessage | Sort::CommitDate) {
+        let mut rows = Vec::new();
+        visit_nav_path_search_rows(nav, &spec, &needle, |row| rows.push(row));
+        load_commits(&mut rows);
+        let mut rows = sort_path_search_rows(rows, &needle, spec.sort, spec.dir);
+        let truncated = rows.len() > spec.max_rows;
+        rows.truncate(spec.max_rows);
+        return PathSearchRows {
+            rows,
+            truncated,
+            max_rows: spec.max_rows,
+        };
+    }
+
+    let mut selector = PathSearchSelector::new(spec.max_rows, &needle, spec.sort, spec.dir);
+    visit_nav_path_search_rows(nav, &spec, &needle, |row| selector.push(row));
+    let (mut rows, truncated) = selector.finish();
+    if spec.load_commit_meta {
+        load_commits(&mut rows);
+    }
+    PathSearchRows {
+        rows,
+        truncated,
+        max_rows: spec.max_rows,
+    }
+}
+
+#[cfg(test)]
+fn visit_path_search_rows(
+    spec: &PathSearchSpec<'_>,
+    needle: &str,
+    mut visit: impl FnMut(PathSearchRow),
+) {
+    let prefix = (!spec.current_path.is_empty()).then(|| format!("{}/", spec.current_path));
+    for (dir, nav_dir) in &spec.tree.dirs {
+        if let Some(prefix) = &prefix {
+            if dir != spec.current_path && !dir.starts_with(prefix) {
+                continue;
+            }
+        }
+
+        let rel_dir = if dir == spec.current_path {
+            ""
+        } else if let Some(prefix) = &prefix {
+            dir.strip_prefix(prefix).unwrap_or(dir.as_str())
+        } else {
+            dir.as_str()
+        };
+
+        for entry in &nav_dir.entries {
+            let rel_path = if rel_dir.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{rel_dir}/{}", entry.name)
+            };
+            if !rel_path.to_lowercase().contains(needle) {
+                continue;
+            }
+            visit(PathSearchRow {
+                href: entry.href.clone(),
+                display: if entry.is_dir {
+                    format!("{rel_path}/")
+                } else {
+                    rel_path
+                },
+                is_dir: entry.is_dir,
+                modified: entry.modified,
+                size: entry.size,
+                lines: entry.lines,
+                commit_subject: None,
+                commit_timestamp: None,
+            });
+        }
+    }
+}
+
+fn visit_nav_path_search_rows(
+    nav: &NavSet,
+    spec: &NavPathSearchSpec<'_>,
+    needle: &str,
+    mut visit: impl FnMut(PathSearchRow),
+) {
+    let load_lines = spec.load_lines || spec.sort == Sort::Lines;
+    let prune_empty = spec.opts.filter_ext;
+    let dirs_with_files = if prune_empty {
+        compute_dirs_with_files(
+            &nav.snapshot,
+            &nav.exclude_names,
+            &nav.extensions,
+            spec.matcher,
+            spec.opts,
+        )
+    } else {
+        HashSet::new()
+    };
+    let prefix = (!spec.current_path.is_empty()).then(|| format!("{}/", spec.current_path));
+
+    for entry in &nav.snapshot.entries {
+        if !allow_path(&entry.path, &nav.exclude_names, spec.opts) {
+            continue;
+        }
+        if prune_empty {
+            if entry.is_dir {
+                if !dirs_with_files.contains(&entry.path) {
+                    continue;
+                }
+            } else if !matches_filter(&entry.path, &nav.extensions, spec.matcher) {
+                continue;
+            }
+        }
+
+        let (display, display_lower) = if let Some(prefix) = &prefix {
+            let Some(display) = entry.key.strip_prefix(prefix) else {
+                continue;
+            };
+            (display, Cow::Owned(display.to_lowercase()))
+        } else {
+            (entry.key.as_str(), Cow::Borrowed(entry.key_lower.as_str()))
+        };
+        if !display_lower.contains(needle) {
+            continue;
+        }
+
+        visit(PathSearchRow {
+            href: if entry.is_dir {
+                dir_href(&entry.path)
+            } else {
+                file_href(&entry.path)
+            },
+            display: if entry.is_dir {
+                format!("{display}/")
+            } else {
+                display.to_string()
+            },
+            is_dir: entry.is_dir,
+            modified: entry.modified,
+            size: entry.size,
+            lines: if load_lines && !entry.is_dir {
+                line_count(&nav.snapshot.root.join(&entry.path), entry.size)
+            } else {
+                None
+            },
+            commit_subject: None,
+            commit_timestamp: None,
+        });
+    }
+}
+
+fn sort_path_search_rows(
+    rows: Vec<PathSearchRow>,
+    needle: &str,
+    sort: Sort,
+    dir: SortDir,
+) -> Vec<PathSearchRow> {
+    let mut ranked = rows
+        .into_iter()
+        .map(|row| RankedPathSearchRow::new(row, needle, sort, dir))
+        .collect::<Vec<_>>();
+    ranked.sort();
+    ranked.into_iter().map(|ranked| ranked.row).collect()
+}
+
+struct PathSearchSelector<'a> {
+    heap: BinaryHeap<RankedPathSearchRow>,
+    count: usize,
+    max_rows: usize,
+    needle: &'a str,
+    sort: Sort,
+    dir: SortDir,
+}
+
+impl<'a> PathSearchSelector<'a> {
+    fn new(max_rows: usize, needle: &'a str, sort: Sort, dir: SortDir) -> Self {
+        Self {
+            heap: BinaryHeap::with_capacity(max_rows),
+            count: 0,
+            max_rows,
+            needle,
+            sort,
+            dir,
+        }
+    }
+
+    fn push(&mut self, row: PathSearchRow) {
+        self.count += 1;
+        if self.max_rows == 0 {
+            return;
+        }
+
+        let ranked = RankedPathSearchRow::new(row, self.needle, self.sort, self.dir);
+        if self.heap.len() < self.max_rows {
+            self.heap.push(ranked);
+            return;
+        }
+        if self
+            .heap
+            .peek()
+            .is_some_and(|worst| ranked.cmp(worst) == Ordering::Less)
+        {
+            self.heap.pop();
+            self.heap.push(ranked);
+        }
+    }
+
+    fn finish(self) -> (Vec<PathSearchRow>, bool) {
+        let truncated = self.count > self.max_rows;
+        let mut ranked = self.heap.into_vec();
+        ranked.sort();
+        (
+            ranked.into_iter().map(|ranked| ranked.row).collect(),
+            truncated,
+        )
+    }
+}
+
+struct RankedPathSearchRow {
+    row: PathSearchRow,
+    base_match: bool,
+    display_lower: String,
+    ext: String,
+    commit_subject_lower: Option<String>,
+    sort: Sort,
+    dir: SortDir,
+}
+
+impl RankedPathSearchRow {
+    fn new(row: PathSearchRow, needle: &str, sort: Sort, dir: SortDir) -> Self {
+        let display_lower = row.display.to_lowercase();
+        let base_match = display_lower
+            .rsplit('/')
+            .next()
+            .is_some_and(|name| name.contains(needle));
+        let ext = path_ext(&row.display);
+        let commit_subject_lower = row
+            .commit_subject
+            .as_ref()
+            .map(|subject| subject.to_lowercase());
+        Self {
+            row,
+            base_match,
+            display_lower,
+            ext,
+            commit_subject_lower,
+            sort,
+            dir,
+        }
+    }
+}
+
+impl PartialEq for RankedPathSearchRow {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl Eq for RankedPathSearchRow {}
+
+impl PartialOrd for RankedPathSearchRow {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for RankedPathSearchRow {
+    fn cmp(&self, other: &Self) -> Ordering {
+        cmp_path_search_rows(self, other, self.sort, self.dir)
+    }
+}
+
+fn cmp_path_search_rows(
+    a: &RankedPathSearchRow,
+    b: &RankedPathSearchRow,
+    sort: Sort,
+    dir: SortDir,
+) -> Ordering {
+    b.base_match
+        .cmp(&a.base_match)
+        .then_with(|| dir_first(a.row.is_dir, b.row.is_dir))
+        .then_with(|| match sort {
+            Sort::Name => apply_dir(a.display_lower.cmp(&b.display_lower), dir),
+            Sort::Type => apply_dir(
+                a.ext
+                    .cmp(&b.ext)
+                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
+                dir,
+            ),
+            Sort::Timestamp => apply_dir(
+                a.row
+                    .modified
+                    .cmp(&b.row.modified)
+                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
+                dir,
+            ),
+            Sort::Size => apply_dir(
+                a.row
+                    .size
+                    .cmp(&b.row.size)
+                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
+                dir,
+            ),
+            Sort::Lines => apply_dir(
+                a.row
+                    .lines
+                    .cmp(&b.row.lines)
+                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
+                dir,
+            ),
+            Sort::CommitMessage => apply_dir(
+                a.commit_subject_lower
+                    .cmp(&b.commit_subject_lower)
+                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
+                dir,
+            ),
+            Sort::CommitDate => apply_dir(
+                a.row
+                    .commit_timestamp
+                    .cmp(&b.row.commit_timestamp)
+                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
+                dir,
+            ),
+        })
+}
+
+fn path_ext(display: &str) -> String {
+    Path::new(display.trim_end_matches('/'))
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase()
+}
+
 fn sort_entries(entries: &mut [NavEntry], sort: Sort, dir: SortDir) {
     entries.sort_by(|a, b| cmp_entries(a, b, sort, dir));
 }
 
 fn view_key(opts: ViewOpts) -> u8 {
     (opts.show_hidden as u8) | ((opts.show_excludes as u8) << 1) | ((opts.filter_ext as u8) << 2)
+}
+
+fn tree_cache_key(opts: ViewOpts, sort: Sort, dir: SortDir, load_lines: bool) -> usize {
+    tree_key(opts, sort, dir) * 2 + usize::from(load_lines)
 }
 
 fn tree_key(opts: ViewOpts, sort: Sort, dir: SortDir) -> usize {
@@ -730,17 +1195,6 @@ fn sort_index(sort: Sort) -> usize {
         .iter()
         .position(|def| def.sort == sort)
         .expect("sort definition exists")
-}
-
-fn sort_from_index(idx: usize) -> Sort {
-    SORT_DEFS[((idx / VIEW_COMBINATIONS) / 2).min(SORT_DEFS.len() - 1)].sort
-}
-
-fn dir_from_index(idx: usize) -> SortDir {
-    match (idx / VIEW_COMBINATIONS) % 2 {
-        0 => SortDir::Asc,
-        _ => SortDir::Desc,
-    }
 }
 
 fn dir_index(dir: SortDir) -> usize {

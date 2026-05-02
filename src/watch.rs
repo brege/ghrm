@@ -17,7 +17,7 @@ pub struct NavCache {
 pub fn spawn_dir(
     root: PathBuf,
     nav: NavCache,
-    reload_tx: broadcast::Sender<()>,
+    reload_tx: broadcast::Sender<&'static str>,
     use_ignore: bool,
     exclude_names: Vec<String>,
     extensions: Vec<String>,
@@ -60,11 +60,6 @@ pub fn spawn_dir(
                 if let Ok(mut guard) = nav.current.write() {
                     *guard = fresh;
                 }
-                let alternate =
-                    walk::build_all(&root, !use_ignore, &exclude_names, &extensions, no_excludes);
-                if let Ok(mut guard) = nav.alternate.write() {
-                    *guard = Some(alternate);
-                }
             }
             for p in changed {
                 let rel = p.strip_prefix(&root).unwrap_or(&p).display();
@@ -74,7 +69,7 @@ pub fn spawn_dir(
                     "change"
                 );
             }
-            let _ = reload_tx.send(());
+            let _ = reload_tx.send("reload");
         }
     });
 
@@ -84,7 +79,7 @@ pub fn spawn_dir(
     Ok(())
 }
 
-pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<()>) -> anyhow::Result<()> {
+pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<&'static str>) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(120), None, tx)?;
     let parent = file.parent().unwrap_or(Path::new(".")).to_path_buf();
@@ -99,7 +94,7 @@ pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<()>) -> anyhow::Re
                 .any(|e| e.event.paths.iter().any(|p| p == &file))
             {
                 info!(path = %file.display(), "change");
-                let _ = reload_tx.send(());
+                let _ = reload_tx.send("reload");
             }
         }
     });

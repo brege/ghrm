@@ -593,13 +593,23 @@ function setupFileViews() {
 function setupLiveReload() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${proto}//${location.host}/_ghrm/ws`;
+  let connectedOnce = false;
   function connect() {
     const ws = new WebSocket(url);
     ws.onopen = () => {
       setConnected(true);
+      if (connectedOnce) {
+        location.reload();
+        return;
+      }
+      connectedOnce = true;
     };
     ws.onmessage = (ev) => {
-      if (ev.data === 'reload') location.reload();
+      if (ev.data === 'reload') {
+        location.reload();
+      } else if (ev.data === 'nav-ready') {
+        refreshActiveSearch();
+      }
     };
     ws.onerror = () => {
       setConnected(false);
