@@ -1,4 +1,7 @@
-# ghrm
+<p align="center">
+  <img src="assets/img/favicon.svg" width="96" height="96" alt="ghrm logo">
+  <h1 align="center">ghrm</h1>
+</p>
 
 Explore your filesystem and render Markdown as if it were on GitHub.
 
@@ -7,20 +10,39 @@ Ghrm supports all **G**it**H**ub-flavored Markdown features, **R**ead**m**e and 
 ## Supported Features
 
 - **Works offline**
-- File explorer with [fd](https://github.com/sharkdp/fd) semantics
+- Live reloading
+- File explorer
+- Rendered Markdown and numbered source code
+- Light-and-dark theme, custom theme support
+
+### Markdown
+
 - Syntax highlighting
-- Focus filters for Markdown, source, and hidden files
+- Tables
 - Admonitions `[!NOTE]`
 - Mermaid diagrams
 - KaTeX math
 - GeoJSON and TopoJSON maps
-- Light/dark theme toggle
+
+### Terminal
+
+```bash
+ghrm .
+```
+
+### Neovim
+
+```lua
+:Ghrm
+```
 
 ## Ethos
 
-I made Ghrm because when I lose internet/power, I often turn toward documentation and repo-gardening to stay occupied while online resources are unavailable. It locally downloads the JavaScript libraries on first install and never touches the internet again, except for URL sources that may already be in your Markdown.  It renders Markdown and file trees the exact same way as GitHub would so there's zero mystery how your documentation is going to look like on GitHub.
+I made Ghrm because when I lose internet/power, I often turn toward documentation and repo-gardening to stay occupied while online resources are unavailable. On first run, ghrm locally downloads the JavaScript libraries from CDNs and never touches the internet again, except for URL sources that may already be in your Markdown.  It renders Markdown and file trees the exact same way as GitHub does. There's zero mystery what your docs are going to look like after you push.
 
-Ghrm is not meant to be a general git repository manager.
+Ghrm is non-mutating. It's not meant to be a general git repo manager.
+
+You can use `--bind 0.0.0.0` to connect to a ghrm instance from other devices in your network. It's automatically password protected, set via [`config.toml`](config.example.toml).
 
 ## Install
 
@@ -37,7 +59,7 @@ ghrm README.md
 
 Multiple files, recursively.
 ```bash
-ghrm .       # ~, ~/Documents, ~/.config, etc
+ghrm ~/src
 ```
 
 Opens a live-reloading preview in your browser. Edits to the file in your editor are reflected automatically on save.
@@ -59,10 +81,9 @@ Commands: `:Ghrm` to start, `:GhrmStop` to stop, or just exit nvim.
 - [Languages](smoke/languages.md)
 
 ```bash
-ghrm README.md
 ghrm smoke/basics.md
 ghrm smoke/diagrams.md
-ghrm .
+ghrm smoke/languages.md
 ```
 
 ## Uninstall
@@ -72,15 +93,11 @@ cargo uninstall ghrm
 rm -r ~/.cache/ghrm
 ```
 
-## Roadmap
+## Inspiration
 
-- Add metadata configuration in header-actions (test these out one by one and bench)
-  - fs timestamp date or git timestamp switch for each file/directory
-  - line count for files
-  - size on disk of file or directory
-- Polish
-  - favicon.svg
-  - demo.webm
+- [fd](https://github.com/sharkdp/fd)
+- [ripgrep](https://github.com/BurntSushi/ripgrep)
+- [tokei](https://github.com/XAMPPRocky/tokei)
 
 ## License
 

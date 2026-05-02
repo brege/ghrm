@@ -103,9 +103,7 @@ fn main() -> Result<()> {
     vendor::ensure()?;
     theme::ensure()?;
 
-    let target = cli
-        .target
-        .ok_or_else(|| anyhow::anyhow!("missing target"))?;
+    let target = cli.target.unwrap_or(std::env::current_dir()?);
     let abs = target.canonicalize()?;
 
     let port = cli.port.or(cfg.port).unwrap_or(1331);
