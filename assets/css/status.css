@@ -73,6 +73,12 @@
   display: none;
 }
 
+body.ghrm-about-open article[data-explorer] .ghrm-explorer-shell,
+body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
 .ghrm-about-peek-inner {
   position: relative;
   z-index: 1;

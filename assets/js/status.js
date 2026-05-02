@@ -17,6 +17,7 @@ function sync() {
   if (peek) {
     peek.hidden = !peekOpen;
   }
+  document.body?.classList.toggle('ghrm-about-open', peekOpen);
 }
 
 export function beginActivity() {
