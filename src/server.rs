@@ -17,7 +17,7 @@ use axum::{
     Router,
     body::Body,
     extract::{Path as AxPath, Query, RawQuery, State, ws::WebSocketUpgrade},
-    http::{StatusCode, header},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     middleware,
     response::{Html, IntoResponse, Response},
     routing::get,
@@ -54,6 +54,31 @@ pub struct AppState {
 pub enum Mode {
     File,
     Dir,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct HtmxContext {
+    pub(crate) is_htmx: bool,
+    pub(crate) push_url: Option<String>,
+}
+
+impl HtmxContext {
+    fn from_headers(headers: &HeaderMap) -> Self {
+        let is_htmx = headers
+            .get("HX-Request")
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value == "true")
+            .unwrap_or(false);
+        Self {
+            is_htmx,
+            push_url: None,
+        }
+    }
+
+    fn with_push_url(mut self, url: String) -> Self {
+        self.push_url = Some(url);
+        self
+    }
 }
 
 pub struct Options {
@@ -452,25 +477,29 @@ fn breadcrumb_html(
 
 async fn root(
     State(s): State<AppState>,
+    headers: HeaderMap,
     RawQuery(raw_query): RawQuery,
     Query(q): Query<ViewQuery>,
 ) -> Response {
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
+    let hx = HtmxContext::from_headers(&headers);
     match s.mode {
-        Mode::File => render_target(&s, &s.target, None, view).await,
-        Mode::Dir => render_explorer(&s, "", view).await,
+        Mode::File => render_target(&s, &s.target, None, view, hx).await,
+        Mode::Dir => render_explorer(&s, "", view, hx).await,
     }
 }
 
 async fn any_path(
     State(s): State<AppState>,
     AxPath(path): AxPath<String>,
+    headers: HeaderMap,
     RawQuery(raw_query): RawQuery,
     Query(q): Query<ViewQuery>,
 ) -> Response {
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
+    let hx = HtmxContext::from_headers(&headers);
     if s.mode == Mode::File {
-        return serve_file_mode(&s, &path, view).await;
+        return serve_file_mode(&s, &path, view, hx).await;
     }
     let had_trailing = path.ends_with('/');
     let clean = path.trim_matches('/').to_string();
@@ -486,27 +515,32 @@ async fn any_path(
     if meta.is_dir() {
         if !had_trailing {
             let loc = view::with_view(&format!("/{}/", clean), &view, &s.view_cfg);
+            if hx.is_htmx {
+                let hx = hx.with_push_url(loc.clone());
+                return render_explorer(&s, &clean, view, hx).await;
+            }
             return Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
                 .header(header::LOCATION, loc)
+                .header(header::VARY, "HX-Request")
                 .body(Body::empty())
                 .unwrap();
         }
-        return render_explorer(&s, &clean, view).await;
+        return render_explorer(&s, &clean, view, hx).await;
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&s, &joined, Some(s.target.as_path()), view).await;
+        return render_file(&s, &joined, Some(s.target.as_path()), view, hx).await;
     }
-    dispatch_file(&s, &joined, &s.target, &clean, view).await
+    dispatch_file(&s, &joined, &s.target, &clean, view, hx).await
 }
 
-async fn serve_file_mode(s: &AppState, path: &str, view: ViewState) -> Response {
+async fn serve_file_mode(s: &AppState, path: &str, view: ViewState, hx: HtmxContext) -> Response {
     let Some(root) = s.target.parent() else {
         return not_found();
     };
     let clean = path.trim_matches('/');
     if clean.is_empty() {
-        return render_target(s, &s.target, None, view).await;
+        return render_target(s, &s.target, None, view, hx).await;
     }
     let joined = root.join(clean);
     let meta = match tokio::fs::metadata(&joined).await {
@@ -516,7 +550,7 @@ async fn serve_file_mode(s: &AppState, path: &str, view: ViewState) -> Response 
     if meta.is_dir() {
         return not_found();
     }
-    render_target(s, &joined, None, view).await
+    render_target(s, &joined, None, view, hx).await
 }
 
 async fn render_target(
@@ -524,9 +558,10 @@ async fn render_target(
     path: &Path,
     root: Option<&Path>,
     view: ViewState,
+    hx: HtmxContext,
 ) -> Response {
     if path.extension().and_then(|s| s.to_str()) == Some("md") {
-        render_file(s, path, root, view).await
+        render_file(s, path, root, view, hx).await
     } else {
         let Some(base) = root.or_else(|| path.parent()) else {
             return not_found();
@@ -537,11 +572,17 @@ async fn render_target(
             .map(|p| p.to_string_lossy().into_owned())
             .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_default();
-        dispatch_file(s, path, base, &rel, view).await
+        dispatch_file(s, path, base, &rel, view, hx).await
     }
 }
 
-async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewState) -> Response {
+async fn render_file(
+    s: &AppState,
+    path: &Path,
+    root: Option<&Path>,
+    view: ViewState,
+    hx: HtmxContext,
+) -> Response {
     let md = match tokio::fs::read_to_string(path).await {
         Ok(m) => m,
         Err(_) => return not_found(),
@@ -576,16 +617,14 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewS
             return not_found();
         }
     };
-    respond_html(
-        &rendered,
-        &body,
-        s.repos.source_for(path),
-        &s.view_cfg,
-        s.auth.is_some(),
-    )
+    let source = s.repos.source_for(path);
+    if hx.is_htmx {
+        return respond_fragment(&body, source, hx);
+    }
+    respond_html(&rendered, &body, source, &s.view_cfg, s.auth.is_some())
 }
 
-async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
+async fn render_explorer(s: &AppState, rel: &str, view: ViewState, hx: HtmxContext) -> Response {
     let matcher = view::matcher(&view, &s.filters);
     let filter_exts = view::filter_exts(&view, &s.filter_exts);
     let tree = s.cached_nav_tree(&view, matcher.as_ref());
@@ -776,13 +815,11 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     } else {
         s.target.join(rel)
     };
-    respond_html(
-        &combined,
-        &body,
-        s.repos.source_for(&current),
-        &s.view_cfg,
-        s.auth.is_some(),
-    )
+    let source = s.repos.source_for(&current);
+    if hx.is_htmx {
+        return respond_fragment(&body, source, hx);
+    }
+    respond_html(&combined, &body, source, &s.view_cfg, s.auth.is_some())
 }
 
 fn cmp_commit_entries(
@@ -856,23 +893,48 @@ fn respond_html(
             return not_found();
         }
     };
-    Html(html).into_response()
+    let mut res = Html(html).into_response();
+    res.headers_mut()
+        .insert(header::VARY, HeaderValue::from_static("HX-Request"));
+    res
+}
+
+fn respond_fragment(body: &str, source: SourceState, hx: HtmxContext) -> Response {
+    let source_oob = source_oob_html(&source);
+    let html = format!("{body}{source_oob}");
+    let mut res = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .header(header::VARY, "HX-Request");
+    if let Some(url) = hx.push_url {
+        res = res.header("HX-Push-Url", url);
+    }
+    res.body(Body::from(html)).unwrap()
+}
+
+fn source_oob_html(source: &SourceState) -> String {
+    source_html_inner(source, true)
 }
 
 fn source_html(source: &SourceState) -> String {
+    source_html_inner(source, false)
+}
+
+fn source_html_inner(source: &SourceState, oob: bool) -> String {
+    let oob_attr = if oob { " hx-swap-oob=\"true\"" } else { "" };
     match source {
-        SourceState::Web { url, label, .. } => web_source_html(url, label),
+        SourceState::Web { url, label, .. } => web_source_html(url, label, oob_attr),
         SourceState::Transport { raw } => format!(
-            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\">{badge}<span class=\"ghrm-source-text\">{text}</span></span>",
+            "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\">{badge}<span class=\"ghrm-source-text\">{text}</span></span>",
             raw = html_escape::encode_double_quoted_attribute(raw),
             badge = status_badge_html(),
             text = html_escape::encode_text(raw),
         ),
         SourceState::NoRemote => format!(
-            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\">{badge}<span class=\"ghrm-source-text\">no remote</span></span>",
+            "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\">{badge}<span class=\"ghrm-source-text\">no remote</span></span>",
             badge = status_badge_html(),
         ),
-        SourceState::NoRepo => project_source_html(),
+        SourceState::NoRepo => project_source_html(oob_attr),
     }
 }
 
@@ -882,14 +944,14 @@ fn status_badge_html() -> &'static str {
     "<button type=\"button\" class=\"ghrm-source-badge\" aria-expanded=\"false\" aria-controls=\"ghrm-about-peek\" aria-label=\"Show ghrm status\" title=\"Show ghrm status\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></button>"
 }
 
-fn project_source_html() -> String {
+fn project_source_html(oob_attr: &str) -> String {
     format!(
-        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\"><span class=\"ghrm-source-repo\">ghrm</span></span></span>",
+        "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\"><span class=\"ghrm-source-repo\">ghrm</span></span></span>",
         badge = status_badge_html(),
     )
 }
 
-fn web_source_html(url: &str, label: &str) -> String {
+fn web_source_html(url: &str, label: &str, oob_attr: &str) -> String {
     let href = html_escape::encode_double_quoted_attribute(url);
     let title_attr = html_escape::encode_double_quoted_attribute(url);
     let (host, repo) = source_display(url, label);
@@ -912,7 +974,7 @@ fn web_source_html(url: &str, label: &str) -> String {
     };
 
     format!(
-        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
+        "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
         badge = status_badge_html(),
     )
 }
@@ -938,6 +1000,7 @@ async fn dispatch_file(
     root: &Path,
     rel: &str,
     view: ViewState,
+    hx: HtmxContext,
 ) -> Response {
     if path
         .extension()
@@ -984,13 +1047,11 @@ async fn dispatch_file(
             return not_found();
         }
     };
-    respond_html(
-        &rendered,
-        &body,
-        s.repos.source_for(path),
-        &s.view_cfg,
-        s.auth.is_some(),
-    )
+    let source = s.repos.source_for(path);
+    if hx.is_htmx {
+        return respond_fragment(&body, source, hx);
+    }
+    respond_html(&rendered, &body, source, &s.view_cfg, s.auth.is_some())
 }
 
 async fn ws_handler(State(s): State<AppState>, ws: WebSocketUpgrade) -> Response {
@@ -1030,5 +1091,57 @@ mod tests {
         let (host, repo) = source_display("https://github.com/brege/ghrm", "brege / ghrm");
         assert_eq!(host, "github.com");
         assert_eq!(repo, "brege/ghrm");
+    }
+
+    #[test]
+    fn htmx_context_detects_hx_request_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert("HX-Request", "true".parse().unwrap());
+        let hx = HtmxContext::from_headers(&headers);
+        assert!(hx.is_htmx);
+        assert!(hx.push_url.is_none());
+    }
+
+    #[test]
+    fn htmx_context_ignores_missing_header() {
+        let headers = HeaderMap::new();
+        let hx = HtmxContext::from_headers(&headers);
+        assert!(!hx.is_htmx);
+    }
+
+    #[test]
+    fn htmx_context_ignores_non_true_value() {
+        let mut headers = HeaderMap::new();
+        headers.insert("HX-Request", "false".parse().unwrap());
+        let hx = HtmxContext::from_headers(&headers);
+        assert!(!hx.is_htmx);
+    }
+
+    #[test]
+    fn htmx_context_with_push_url() {
+        let headers = HeaderMap::new();
+        let hx = HtmxContext::from_headers(&headers).with_push_url("/foo/".to_string());
+        assert_eq!(hx.push_url, Some("/foo/".to_string()));
+    }
+
+    #[test]
+    fn source_oob_includes_swap_attribute() {
+        let html = source_oob_html(&SourceState::NoRepo);
+        assert!(html.contains("hx-swap-oob=\"true\""));
+        assert!(html.contains("id=\"ghrm-source-slot\""));
+    }
+
+    #[test]
+    fn source_html_omits_oob_attribute() {
+        let html = source_html(&SourceState::NoRepo);
+        assert!(!html.contains("hx-swap-oob"));
+        assert!(html.contains("id=\"ghrm-source-slot\""));
+    }
+
+    #[test]
+    fn fragment_response_varies_on_hx_request() {
+        let response = respond_fragment("body", SourceState::NoRepo, HtmxContext::default());
+
+        assert_eq!(response.headers().get(header::VARY).unwrap(), "HX-Request");
     }
 }
