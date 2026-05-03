@@ -1,5 +1,5 @@
-export function icon(name) {
-  return `<svg aria-hidden="true" height="16" width="16" class="ghrm-file-icon"><use href="#ghrm-icon-${name}"></use></svg>`;
+export function icon(name, cls = 'ghrm-file-icon') {
+  return `<svg aria-hidden="true" height="16" width="16" class="${cls}"><use href="#ghrm-icon-${name}"></use></svg>`;
 }
 
 export function escapeHtml(value) {
