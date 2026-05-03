@@ -617,7 +617,7 @@ async fn render_file(
     if hx.is_htmx {
         return respond_fragment(&body, title, source);
     }
-    respond_html(&rendered, &body, source, &s.view_cfg, s.auth.is_some())
+    respond_html(&rendered, &body, source, s.auth.is_some())
 }
 
 async fn render_explorer(s: &AppState, rel: &str, view: ViewState, hx: HtmxContext) -> Response {
@@ -826,7 +826,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState, hx: HtmxConte
     if hx.is_htmx {
         return respond_fragment(&body, &combined.title, source);
     }
-    respond_html(&combined, &body, source, &s.view_cfg, s.auth.is_some())
+    respond_html(&combined, &body, source, s.auth.is_some())
 }
 
 fn cmp_commit_entries(
@@ -984,21 +984,13 @@ fn explorer_controls(
     }
 }
 
-fn respond_html(
-    r: &Rendered,
-    body: &str,
-    source: SourceState,
-    cfg: &ViewConfig,
-    show_logout: bool,
-) -> Response {
+fn respond_html(r: &Rendered, body: &str, source: SourceState, show_logout: bool) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
     } else {
         &r.title
     };
     let source = source_html(&source);
-    let columns_json = column::client_json(&cfg.default_columns);
-    let sorts_json = walk::client_sort_json();
     let project_version = env!("CARGO_PKG_VERSION");
     let project_release_href = format!("{PROJECT_REMOTE_URL}/releases/tag/v{project_version}");
     let assets = vendor::plan(r);
@@ -1010,15 +1002,6 @@ fn respond_html(
         project_release_href: &project_release_href,
         project_version,
         show_logout,
-        default_show_hidden: cfg.default.show_hidden,
-        default_show_excludes: cfg.default.show_excludes,
-        default_use_ignore: cfg.default_use_ignore,
-        default_filter_ext: cfg.default.filter_ext,
-        default_filter_group: cfg.default_groups.first().map(String::as_str),
-        default_sort: cfg.default_sort.as_str(),
-        columns_json: &columns_json,
-        sorts_json: &sorts_json,
-        can_toggle_excludes: cfg.can_toggle_excludes,
         asset_json: vendor::client_json(),
         vendor_styles: &assets.styles,
         vendor_scripts: &assets.scripts,
@@ -1196,7 +1179,7 @@ async fn dispatch_file(
     if hx.is_htmx {
         return respond_fragment(&body, title, source);
     }
-    respond_html(&rendered, &body, source, &s.view_cfg, s.auth.is_some())
+    respond_html(&rendered, &body, source, s.auth.is_some())
 }
 
 async fn ws_handler(State(s): State<AppState>, ws: WebSocketUpgrade) -> Response {

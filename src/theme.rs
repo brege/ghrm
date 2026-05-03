@@ -32,6 +32,9 @@ pub fn ensure() -> Result<()> {
 }
 
 fn install(dest: &std::path::Path) -> Result<()> {
+    if dest.is_dir() {
+        fs::remove_dir_all(dest)?;
+    }
     fs::create_dir_all(dest)?;
     EMBEDDED.extract(dest)?;
     // Vendor files are managed separately by vendor.rs

@@ -73,12 +73,12 @@ async function searchFragment(endpoint, params) {
   };
 }
 
-function pathSearch(query, currentPath) {
+function fetchPathResults(query, currentPath) {
   const params = buildSearchParams(query, { path: currentPath });
   return searchFragment('/_ghrm/path-search', params);
 }
 
-function contentSearch(query) {
+function fetchContentResults(query) {
   const params = buildSearchParams(query);
   return searchFragment('/_ghrm/search', params);
 }
@@ -215,7 +215,7 @@ export function setupPathSearch({
     try {
       if (searchMode === 'content') {
         status.textContent = 'Searching...';
-        const resp = await contentSearch(query);
+        const resp = await fetchContentResults(query);
         if (seq !== searchSeq) return;
         if (empty) empty.hidden = true;
         table.hidden = false;
@@ -225,7 +225,7 @@ export function setupPathSearch({
           resp.count === 1 ? '1 match' : `${resp.count}${suffix} matches`;
         populateDates();
       } else {
-        const resp = await pathSearch(query, currentPath);
+        const resp = await fetchPathResults(query, currentPath);
         if (seq !== searchSeq) return;
         if (empty) empty.hidden = true;
         table.hidden = false;
