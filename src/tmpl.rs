@@ -59,7 +59,6 @@ pub struct ExplorerCtx<'a> {
     pub column_defs: &'a [column::Def],
     pub show_headers: bool,
     pub empty_cells: &'a [column::Cell],
-    pub content_colspan: usize,
     pub entries: &'a [ExplorerEntry],
     pub readme: Option<ExplorerReadme<'a>>,
 }
@@ -109,6 +108,40 @@ pub struct ExplorerReadme<'a> {
     pub html: &'a str,
 }
 
+#[derive(Template)]
+#[template(path = "fragments/search/path.html")]
+pub struct PathSearchCtx<'a> {
+    pub pending: bool,
+    pub rows: &'a [PathSearchRow<'a>],
+    pub empty_colspan: usize,
+}
+
+pub struct PathSearchRow<'a> {
+    pub href: String,
+    pub html: String,
+    pub is_dir: bool,
+    pub cells: &'a [column::Cell],
+}
+
+#[derive(Template)]
+#[template(path = "fragments/search/content.html")]
+pub struct ContentSearchCtx<'a> {
+    pub rows: &'a [ContentSearchRow],
+    pub truncated: bool,
+    pub max_rows: usize,
+    pub empty_colspan: usize,
+    pub content_colspan: usize,
+    pub summary_colspan: usize,
+}
+
+pub struct ContentSearchRow {
+    pub href: String,
+    pub path: String,
+    pub line: u64,
+    pub html: String,
+    pub modified: Option<u64>,
+}
+
 pub fn base(p: PageShell) -> Result<String> {
     Ok(p.render()?)
 }
@@ -118,5 +151,13 @@ pub fn page(ctx: PageCtx<'_>) -> Result<String> {
 }
 
 pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
+    Ok(ctx.render()?)
+}
+
+pub fn path_search(ctx: PathSearchCtx<'_>) -> Result<String> {
+    Ok(ctx.render()?)
+}
+
+pub fn content_search(ctx: ContentSearchCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }

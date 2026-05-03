@@ -3,19 +3,22 @@ use crate::render;
 use crate::repo::RepoSet;
 use crate::search as content_search;
 use crate::server::{AppState, Mode};
-use crate::view::{self, ViewQuery};
+use crate::tmpl::{self, ContentSearchCtx, ContentSearchRow, PathSearchCtx, PathSearchRow};
+use crate::view::{self, ViewConfig, ViewQuery, ViewState};
 use crate::walk;
 
 use axum::{
     body::Body,
     extract::{Query, RawQuery, State},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::Response,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use tracing::warn;
+
+const CONTENT_SNIPPET_MAX: usize = 88;
 
 #[derive(Serialize)]
 struct TreeResponse {
@@ -51,19 +54,16 @@ pub(crate) async fn tree(
     json_response(&resp, "api_tree")
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 pub(crate) struct SearchQuery {
     q: Option<String>,
-    hidden: Option<u8>,
-    excludes: Option<u8>,
-    ignore: Option<u8>,
-    filter: Option<u8>,
-    sort: Option<String>,
-    dir: Option<String>,
+    #[serde(flatten)]
+    view: ViewQuery,
 }
 
 pub(crate) async fn search(
     State(s): State<AppState>,
+    headers: HeaderMap,
     RawQuery(raw_query): RawQuery,
     Query(q): Query<SearchQuery>,
 ) -> Response {
@@ -72,21 +72,7 @@ pub(crate) async fn search(
         _ => return bad_request(r#"{"error":"missing query"}"#),
     };
 
-    let view = view::from_query(
-        &ViewQuery {
-            hidden: q.hidden.map(|value| value.to_string()),
-            excludes: q.excludes.map(|value| value.to_string()),
-            ignore: q.ignore.map(|value| value.to_string()),
-            filter: q.filter.map(|value| value.to_string()),
-            sort: q.sort.clone(),
-            dir: q.dir.clone(),
-            headers: None,
-            extra: Default::default(),
-        },
-        raw_query.as_deref(),
-        &s.view_cfg,
-        &s.filters,
-    );
+    let view = view::from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let exclude_names = if view.opts.show_excludes {
         &[][..]
     } else {
@@ -105,6 +91,10 @@ pub(crate) async fn search(
         group_filter: matcher.as_ref(),
         max_rows: s.search_max_rows,
     });
+
+    if wants_html(&headers) {
+        return content_search_fragment(&resp, &view, &s.view_cfg);
+    }
 
     json_response(&resp, "api_search")
 }
@@ -135,6 +125,7 @@ pub(crate) struct PathSearchQuery {
 
 pub(crate) async fn path_search(
     State(s): State<AppState>,
+    headers: HeaderMap,
     RawQuery(raw_query): RawQuery,
     Query(q): Query<PathSearchQuery>,
 ) -> Response {
@@ -152,6 +143,19 @@ pub(crate) async fn path_search(
     let rows = if view.use_ignore == s.use_ignore {
         let nav = s.nav.read().unwrap();
         if !nav.is_ready() {
+            if wants_html(&headers) {
+                return path_search_fragment(
+                    &PathSearchResponse {
+                        results: Vec::new(),
+                        truncated: false,
+                        max_rows: s.search_max_rows,
+                        pending: true,
+                    },
+                    query,
+                    &view,
+                    &s.view_cfg,
+                );
+            }
             return json_response(
                 &PathSearchResponse {
                     results: Vec::new(),
@@ -205,6 +209,10 @@ pub(crate) async fn path_search(
         )
     };
     let resp = path_search_response(rows, &view.columns);
+
+    if wants_html(&headers) {
+        return path_search_fragment(&resp, query, &view, &s.view_cfg);
+    }
 
     json_response(&resp, "api_path_search")
 }
@@ -293,6 +301,186 @@ fn path_search_response(rows: walk::PathSearchRows, columns: &column::Set) -> Pa
     }
 }
 
+fn path_search_fragment(
+    resp: &PathSearchResponse,
+    query: &str,
+    view: &ViewState,
+    cfg: &ViewConfig,
+) -> Response {
+    let rows = resp
+        .results
+        .iter()
+        .map(|row| PathSearchRow {
+            href: view::with_view(&row.href, view, cfg),
+            html: highlight_match(&row.display, query),
+            is_dir: row.is_dir,
+            cells: &row.cells,
+        })
+        .collect::<Vec<_>>();
+    let body = match tmpl::path_search(PathSearchCtx {
+        pending: resp.pending,
+        rows: &rows,
+        empty_colspan: view.columns.visible_len() + 2,
+    }) {
+        Ok(body) => body,
+        Err(e) => {
+            warn!("path search template error: {}", e);
+            return not_found();
+        }
+    };
+    html_search_response(
+        body,
+        rows.len(),
+        resp.truncated,
+        resp.pending,
+        resp.max_rows,
+    )
+}
+
+fn content_search_fragment(
+    resp: &content_search::SearchResponse,
+    view: &ViewState,
+    cfg: &ViewConfig,
+) -> Response {
+    let rows = resp
+        .results
+        .iter()
+        .map(|row| ContentSearchRow {
+            href: view::with_view(&format!("/{}", row.path), view, cfg),
+            path: row.path.clone(),
+            line: row.line,
+            html: format_content_snippet(&row.text, &row.ranges),
+            modified: row.modified,
+        })
+        .collect::<Vec<_>>();
+    let body = match tmpl::content_search(ContentSearchCtx {
+        rows: &rows,
+        truncated: resp.truncated,
+        max_rows: resp.max_rows,
+        empty_colspan: column::DEFS.len() + 2,
+        content_colspan: content_search_colspan(),
+        summary_colspan: column::DEFS.len() + 1,
+    }) {
+        Ok(body) => body,
+        Err(e) => {
+            warn!("content search template error: {}", e);
+            return not_found();
+        }
+    };
+    html_search_response(body, rows.len(), resp.truncated, false, resp.max_rows)
+}
+
+fn content_search_colspan() -> usize {
+    column::DEFS
+        .iter()
+        .position(|def| def.key == "date")
+        .map_or(column::DEFS.len() + 1, |idx| idx + 1)
+}
+
+fn highlight_match(value: &str, query: &str) -> String {
+    let lower = value.to_ascii_lowercase();
+    let needle = query.to_ascii_lowercase();
+    let mut start = 0;
+    let mut out = String::new();
+
+    while let Some(offset) = lower[start..].find(&needle) {
+        let idx = start + offset;
+        out.push_str(&html_escape::encode_text(&value[start..idx]));
+        out.push_str(r#"<strong class="ghrm-search-hit">"#);
+        out.push_str(&html_escape::encode_text(&value[idx..idx + needle.len()]));
+        out.push_str("</strong>");
+        start = idx + needle.len();
+    }
+
+    out.push_str(&html_escape::encode_text(&value[start..]));
+    out
+}
+
+fn format_content_snippet(text: &str, ranges: &[(usize, usize)]) -> String {
+    let window = content_window(text, ranges);
+    let mut out = String::new();
+    if window.prefix {
+        out.push_str("... ");
+    }
+    out.push_str(&highlight_ranges(window.text, &window.ranges));
+    if window.suffix {
+        out.push_str(" ...");
+    }
+    out
+}
+
+struct ContentWindow<'a> {
+    text: &'a str,
+    ranges: Vec<(usize, usize)>,
+    prefix: bool,
+    suffix: bool,
+}
+
+fn content_window<'a>(text: &'a str, ranges: &[(usize, usize)]) -> ContentWindow<'a> {
+    if text.len() <= CONTENT_SNIPPET_MAX {
+        return ContentWindow {
+            text,
+            ranges: ranges.to_vec(),
+            prefix: false,
+            suffix: false,
+        };
+    }
+    let center = ranges
+        .first()
+        .map(|(start, end)| start + ((end - start) / 2))
+        .unwrap_or(CONTENT_SNIPPET_MAX / 2);
+    let raw_start = center.saturating_sub(CONTENT_SNIPPET_MAX / 2);
+    let raw_end = (raw_start + CONTENT_SNIPPET_MAX).min(text.len());
+    let start = char_boundary_before(text, raw_start);
+    let end = char_boundary_before(text, raw_end);
+    let clipped = ranges
+        .iter()
+        .filter_map(|(range_start, range_end)| {
+            if *range_end <= start || *range_start >= end {
+                None
+            } else {
+                Some((
+                    range_start.saturating_sub(start),
+                    (*range_end).min(end) - start,
+                ))
+            }
+        })
+        .collect();
+
+    ContentWindow {
+        text: &text[start..end],
+        ranges: clipped,
+        prefix: start > 0,
+        suffix: end < text.len(),
+    }
+}
+
+fn char_boundary_before(text: &str, idx: usize) -> usize {
+    let mut idx = idx.min(text.len());
+    while !text.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
+}
+
+fn highlight_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
+    let mut out = String::new();
+    let mut pos = 0;
+    for (start, end) in ranges {
+        let start = char_boundary_before(text, *start);
+        let end = char_boundary_before(text, *end);
+        if start > pos {
+            out.push_str(&html_escape::encode_text(&text[pos..start]));
+        }
+        out.push_str("<mark>");
+        out.push_str(&html_escape::encode_text(&text[start..end]));
+        out.push_str("</mark>");
+        pos = end;
+    }
+    out.push_str(&html_escape::encode_text(&text[pos..]));
+    out
+}
+
 #[derive(Deserialize)]
 pub(crate) struct RenderQuery {
     path: Option<String>,
@@ -346,6 +534,36 @@ fn json_response<T: Serialize>(value: &T, label: &str) -> Response {
             not_found()
         }
     }
+}
+
+fn html_search_response(
+    body: String,
+    count: usize,
+    truncated: bool,
+    pending: bool,
+    max_rows: usize,
+) -> Response {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .header(header::VARY, "HX-Request, Accept")
+        .header("X-Ghrm-Search-Count", count.to_string())
+        .header("X-Ghrm-Search-Truncated", if truncated { "1" } else { "0" })
+        .header("X-Ghrm-Search-Pending", if pending { "1" } else { "0" })
+        .header("X-Ghrm-Search-Max-Rows", max_rows.to_string())
+        .body(Body::from(body))
+        .unwrap()
+}
+
+fn wants_html(headers: &HeaderMap) -> bool {
+    headers
+        .get("HX-Request")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == "true")
+        || headers
+            .get(header::ACCEPT)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value.contains("text/html"))
 }
 
 fn bad_request(body: &'static str) -> Response {

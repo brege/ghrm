@@ -224,6 +224,10 @@ impl Set {
         }
     }
 
+    pub(crate) fn visible_len(&self) -> usize {
+        self.visible.len()
+    }
+
     pub(crate) fn article_class(&self, base: &str) -> String {
         let mut class = base.to_string();
         if DEFS.iter().any(|def| def.edge && self.is_visible(def)) {

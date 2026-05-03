@@ -1,0 +1,21 @@
+{% if rows.is_empty() %}<tr class="ghrm-search-empty"><td colspan="{{ empty_colspan }}">No matches found.</td></tr>
+{% else %}{% for row in rows %}<tr class="ghrm-content-result">
+  <td class="ghrm-nav-icon">
+    <svg aria-hidden="true" focusable="false" class="octicon">
+      <use href="#ghrm-icon-file"></use>
+    </svg>
+  </td>
+  <td class="ghrm-nav-name ghrm-content-cell" colspan="{{ content_colspan }}">
+    <a class="ghrm-content-path" href="{{ row.href }}"><strong>{{ row.path }}</strong><span class="ghrm-content-line">:{{ row.line }}</span></a>
+    <span class="ghrm-content-text">{{ row.html|safe }}</span>
+  </td>
+  <td class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta" data-column-key="date"{% if let Some(ts) = row.modified %} data-ts="{{ ts }}"{% endif %}></td>
+</tr>
+{% endfor %}<tr class="{% if truncated %}ghrm-search-truncated{% else %}ghrm-search-summary{% endif %}">
+  <td class="ghrm-nav-icon"></td>
+  <td class="ghrm-search-summary-cell" colspan="{{ summary_colspan }}">
+    <span>{% if truncated %}Results truncated{% endif %}</span>
+    <span class="ghrm-search-summary-count">{{ rows.len() }}/{{ max_rows }}</span>
+  </td>
+</tr>
+{% endif %}

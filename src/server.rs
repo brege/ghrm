@@ -807,7 +807,6 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState, hx: HtmxConte
         column_defs: column::DEFS,
         show_headers: view.show_headers,
         empty_cells: &empty_cells,
-        content_colspan: column::DEFS.len() + 1,
         entries: &entries,
         readme: readme_tmpl,
     }) {

@@ -1,6 +1,6 @@
 <article class="{{ article_class }}" data-explorer="true" data-current-path="{{ current_path }}" data-ghrm-features="{{ features }}">
   <section class="ghrm-explorer-shell">
-{% include "fragments/title_block.html" %}{% if entries.is_empty() && !has_parent %}  <p class="ghrm-nav-empty">No files found.</p>
+{% include "fragments/explorer/header.html" %}{% if entries.is_empty() && !has_parent %}  <p class="ghrm-nav-empty">No files found.</p>
 {% else %}  <table class="ghrm-nav-table">
     <colgroup>
       <col class="ghrm-nav-icon-col">
@@ -38,43 +38,6 @@
 {% endfor %}    </tbody>
   </table>
 {% endif %}  </section>
-  <template id="ghrm-search-file-row">
-    <tr>
-      <td class="ghrm-nav-icon">
-        <svg aria-hidden="true" focusable="false" class="octicon">
-          <use href="#ghrm-icon-file"></use>
-        </svg>
-      </td>
-      <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
-{% for cell in empty_cells %}      <td class="{{ cell.class }}" data-column-key="{{ cell.key }}"{% if cell.hidden %} hidden{% endif %}></td>
-{% endfor %}
-    </tr>
-  </template>
-  <template id="ghrm-search-dir-row">
-    <tr>
-      <td class="ghrm-nav-icon">
-        <svg aria-hidden="true" focusable="false" class="octicon">
-          <use href="#ghrm-icon-dir"></use>
-        </svg>
-      </td>
-      <td class="ghrm-nav-name"><a class="ghrm-search-path"></a></td>
-{% for cell in empty_cells %}      <td class="{{ cell.class }}" data-column-key="{{ cell.key }}"{% if cell.hidden %} hidden{% endif %}></td>
-{% endfor %}
-    </tr>
-  </template>
-  <template id="ghrm-content-search-row">
-    <tr class="ghrm-content-result">
-      <td class="ghrm-nav-icon">
-        <svg aria-hidden="true" focusable="false" class="octicon">
-          <use href="#ghrm-icon-file"></use>
-        </svg>
-      </td>
-      <td class="ghrm-nav-name ghrm-content-cell" colspan="{{ content_colspan }}">
-        <a class="ghrm-content-path"></a>
-        <span class="ghrm-content-text"></span>
-      </td>
-    </tr>
-  </template>
 {% if let Some(r) = readme %}  <div class="ghrm-readme-box">
     <div class="ghrm-readme-header">
       <div class="ghrm-readme-title">
