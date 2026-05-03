@@ -80,6 +80,7 @@ pub(crate) async fn search(
             filter: q.filter.map(|value| value.to_string()),
             sort: q.sort.clone(),
             dir: q.dir.clone(),
+            headers: None,
             extra: Default::default(),
         },
         raw_query.as_deref(),

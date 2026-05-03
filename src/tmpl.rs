@@ -1,6 +1,4 @@
 use crate::column;
-use crate::filter::GroupMeta;
-use crate::walk;
 
 use anyhow::Result;
 use askama::Template;
@@ -50,14 +48,53 @@ pub struct ExplorerCtx<'a> {
     pub current_path: &'a str,
     pub has_parent: bool,
     pub parent_href: &'a str,
-    pub show_excludes: bool,
-    pub sort_defs: &'a [walk::SortDef],
+    pub filter_menu_active: bool,
+    pub filter_controls: &'a [FilterControl],
+    pub sort_menu_active: bool,
+    pub sort_controls: &'a [SortControl],
+    pub sort_dir_control: &'a SortDirControl,
+    pub column_menu_active: bool,
+    pub column_controls: &'a [ColumnControl],
+    pub headers_control: &'a ColumnControl,
     pub column_defs: &'a [column::Def],
+    pub show_headers: bool,
     pub empty_cells: &'a [column::Cell],
     pub content_colspan: usize,
-    pub filter_groups: &'a [GroupMeta],
     pub entries: &'a [ExplorerEntry],
     pub readme: Option<ExplorerReadme<'a>>,
+}
+
+pub struct FilterControl {
+    pub href: String,
+    pub label: String,
+    pub title: String,
+    pub active: bool,
+    pub hidden: bool,
+    pub group: bool,
+}
+
+pub struct SortControl {
+    pub href: String,
+    pub label: &'static str,
+    pub title: &'static str,
+    pub active: bool,
+    pub hidden: bool,
+}
+
+pub struct SortDirControl {
+    pub href: String,
+    pub label: &'static str,
+    pub icon: &'static str,
+    pub active: bool,
+}
+
+pub struct ColumnControl {
+    pub href: String,
+    pub key: &'static str,
+    pub label: &'static str,
+    pub title: &'static str,
+    pub active: bool,
+    pub edge: bool,
 }
 
 pub struct ExplorerEntry {

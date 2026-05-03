@@ -5,7 +5,10 @@ use crate::delivery;
 use crate::filter;
 use crate::render::{self, Rendered};
 use crate::repo::{RepoSet, SourceState};
-use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
+use crate::tmpl::{
+    self, ColumnControl, ExplorerCtx, ExplorerEntry, ExplorerReadme, FilterControl, PageShell,
+    SortControl, SortDirControl,
+};
 use crate::vendor;
 use crate::view::{self, ViewConfig, ViewQuery, ViewState};
 use crate::walk::{self, NavSet, ViewOpts};
@@ -767,6 +770,12 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState, hx: HtmxConte
     let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, &view, &s.view_cfg);
     let article_class = view.columns.article_class("markdown-body");
     let empty_cells = view.columns.empty_cells();
+    let current_href = if rel.is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{rel}/")
+    };
+    let controls = explorer_controls(&current_href, &view, &s.view_cfg, &s.filters);
     let (has_mermaid, has_math, has_map) = readme_rendered
         .as_ref()
         .map(|r| (r.has_mermaid, r.has_math, r.has_map))
@@ -787,12 +796,18 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState, hx: HtmxConte
         current_path: rel,
         has_parent,
         parent_href: &parent_href,
-        show_excludes: s.view_cfg.can_toggle_excludes,
-        sort_defs: walk::SORT_DEFS,
+        filter_menu_active: controls.filter_menu_active,
+        filter_controls: &controls.filter_controls,
+        sort_menu_active: controls.sort_menu_active,
+        sort_controls: &controls.sort_controls,
+        sort_dir_control: &controls.sort_dir_control,
+        column_menu_active: controls.column_menu_active,
+        column_controls: &controls.column_controls,
+        headers_control: &controls.headers_control,
         column_defs: column::DEFS,
+        show_headers: view.show_headers,
         empty_cells: &empty_cells,
         content_colspan: column::DEFS.len() + 1,
-        filter_groups: s.filters.groups(),
         entries: &entries,
         readme: readme_tmpl,
     }) {
@@ -837,6 +852,136 @@ fn cmp_commit_entries(
     match dir {
         walk::SortDir::Asc => order,
         walk::SortDir::Desc => order.reverse(),
+    }
+}
+
+struct ExplorerControls {
+    filter_menu_active: bool,
+    filter_controls: Vec<FilterControl>,
+    sort_menu_active: bool,
+    sort_controls: Vec<SortControl>,
+    sort_dir_control: SortDirControl,
+    column_menu_active: bool,
+    column_controls: Vec<ColumnControl>,
+    headers_control: ColumnControl,
+}
+
+fn explorer_controls(
+    href: &str,
+    view: &ViewState,
+    cfg: &ViewConfig,
+    filters: &filter::Set,
+) -> ExplorerControls {
+    let filter_menu_active = view.opts.show_hidden != cfg.default.show_hidden
+        || (cfg.can_toggle_excludes && view.opts.show_excludes != cfg.default.show_excludes)
+        || view.use_ignore != cfg.default_use_ignore
+        || view.opts.filter_ext != cfg.default.filter_ext
+        || view.groups != cfg.default_groups;
+    let mut filter_controls = vec![
+        FilterControl {
+            href: view::with_view(href, &view::toggle_hidden(view), cfg),
+            label: "Show hidden".to_string(),
+            title: "Set by -H".to_string(),
+            active: view.opts.show_hidden,
+            hidden: false,
+            group: false,
+        },
+        FilterControl {
+            href: view::with_view(href, &view::toggle_excludes(view, cfg), cfg),
+            label: "Show excludes".to_string(),
+            title: "Set by -E".to_string(),
+            active: view.opts.show_excludes,
+            hidden: !cfg.can_toggle_excludes,
+            group: false,
+        },
+        FilterControl {
+            href: view::with_view(href, &view::toggle_ignore(view), cfg),
+            label: "Show gitignores".to_string(),
+            title: "Set by -I".to_string(),
+            active: !view.use_ignore,
+            hidden: false,
+            group: false,
+        },
+        FilterControl {
+            href: view::with_view(href, &view::toggle_filter(view, cfg), cfg),
+            label: "Filter files".to_string(),
+            title: "Customize with -e <file extension>".to_string(),
+            active: view.opts.filter_ext,
+            hidden: false,
+            group: false,
+        },
+    ];
+    for group in filters.groups() {
+        filter_controls.push(FilterControl {
+            href: view::with_view(href, &view::toggle_group(view, &group.name), cfg),
+            label: group.label.clone(),
+            title: group.detail.clone(),
+            active: view.opts.filter_ext && view.groups.contains(&group.name),
+            hidden: false,
+            group: true,
+        });
+    }
+
+    let sort_menu_active =
+        view.sort != cfg.default_sort || view.sort_dir != view.sort.default_dir();
+    let sort_controls = walk::SORT_DEFS
+        .iter()
+        .map(|def| SortControl {
+            href: view::with_view(href, &view::set_sort(view, def.sort), cfg),
+            label: def.label,
+            title: def.title,
+            active: view.sort == def.sort,
+            hidden: def
+                .column_key
+                .is_some_and(|key| !view.columns.is_visible_key(key)),
+        })
+        .collect();
+    let sort_dir_desc = view.sort_dir == walk::SortDir::Desc;
+    let sort_dir_control = SortDirControl {
+        href: view::with_view(href, &view::toggle_sort_dir(view), cfg),
+        label: if sort_dir_desc {
+            "Sort descending"
+        } else {
+            "Sort ascending"
+        },
+        icon: if sort_dir_desc {
+            "ghrm-icon-chevron-down"
+        } else {
+            "ghrm-icon-chevron-up"
+        },
+        active: view.sort_dir != view.sort.default_dir(),
+    };
+
+    let column_menu_active = view.columns != cfg.default_columns || view.show_headers;
+    let column_controls = column::DEFS
+        .iter()
+        .map(|def| ColumnControl {
+            href: view::with_view(href, &view::toggle_column(view, def.key), cfg),
+            key: def.key,
+            label: def.label,
+            title: def.title,
+            active: view.columns.is_visible(def),
+            edge: def.edge,
+        })
+        .collect();
+    let headers_control = ColumnControl {
+        href: view::with_view(href, &view::toggle_headers(view), cfg),
+        key: "headers",
+        label: "Show column headers",
+        title: "Show column headers in explorer",
+        active: view.show_headers,
+        edge: false,
+    };
+
+    ExplorerControls {
+        filter_menu_active,
+        filter_controls,
+        sort_menu_active,
+        sort_controls,
+        sort_dir_control,
+        column_menu_active,
+        column_controls,
+        headers_control,
     }
 }
 

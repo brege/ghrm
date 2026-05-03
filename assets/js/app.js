@@ -11,7 +11,6 @@ import {
 } from './dom.js';
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './preview.js';
 import {
-  hasActiveSearch,
   refreshActiveSearch,
   setSearchCloseHandler,
   setupPathSearch,
@@ -24,25 +23,9 @@ import {
   syncServerStatus,
 } from './status.js';
 import { buildToc, setupToc } from './toc.js';
-import {
-  canToggleExcludes,
-  currentView,
-  defaultColumns,
-  defaultFilterExt,
-  defaultFilterGroups,
-  defaultShowExcludes,
-  defaultShowHidden,
-  defaultSort,
-  defaultSortDir,
-  defaultUseIgnore,
-  hasEdgeColumn,
-  sortAvailable,
-  sortColumnKey,
-  withView,
-} from './view.js';
 
 let explorerMenusBound = false;
-let reopenExplorerMenu = null;
+let pendingSamePathSwap = false;
 
 const EXPLORER_MENUS = [
   {
@@ -62,100 +45,40 @@ const EXPLORER_MENUS = [
   },
 ];
 
-function syncViewMenu(view = currentView()) {
-  const menu = currentExplorerMenu('filter');
-  if (menu) {
-    const active =
-      view.showHidden !== defaultShowHidden() ||
-      (canToggleExcludes() && view.showExcludes !== defaultShowExcludes()) ||
-      view.useIgnore !== defaultUseIgnore() ||
-      view.filterExt !== defaultFilterExt() ||
-      view.filterGroups.join(',') !== defaultFilterGroups().join(',');
-    menu.toggle.classList.toggle('is-active', active);
-  }
-  for (const button of menu?.panel.querySelectorAll('.ghrm-view-option') ||
-    []) {
-    if (button.dataset.viewToggle === 'excludes' && !canToggleExcludes()) {
-      button.hidden = true;
-      continue;
-    }
-    const active =
-      (button.dataset.viewToggle === 'hidden' && view.showHidden) ||
-      (button.dataset.viewToggle === 'excludes' && view.showExcludes) ||
-      (button.dataset.viewToggle === 'ignored' && !view.useIgnore) ||
-      (button.dataset.viewToggle === 'filter' && view.filterExt) ||
-      (view.filterExt &&
-        button.dataset.filterGroup &&
-        view.filterGroups.includes(button.dataset.filterGroup));
-    button.classList.toggle('is-active', active);
-    button.setAttribute('aria-checked', active ? 'true' : 'false');
-  }
-}
-
-function syncSortControls(view = currentView()) {
-  const menu = currentExplorerMenu('sort');
-  if (menu) {
-    const active =
-      view.sort !== defaultSort() || view.sortDir !== defaultSortDir(view.sort);
-    menu.toggle.classList.toggle('is-active', active);
-  }
-  for (const button of menu?.panel.querySelectorAll('.ghrm-view-option') ||
-    []) {
-    const available = sortAvailable(button.dataset.sort, view.columns);
-    button.hidden = !available;
-    button.disabled = !available;
-    const active = button.dataset.sort === view.sort;
-    button.classList.toggle('is-active', active);
-    button.setAttribute('aria-checked', active ? 'true' : 'false');
-  }
-  const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
-  if (!dirToggle) return;
-  const use = dirToggle.querySelector('use');
-  if (use) {
-    use.setAttribute(
-      'href',
-      view.sortDir === 'desc'
-        ? '#ghrm-icon-chevron-down'
-        : '#ghrm-icon-chevron-up',
-    );
-  }
-  const label = view.sortDir === 'desc' ? 'Sort descending' : 'Sort ascending';
-  dirToggle.title = label;
-  dirToggle.setAttribute('aria-label', label);
-  dirToggle.classList.toggle(
-    'is-active',
-    view.sortDir !== defaultSortDir(view.sort),
-  );
-}
-
-function syncColumnControls(view = currentView()) {
+function syncColumnControls() {
   const article = document.querySelector('article[data-explorer]');
-  const menu = currentExplorerMenu('column');
+  const controls = [
+    ...document.querySelectorAll('[data-column-toggle].ghrm-view-option'),
+  ];
+  const columns = new Set(
+    controls
+      .filter((control) => {
+        return (
+          control.dataset.columnToggle !== 'headers' &&
+          control.classList.contains('is-active')
+        );
+      })
+      .map((control) => control.dataset.columnToggle),
+  );
   if (article) {
-    article.classList.toggle('ghrm-has-edge-meta', hasEdgeColumn(view.columns));
+    const hasEdge = controls.some((control) => {
+      return (
+        control.dataset.columnToggle !== 'headers' &&
+        control.dataset.columnEdge === '1' &&
+        control.classList.contains('is-active')
+      );
+    });
+    article.classList.toggle('ghrm-has-edge-meta', hasEdge);
     for (const cell of article.querySelectorAll('[data-column-key]')) {
-      cell.hidden = !view.columns.has(cell.dataset.columnKey);
+      cell.hidden = !columns.has(cell.dataset.columnKey);
     }
     const headers = article.querySelector('.ghrm-column-headers');
+    const headerControl = controls.find((control) => {
+      return control.dataset.columnToggle === 'headers';
+    });
     if (headers) {
-      headers.hidden = !view.showHeaders;
+      headers.hidden = !headerControl?.classList.contains('is-active');
     }
-  }
-  for (const button of menu?.panel.querySelectorAll('.ghrm-view-option') ||
-    []) {
-    const key = button.dataset.columnToggle;
-    const active = key === 'headers' ? view.showHeaders : view.columns.has(key);
-    button.classList.toggle('is-active', active);
-    button.setAttribute('aria-checked', active ? 'true' : 'false');
-  }
-
-  if (menu) {
-    const defaults = defaultColumns();
-    const active =
-      view.columns.size !== defaults.size ||
-      [...view.columns].some((key) => !defaults.has(key)) ||
-      view.showHeaders;
-    menu.toggle.classList.toggle('is-active', active);
   }
 }
 
@@ -223,30 +146,12 @@ function openExplorerMenu(name) {
   positionFloatingPanel(menu.panel, menu.toggle);
 }
 
-function applyView(next, { closeMenus = false } = {}) {
-  const target = withView(location.href, next);
-  if (hasActiveSearch()) {
-    if (closeMenus) closeExplorerMenus();
-    history.pushState(null, '', target);
-    syncViewMenu(next);
-    syncSortControls(next);
-    syncColumnControls(next);
-    refreshActiveSearch(next);
-    return;
-  }
-  if (closeMenus) closeExplorerMenus();
-  location.assign(target);
-}
-
 function setupViewMenu() {
   const filter = currentExplorerMenu('filter');
   const sort = currentExplorerMenu('sort');
   const column = currentExplorerMenu('column');
-  const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
-  if (!filter || !sort || !column || !dirToggle) return;
+  if (!filter || !sort || !column) return;
 
-  syncViewMenu();
-  syncSortControls();
   syncColumnControls();
   closeExplorerMenus();
 
@@ -258,136 +163,25 @@ function setupViewMenu() {
         closeExplorerMenus();
       }
     };
-  }
-
-  const reopenMenu = () => {
-    if (reopenExplorerMenu) {
-      const name = reopenExplorerMenu;
-      reopenExplorerMenu = null;
-      openExplorerMenu(name);
-    } else {
-      reopenExplorerMenu = null;
+    for (const option of menu.panel.querySelectorAll('.ghrm-view-option')) {
+      option.onclick = () => {
+        closeExplorerMenus();
+      };
     }
-  };
-
-  dirToggle.onclick = () => {
-    const view = currentView();
-    const next = {
-      ...view,
-      filterGroups: [...view.filterGroups],
-      sortDir: view.sortDir === 'desc' ? 'asc' : 'desc',
-    };
-    applyView(next);
-  };
-
-  for (const button of filter.panel.querySelectorAll('.ghrm-view-option')) {
-    button.onclick = () => {
-      const view = currentView();
-      const next = {
-        ...view,
-        filterGroups: [...view.filterGroups],
-      };
-      switch (button.dataset.viewToggle) {
-        case 'hidden':
-          next.showHidden = !view.showHidden;
-          break;
-        case 'excludes':
-          if (!canToggleExcludes()) return;
-          next.showExcludes = !view.showExcludes;
-          break;
-        case 'ignored':
-          next.useIgnore = !view.useIgnore;
-          break;
-        case 'filter':
-          next.filterExt = !view.filterExt;
-          if (next.filterExt && next.filterGroups.length === 0) {
-            next.filterGroups = defaultFilterGroups();
-          }
-          break;
-        default:
-          if (button.dataset.filterGroup) {
-            const group = button.dataset.filterGroup;
-            next.filterExt = true;
-            if (next.filterGroups.includes(group)) {
-              next.filterGroups = next.filterGroups.filter(
-                (current) => current !== group,
-              );
-              if (next.filterGroups.length === 0) {
-                next.filterExt = false;
-              }
-            } else {
-              next.filterGroups.push(group);
-              next.filterGroups = [...new Set(next.filterGroups)];
-            }
-            break;
-          }
-          return;
-      }
-      if (!hasActiveSearch()) {
-        reopenExplorerMenu = 'filter';
-      }
-      applyView(next);
-    };
-  }
-
-  for (const button of sort.panel.querySelectorAll('.ghrm-view-option')) {
-    button.onclick = () => {
-      const view = currentView();
-      const next = {
-        ...view,
-        filterGroups: [...view.filterGroups],
-        sort: button.dataset.sort || view.sort,
-      };
-      if (!button.dataset.sort) return;
-      if (!sortAvailable(next.sort, view.columns)) return;
-      if (!new URLSearchParams(location.search).has('dir')) {
-        next.sortDir = defaultSortDir(next.sort);
-      }
-      applyView(next, { closeMenus: true });
-    };
-  }
-
-  for (const button of column.panel.querySelectorAll('.ghrm-view-option')) {
-    button.onclick = () => {
-      const view = currentView();
-      const next = {
-        ...view,
-        columns: new Set(view.columns),
-        filterGroups: [...view.filterGroups],
-      };
-      const key = button.dataset.columnToggle;
-      if (!key) return;
-      if (key === 'headers') {
-        next.showHeaders = !view.showHeaders;
-      } else if (next.columns.has(key)) {
-        next.columns.delete(key);
-      } else {
-        next.columns.add(key);
-      }
-      if (sortColumnKey(next.sort) === key && !next.columns.has(key)) {
-        next.sort = defaultSort();
-        next.sortDir = defaultSortDir(next.sort);
-      }
-      if (!hasActiveSearch()) {
-        reopenExplorerMenu = 'column';
-      }
-      applyView(next);
-    };
   }
 
   if (explorerMenusBound) {
-    reopenMenu();
     return;
   }
   explorerMenusBound = true;
 
   document.addEventListener('click', (e) => {
     const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
-    if (!hasExplorerMenus() || !dirToggle) return;
+    if (!hasExplorerMenus()) return;
     const insideMenu = currentExplorerMenus().some(({ toggle, panel }) => {
       return toggle.contains(e.target) || panel.contains(e.target);
     });
-    if (insideMenu || dirToggle.contains(e.target)) return;
+    if (insideMenu || dirToggle?.contains(e.target)) return;
     closeExplorerMenus();
   });
 
@@ -409,8 +203,6 @@ function setupViewMenu() {
       openMenu.toggle.focus();
     }
   });
-
-  reopenMenu();
 }
 
 function rawText(container) {
@@ -685,21 +477,27 @@ function setupHtmxNav() {
       setupSearch();
       setupNavExternalLinks();
       setupViewMenu();
-      syncViewMenu();
       syncColumnControls();
       applyDocChromePref();
       populateDates();
       buildToc();
       const hash = location.hash;
-      if (!hash || !scrollToHash(hash)) {
+      if (hash) {
+        scrollToHash(hash);
+      } else if (!pendingSamePathSwap) {
         window.scrollTo(0, 0);
       }
+      pendingSamePathSwap = false;
       document.dispatchEvent(new CustomEvent('ghrm:contentready'));
     }
   });
 
   document.body.addEventListener('htmx:beforeRequest', (e) => {
     if (e.detail.target?.matches('article.markdown-body')) {
+      const link = e.detail.elt?.closest?.('a');
+      pendingSamePathSwap = link
+        ? new URL(link.href, location.origin).pathname === location.pathname
+        : false;
       beginActivity();
     }
   });
@@ -709,13 +507,16 @@ function setupHtmxNav() {
       endActivity();
     }
   });
+
+  document.body.addEventListener('htmx:afterSettle', () => {
+    syncServerStatus();
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   setupFileViews();
   setupSearch();
   setupViewMenu();
-  syncViewMenu();
   setupDocChromeToggle();
   populateDates();
   setupToc();
