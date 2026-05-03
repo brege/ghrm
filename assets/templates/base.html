@@ -15,7 +15,9 @@
     document.documentElement.setAttribute('data-theme', stored || system);
   })();
   </script>
-  <link rel="stylesheet" href="/vendor/github-markdown.css">
+{% for href in vendor_styles %}  <link rel="stylesheet" href="{{ href }}">
+{% endfor %}
+  <script type="application/json" id="ghrm-assets">{{ asset_json|safe }}</script>
   <link rel="stylesheet" href="/_ghrm/assets/css/admonitions.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/page.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/chrome.css">
@@ -23,9 +25,7 @@
   <link rel="stylesheet" href="/_ghrm/assets/css/search.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/toc.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/features.css">
-{% if has_math %}  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
-{% endif %}{% if has_map %}  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
-{% endif %}</head>
+</head>
 <body
   data-default-show-hidden="{% if default_show_hidden %}1{% else %}0{% endif %}"
   data-default-show-excludes="{% if default_show_excludes %}1{% else %}0{% endif %}"
@@ -99,13 +99,8 @@
     </div>
   </section>
   <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
-{{ body|safe }}{% if has_mermaid %}  <script defer src="/vendor/mermaid.js"></script>
-  <script defer src="/vendor/svg-pan-zoom.min.js"></script>{% endif %}
-{% if has_math %}<script defer src="/vendor/katex/katex.min.js"></script>
-  <script defer src="/vendor/katex/auto-render.min.js"></script>{% endif %}
-{% if has_map %}<script defer src="/vendor/leaflet/leaflet.js"></script>
-  <script defer src="/vendor/topojson-client.min.js"></script>{% endif %}
-  <script defer src="/vendor/highlightjs/highlight.min.js"></script>
+{{ body|safe }}{% for src in vendor_scripts %}  <script defer src="{{ src }}"></script>
+{% endfor %}
   <script type="module" src="/_ghrm/assets/js/preview.js"></script>
   <script type="module" src="/_ghrm/assets/js/app.js"></script>
 </body>

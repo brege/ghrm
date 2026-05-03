@@ -6,6 +6,7 @@ use crate::filter;
 use crate::render::{self, Rendered};
 use crate::repo::{RepoSet, SourceState};
 use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
+use crate::vendor;
 use crate::view::{self, ViewConfig, ViewQuery, ViewState};
 use crate::walk::{self, NavSet, ViewOpts};
 use crate::watch;
@@ -549,6 +550,7 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewS
         return not_found();
     };
     let rendered = render::render_at(&md, Some(render::RenderPath { root, src: path }));
+    let features = vendor::feature_list(&rendered);
     let rel = path
         .strip_prefix(root)
         .ok()
@@ -560,6 +562,7 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewS
     let view = delivery::FileView::markdown();
     let view_attrs = delivery::file_view_attrs(&rel, view);
     let body = match tmpl::page(tmpl::PageCtx {
+        features: &features,
         crumbs: &crumbs,
         preview_html: &rendered.html,
         raw_html: &raw_html,
@@ -732,8 +735,22 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, &view, &s.view_cfg);
     let article_class = view.columns.article_class("markdown-body");
     let empty_cells = view.columns.empty_cells();
+    let (has_mermaid, has_math, has_map) = readme_rendered
+        .as_ref()
+        .map(|r| (r.has_mermaid, r.has_math, r.has_map))
+        .unwrap_or_default();
+    let combined = Rendered {
+        html: String::new(),
+        title,
+        lang: None,
+        has_mermaid,
+        has_math,
+        has_map,
+    };
+    let features = vendor::feature_list(&combined);
     let body = match tmpl::explorer(ExplorerCtx {
         article_class: &article_class,
+        features: &features,
         crumbs: &crumbs,
         current_path: rel,
         has_parent,
@@ -752,19 +769,6 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
             warn!("template error: {}", e);
             return not_found();
         }
-    };
-
-    let (has_mermaid, has_math, has_map) = readme_rendered
-        .as_ref()
-        .map(|r| (r.has_mermaid, r.has_math, r.has_map))
-        .unwrap_or_default();
-    let combined = Rendered {
-        html: String::new(),
-        title,
-        lang: None,
-        has_mermaid,
-        has_math,
-        has_map,
     };
 
     let current = if rel.is_empty() {
@@ -823,6 +827,7 @@ fn respond_html(
     let sorts_json = walk::client_sort_json();
     let project_version = env!("CARGO_PKG_VERSION");
     let project_release_href = format!("{PROJECT_REMOTE_URL}/releases/tag/v{project_version}");
+    let assets = vendor::plan(r);
     let shell = PageShell {
         title,
         body,
@@ -840,9 +845,9 @@ fn respond_html(
         columns_json: &columns_json,
         sorts_json: &sorts_json,
         can_toggle_excludes: cfg.can_toggle_excludes,
-        has_mermaid: r.has_mermaid,
-        has_math: r.has_math,
-        has_map: r.has_map,
+        asset_json: vendor::client_json(),
+        vendor_styles: &assets.styles,
+        vendor_scripts: &assets.scripts,
     };
     let html = match tmpl::base(shell) {
         Ok(h) => h,
@@ -959,11 +964,13 @@ async fn dispatch_file(
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
     let rendered = render::render_text(filename, &text);
+    let features = vendor::feature_list(&rendered);
     let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, &view, &s.view_cfg);
     let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
     let view = delivery::FileView::raw();
     let view_attrs = delivery::file_view_attrs(rel, view);
     let body = match tmpl::page(tmpl::PageCtx {
+        features: &features,
         crumbs: &crumbs,
         preview_html: &rendered.html,
         raw_html: &raw_html,

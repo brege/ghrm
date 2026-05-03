@@ -24,14 +24,15 @@ pub struct PageShell<'a> {
     pub columns_json: &'a str,
     pub sorts_json: &'a str,
     pub can_toggle_excludes: bool,
-    pub has_mermaid: bool,
-    pub has_math: bool,
-    pub has_map: bool,
+    pub asset_json: &'a str,
+    pub vendor_styles: &'a [String],
+    pub vendor_scripts: &'a [String],
 }
 
 #[derive(Template)]
 #[template(path = "page.html")]
 pub struct PageCtx<'a> {
+    pub features: &'a str,
     pub crumbs: &'a str,
     pub preview_html: &'a str,
     pub raw_html: &'a str,
@@ -44,6 +45,7 @@ pub struct PageCtx<'a> {
 #[template(path = "explorer.html")]
 pub struct ExplorerCtx<'a> {
     pub article_class: &'a str,
+    pub features: &'a str,
     pub crumbs: &'a str,
     pub current_path: &'a str,
     pub has_parent: bool,

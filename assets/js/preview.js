@@ -4,9 +4,11 @@ let mermaidId = 0;
 let mermaidVersionPromise;
 const copyResetDelay = 1000;
 const vendorLoading = new Map();
+let assetConfig;
 
 function loadScript(src) {
   if (vendorLoading.has(src)) return vendorLoading.get(src);
+  if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
   const promise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = src;
@@ -19,13 +21,46 @@ function loadScript(src) {
 }
 
 function loadStylesheet(href) {
-  if (document.querySelector(`link[href="${href}"]`)) return Promise.resolve();
+  if (document.querySelector(`link[href="${href}"]`)) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = href;
   document.head.appendChild(link);
-  return Promise.resolve();
 }
+
+function currentArticle() {
+  return document.querySelector('article.markdown-body');
+}
+
+function assetPlan() {
+  if (!assetConfig) {
+    assetConfig = JSON.parse(
+      document.getElementById('ghrm-assets')?.textContent || '{"features":{}}',
+    );
+  }
+  return assetConfig;
+}
+
+function currentFeatures() {
+  return (currentArticle()?.dataset.ghrmFeatures || '')
+    .split(/\s+/)
+    .filter((value) => value);
+}
+
+function hasFeature(name) {
+  return currentFeatures().includes(name);
+}
+
+async function loadAssets() {
+  const config = assetPlan();
+  for (const name of currentFeatures()) {
+    const feature = config.features?.[name];
+    if (!feature) continue;
+    for (const href of feature.styles || []) loadStylesheet(href);
+    for (const src of feature.scripts || []) await loadScript(src);
+  }
+}
+
 const SHELL_BUILTINS = new Set([
   '.',
   ':',
@@ -279,14 +314,11 @@ function restoreGitHubInlineMath(container) {
 }
 
 async function renderMath() {
+  if (!hasFeature('math')) return;
+
   const containers = document.querySelectorAll('.markdown-body');
   if (containers.length === 0) return;
 
-  if (typeof window.renderMathInElement !== 'function') {
-    loadStylesheet('/vendor/katex/katex.min.css');
-    await loadScript('/vendor/katex/katex.min.js');
-    await loadScript('/vendor/katex/auto-render.min.js');
-  }
   if (typeof window.renderMathInElement !== 'function') return;
 
   for (const container of containers) {
@@ -553,12 +585,11 @@ function ensureMermaidActions(block) {
 }
 
 async function renderMermaid() {
+  if (!hasFeature('mermaid')) return;
+
   const blocks = document.querySelectorAll('.ghrm-mermaid');
   if (blocks.length === 0) return;
 
-  if (!window.mermaid) {
-    await loadScript('/vendor/mermaid.js');
-  }
   const api = window.mermaid;
   if (!api) return;
 
@@ -611,7 +642,9 @@ async function getMermaidVersion(api) {
   }
 
   if (!mermaidVersionPromise) {
-    mermaidVersionPromise = fetch('/vendor/mermaid-version.txt')
+    const versionPath = assetPlan().mermaidVersion;
+    if (!versionPath) return 'unknown';
+    mermaidVersionPromise = fetch(versionPath)
       .then((r) => r.text())
       .then((t) => t.trim() || 'unknown')
       .catch(() => 'unknown');
@@ -713,17 +746,12 @@ function renderMapBlock(block, kind) {
 }
 
 async function renderMaps() {
+  if (!hasFeature('map')) return;
+
   const geojsonBlocks = document.querySelectorAll('.ghrm-geojson');
   const topojsonBlocks = document.querySelectorAll('.ghrm-topojson');
   if (geojsonBlocks.length === 0 && topojsonBlocks.length === 0) return;
 
-  if (!window.L) {
-    loadStylesheet('/vendor/leaflet/leaflet.css');
-    await loadScript('/vendor/leaflet/leaflet.js');
-  }
-  if (!window.topojson && topojsonBlocks.length > 0) {
-    await loadScript('/vendor/topojson-client.min.js');
-  }
   if (!window.L) return;
 
   for (const block of geojsonBlocks) {
@@ -745,6 +773,7 @@ async function renderMaps() {
 }
 
 async function runAll() {
+  await loadAssets();
   renderCode();
   renderBlobs();
   await renderMath();
@@ -757,7 +786,8 @@ document.addEventListener('DOMContentLoaded', runAll);
 document.addEventListener('ghrm:contentready', runAll);
 
 document.addEventListener('ghrm:themechange', async () => {
+  await loadAssets();
   await renderMermaid();
-  renderMaps();
+  await renderMaps();
   addCopyButtons();
 });

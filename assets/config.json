@@ -1,4 +1,43 @@
 {
+  "base_path": "/vendor/",
+  "features": {
+    "common": {
+      "styles": [
+        "github-markdown.css"
+      ],
+      "scripts": [
+        "highlightjs/highlight.min.js"
+      ]
+    },
+    "mermaid": {
+      "scripts": [
+        "mermaid.js",
+        "svg-pan-zoom.min.js"
+      ]
+    },
+    "math": {
+      "styles": [
+        "katex/katex.min.css"
+      ],
+      "scripts": [
+        "katex/katex.min.js",
+        "katex/auto-render.min.js"
+      ]
+    },
+    "map": {
+      "styles": [
+        "leaflet/leaflet.css"
+      ],
+      "scripts": [
+        "leaflet/leaflet.js",
+        "topojson-client.min.js"
+      ]
+    }
+  },
+  "mermaid_version": {
+    "source": "mermaid.js",
+    "path": "mermaid-version.txt"
+  },
   "files": [
     {
       "url": "https://cdn.jsdelivr.net/npm/github-markdown-css@5.6.1/github-markdown.css",
