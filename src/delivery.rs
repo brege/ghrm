@@ -4,11 +4,16 @@ use crate::server::{AppState, Mode};
 use axum::{
     body::Body,
     extract::{Path as AxPath, State},
-    http::{StatusCode, header},
-    response::Response,
+    http::{HeaderValue, Request, StatusCode, header},
+    response::{IntoResponse, Response},
 };
+use std::io::Read;
 use std::path::{Path, PathBuf};
+use tokio::io::AsyncReadExt;
+use tower_http::services::ServeFile;
 use tracing::warn;
+
+const PEEK_BYTES: usize = 8192;
 
 #[derive(Clone, Copy)]
 pub(crate) struct FileView {
@@ -62,23 +67,18 @@ pub(crate) async fn raw_file(State(s): State<AppState>, AxPath(path): AxPath<Str
     let Some(path) = resolve_internal_file(&s, &path) else {
         return not_found();
     };
-    stream_export(&path, false).await
+    if previews_text(&path).await {
+        stream_text_file(&path).await
+    } else {
+        stream_file(&path).await
+    }
 }
 
 pub(crate) async fn html_file(State(s): State<AppState>, AxPath(path): AxPath<String>) -> Response {
     let Some(path) = resolve_internal_file(&s, &path) else {
         return not_found();
     };
-    let bytes = match tokio::fs::read(&path).await {
-        Ok(b) => b,
-        Err(_) => return not_found(),
-    };
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, mime_guess(&path))
-        .header(header::CACHE_CONTROL, "no-cache")
-        .body(Body::from(bytes))
-        .unwrap()
+    stream_file(&path).await
 }
 
 pub(crate) async fn download_file(
@@ -88,98 +88,69 @@ pub(crate) async fn download_file(
     let Some(path) = resolve_internal_file(&s, &path) else {
         return not_found();
     };
-    stream_export(&path, true).await
-}
-
-pub(crate) fn is_binary_ext(ext: &str) -> bool {
-    matches!(
-        ext,
-        "png"
-            | "jpg"
-            | "jpeg"
-            | "gif"
-            | "svg"
-            | "webp"
-            | "ico"
-            | "bmp"
-            | "tiff"
-            | "tif"
-            | "pdf"
-            | "woff"
-            | "woff2"
-            | "ttf"
-            | "otf"
-            | "eot"
-            | "zip"
-            | "gz"
-            | "tar"
-            | "bz2"
-            | "xz"
-            | "7z"
-            | "rar"
-            | "zst"
-            | "exe"
-            | "bin"
-            | "so"
-            | "dylib"
-            | "dll"
-            | "o"
-            | "a"
-            | "lib"
-            | "mp3"
-            | "mp4"
-            | "wav"
-            | "ogg"
-            | "flac"
-            | "mkv"
-            | "avi"
-            | "mov"
-            | "webm"
-            | "sqlite"
-            | "db"
-            | "sqlite3"
-            | "class"
-            | "jar"
-            | "pyc"
-    )
-}
-
-pub(crate) fn stream_bytes(path: &Path, bytes: Vec<u8>) -> Response {
-    let mime = mime_guess(path);
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, mime)
-        .header(header::CACHE_CONTROL, "no-cache")
-        .body(Body::from(bytes))
-        .unwrap()
+    let mut res = stream_file(&path).await;
+    if res.status().is_success() {
+        res.headers_mut().insert(
+            header::CONTENT_DISPOSITION,
+            HeaderValue::from_str(&content_disposition(&path)).unwrap(),
+        );
+    }
+    res
 }
 
 pub(crate) async fn stream_file(path: &Path) -> Response {
-    let bytes = match tokio::fs::read(path).await {
-        Ok(b) => b,
-        Err(_) => return not_found(),
-    };
-    stream_bytes(path, bytes)
+    serve_file(ServeFile::new(path)).await
 }
 
-fn mime_guess(path: &Path) -> &'static str {
-    match path.extension().and_then(|s| s.to_str()) {
-        Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
-        Some("gif") => "image/gif",
-        Some("svg") => "image/svg+xml",
-        Some("webp") => "image/webp",
-        Some("ico") => "image/x-icon",
-        Some("css") => "text/css; charset=utf-8",
-        Some("js") | Some("mjs") => "application/javascript; charset=utf-8",
-        Some("json") => "application/json; charset=utf-8",
-        Some("woff") => "font/woff",
-        Some("woff2") => "font/woff2",
-        Some("ttf") => "font/ttf",
-        Some("otf") => "font/otf",
-        Some("html") => "text/html; charset=utf-8",
-        _ => "application/octet-stream",
+async fn stream_text_file(path: &Path) -> Response {
+    let mut res = stream_file(path).await;
+    if res.status().is_success() {
+        res.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/plain; charset=utf-8"),
+        );
     }
+    res
+}
+
+async fn serve_file(mut file: ServeFile) -> Response {
+    match file.try_call(Request::new(Body::empty())).await {
+        Ok(res) => {
+            let mut res = res.map(Body::new).into_response();
+            res.headers_mut()
+                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+            res
+        }
+        Err(_) => not_found(),
+    }
+}
+
+pub(crate) async fn previews_text(path: &Path) -> bool {
+    let Ok(mut file) = tokio::fs::File::open(path).await else {
+        return false;
+    };
+    let mut bytes = vec![0; PEEK_BYTES];
+    let Ok(n) = file.read(&mut bytes).await else {
+        return false;
+    };
+    bytes.truncate(n);
+    previews_bytes(&bytes)
+}
+
+pub(crate) fn previews_text_sync(path: &Path) -> bool {
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut bytes = [0; PEEK_BYTES];
+    let Ok(n) = file.read(&mut bytes) else {
+        return false;
+    };
+    previews_bytes(&bytes[..n])
+}
+
+fn previews_bytes(bytes: &[u8]) -> bool {
+    infer::get(bytes).is_none_or(|kind| kind.matcher_type() == infer::MatcherType::Text)
+        && content_inspector::inspect(bytes).is_text()
 }
 
 pub(crate) fn raw_blob_html(text: &str, lang: Option<&str>) -> String {
@@ -229,36 +200,6 @@ fn resolve_internal_file(s: &AppState, rel: &str) -> Option<PathBuf> {
     paths::resolve_file(base, rel)
 }
 
-async fn stream_export(path: &Path, attachment: bool) -> Response {
-    let bytes = match tokio::fs::read(path).await {
-        Ok(b) => b,
-        Err(_) => return not_found(),
-    };
-
-    let mut res = Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, export_mime(path, &bytes))
-        .header(header::CACHE_CONTROL, "no-cache");
-    if attachment {
-        res = res.header(header::CONTENT_DISPOSITION, content_disposition(path));
-    }
-    res.body(Body::from(bytes)).unwrap()
-}
-
-fn export_mime(path: &Path, bytes: &[u8]) -> &'static str {
-    let is_binary = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(|ext| is_binary_ext(&ext.to_lowercase()))
-        .unwrap_or(false)
-        || bytes.contains(&0);
-    if is_binary {
-        mime_guess(path)
-    } else {
-        "text/plain; charset=utf-8"
-    }
-}
-
 fn content_disposition(path: &Path) -> String {
     let filename = path
         .file_name()
@@ -288,11 +229,9 @@ mod tests {
     }
 
     #[test]
-    fn export_mime_prefers_text_plain_for_text_files() {
-        assert_eq!(
-            export_mime(Path::new("README.md"), b"# hello\n"),
-            "text/plain; charset=utf-8",
-        );
+    fn preview_detection_uses_file_signatures() {
+        assert!(previews_bytes(b"# hello\n"));
+        assert!(!previews_bytes(&[0x28, 0xb5, 0x2f, 0xfd]));
     }
 
     #[test]

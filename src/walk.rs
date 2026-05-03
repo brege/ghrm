@@ -163,11 +163,7 @@ pub fn line_count(path: &Path, size: Option<u64>) -> Option<u64> {
     if size.is_some_and(|size| size > LINE_COUNT_MAX_BYTES) {
         return None;
     }
-    if path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| crate::delivery::is_binary_ext(&ext.to_lowercase()))
-    {
+    if !crate::delivery::previews_text_sync(path) {
         return None;
     }
 

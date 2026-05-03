@@ -1125,13 +1125,8 @@ async fn dispatch_file(
     view: ViewState,
     hx: HtmxContext,
 ) -> Response {
-    if path
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(|ext| delivery::is_binary_ext(&ext.to_lowercase()))
-        .unwrap_or(false)
-    {
-        return delivery::stream_file(path).await;
+    if !delivery::previews_text(path).await {
+        return native_file(s, path, rel, &view, hx).await;
     }
 
     let bytes = match tokio::fs::read(path).await {
@@ -1139,13 +1134,9 @@ async fn dispatch_file(
         Err(_) => return not_found(),
     };
 
-    if bytes.contains(&0u8) {
-        return delivery::stream_bytes(path, bytes);
-    }
-
     let text = match String::from_utf8(bytes) {
         Ok(s) => s,
-        Err(e) => return delivery::stream_bytes(path, e.into_bytes()),
+        Err(_) => return native_file(s, path, rel, &view, hx).await,
     };
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
@@ -1180,6 +1171,29 @@ async fn dispatch_file(
         return respond_fragment(&body, title, source);
     }
     respond_html(&rendered, &body, source, s.auth.is_some())
+}
+
+async fn native_file(
+    s: &AppState,
+    path: &Path,
+    rel: &str,
+    view: &ViewState,
+    hx: HtmxContext,
+) -> Response {
+    if hx.is_htmx {
+        let href = view::with_view(&format!("/{rel}"), view, &s.view_cfg);
+        return htmx_redirect(&href);
+    }
+    delivery::stream_file(path).await
+}
+
+fn htmx_redirect(location: &str) -> Response {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("HX-Redirect", location)
+        .header(header::VARY, "HX-Request")
+        .body(Body::empty())
+        .unwrap()
 }
 
 async fn ws_handler(State(s): State<AppState>, ws: WebSocketUpgrade) -> Response {
