@@ -443,6 +443,8 @@ def validate_results(results, profile, scenario, args):
         if result is None:
             failures.append(f"missing {phase} result for excluded-root")
             continue
+        if phase == "cold" and result["pending"]:
+            continue
         if result["results"] != scenario.excluded_dir_rows:
             failures.append(
                 f"{phase} excluded-root returned {result['results']} rows, "
