@@ -76,6 +76,29 @@ impl HtmxContext {
     }
 }
 
+fn native_file_request(headers: &HeaderMap) -> bool {
+    if HtmxContext::from_headers(headers).is_htmx {
+        return false;
+    }
+    if let Some(dest) = headers
+        .get("Sec-Fetch-Dest")
+        .and_then(|value| value.to_str().ok())
+    {
+        return !matches!(dest, "" | "document");
+    }
+    headers
+        .get(header::ACCEPT)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|accept| {
+            !accept.contains("text/html")
+                && (accept.contains("image/")
+                    || accept.contains("audio/")
+                    || accept.contains("video/")
+                    || accept.contains("font/")
+                    || accept.contains("application/pdf"))
+        })
+}
+
 pub struct Options {
     pub bind: String,
     pub port: u16,
@@ -493,8 +516,9 @@ async fn any_path(
 ) -> Response {
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let hx = HtmxContext::from_headers(&headers);
+    let native = native_file_request(&headers);
     if s.mode == Mode::File {
-        return serve_file_mode(&s, &path, view, hx).await;
+        return serve_file_mode(&s, &path, view, hx, native).await;
     }
     let had_trailing = path.ends_with('/');
     let clean = path.trim_matches('/').to_string();
@@ -522,10 +546,19 @@ async fn any_path(
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
         return render_file(&s, &joined, Some(s.target.as_path()), view, hx).await;
     }
+    if native {
+        return delivery::stream_file(&joined).await;
+    }
     dispatch_file(&s, &joined, &s.target, &clean, view, hx).await
 }
 
-async fn serve_file_mode(s: &AppState, path: &str, view: ViewState, hx: HtmxContext) -> Response {
+async fn serve_file_mode(
+    s: &AppState,
+    path: &str,
+    view: ViewState,
+    hx: HtmxContext,
+    native: bool,
+) -> Response {
     let Some(root) = s.target.parent() else {
         return not_found();
     };
@@ -540,6 +573,9 @@ async fn serve_file_mode(s: &AppState, path: &str, view: ViewState, hx: HtmxCont
     };
     if meta.is_dir() {
         return not_found();
+    }
+    if native {
+        return delivery::stream_file(&joined).await;
     }
     render_target(s, &joined, None, view, hx).await
 }
@@ -1256,6 +1292,28 @@ mod tests {
         headers.insert("HX-Request", "false".parse().unwrap());
         let hx = HtmxContext::from_headers(&headers);
         assert!(!hx.is_htmx);
+    }
+
+    #[test]
+    fn native_file_request_detects_image_fetch() {
+        let mut headers = HeaderMap::new();
+        headers.insert("Sec-Fetch-Dest", "image".parse().unwrap());
+        assert!(native_file_request(&headers));
+    }
+
+    #[test]
+    fn native_file_request_ignores_document_navigation() {
+        let mut headers = HeaderMap::new();
+        headers.insert("Sec-Fetch-Dest", "document".parse().unwrap());
+        assert!(!native_file_request(&headers));
+    }
+
+    #[test]
+    fn native_file_request_ignores_htmx_requests() {
+        let mut headers = HeaderMap::new();
+        headers.insert("HX-Request", "true".parse().unwrap());
+        headers.insert("Sec-Fetch-Dest", "image".parse().unwrap());
+        assert!(!native_file_request(&headers));
     }
 
     #[test]
