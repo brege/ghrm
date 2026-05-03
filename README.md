@@ -38,7 +38,7 @@ ghrm .
 
 ## Ethos
 
-I made Ghrm because when I lose internet/power, I often turn toward documentation and repo-gardening to stay occupied while online resources are unavailable. On first run, ghrm locally downloads the JavaScript libraries from CDNs and never touches the internet again, except for URL sources that may already be in your Markdown.  It renders Markdown and file trees the exact same way as GitHub does. There's zero mystery what your docs are going to look like after you push.
+I made Ghrm because when I lose internet/power, I often turn toward documentation and repo-gardening to stay occupied while online resources are unavailable. On first run, ghrm locally downloads the JavaScript libraries from CDNs and never touches the internet again, except for URL sources (or maps) that may already be in your Markdown.  It renders Markdown and file trees the exact same way as GitHub does. There's zero mystery what your docs are going to look like after you push.
 
 Ghrm is non-mutating. It's not meant to be a general git repo manager.
 

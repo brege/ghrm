@@ -3,6 +3,29 @@ import { escapeHtml } from './dom.js';
 let mermaidId = 0;
 let mermaidVersionPromise;
 const copyResetDelay = 1000;
+const vendorLoading = new Map();
+
+function loadScript(src) {
+  if (vendorLoading.has(src)) return vendorLoading.get(src);
+  const promise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  vendorLoading.set(src, promise);
+  return promise;
+}
+
+function loadStylesheet(href) {
+  if (document.querySelector(`link[href="${href}"]`)) return Promise.resolve();
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+  document.head.appendChild(link);
+  return Promise.resolve();
+}
 const SHELL_BUILTINS = new Set([
   '.',
   ':',
@@ -255,12 +278,18 @@ function restoreGitHubInlineMath(container) {
   }
 }
 
-function renderMath() {
-  if (typeof window.renderMathInElement !== 'function') {
-    return;
-  }
+async function renderMath() {
+  const containers = document.querySelectorAll('.markdown-body');
+  if (containers.length === 0) return;
 
-  for (const container of document.querySelectorAll('.markdown-body')) {
+  if (typeof window.renderMathInElement !== 'function') {
+    loadStylesheet('/vendor/katex/katex.min.css');
+    await loadScript('/vendor/katex/katex.min.js');
+    await loadScript('/vendor/katex/auto-render.min.js');
+  }
+  if (typeof window.renderMathInElement !== 'function') return;
+
+  for (const container of containers) {
     // GitHub's $`...`$ form becomes $<code>...</code>$ after Markdown parsing.
     restoreGitHubInlineMath(container);
     window.renderMathInElement(container, {
@@ -524,11 +553,14 @@ function ensureMermaidActions(block) {
 }
 
 async function renderMermaid() {
-  const api = window.mermaid;
   const blocks = document.querySelectorAll('.ghrm-mermaid');
-  if (!api || blocks.length === 0) {
-    return;
+  if (blocks.length === 0) return;
+
+  if (!window.mermaid) {
+    await loadScript('/vendor/mermaid.js');
   }
+  const api = window.mermaid;
+  if (!api) return;
 
   api.initialize({
     startOnLoad: false,
@@ -631,9 +663,11 @@ function renderMapBlock(block, kind) {
     scrollWheelZoom: true,
   });
 
-  window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-  }).addTo(map);
+  if (navigator.onLine) {
+    window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(map);
+  }
 
   const layer = window.L.geoJSON(geojson, {
     style(feature) {
@@ -673,22 +707,34 @@ function renderMapBlock(block, kind) {
   block._ghrmMap = map;
 }
 
-function renderMaps() {
-  if (!window.L) {
-    return;
-  }
+async function renderMaps() {
+  const geojsonBlocks = document.querySelectorAll('.ghrm-geojson');
+  const topojsonBlocks = document.querySelectorAll('.ghrm-topojson');
+  if (geojsonBlocks.length === 0 && topojsonBlocks.length === 0) return;
 
-  for (const [selector, kind] of [
-    ['.ghrm-geojson', 'geojson'],
-    ['.ghrm-topojson', 'topojson'],
-  ]) {
-    for (const block of document.querySelectorAll(selector)) {
-      clearError(block);
-      try {
-        renderMapBlock(block, kind);
-      } catch (error) {
-        setError(block, error.message);
-      }
+  if (!window.L) {
+    loadStylesheet('/vendor/leaflet/leaflet.css');
+    await loadScript('/vendor/leaflet/leaflet.js');
+  }
+  if (!window.topojson && topojsonBlocks.length > 0) {
+    await loadScript('/vendor/topojson-client.min.js');
+  }
+  if (!window.L) return;
+
+  for (const block of geojsonBlocks) {
+    clearError(block);
+    try {
+      renderMapBlock(block, 'geojson');
+    } catch (error) {
+      setError(block, error.message);
+    }
+  }
+  for (const block of topojsonBlocks) {
+    clearError(block);
+    try {
+      renderMapBlock(block, 'topojson');
+    } catch (error) {
+      setError(block, error.message);
     }
   }
 }
@@ -696,9 +742,9 @@ function renderMaps() {
 async function runAll() {
   renderCode();
   renderBlobs();
-  renderMath();
+  await renderMath();
   await renderMermaid();
-  renderMaps();
+  await renderMaps();
   addCopyButtons();
 }
 
