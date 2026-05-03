@@ -23,6 +23,7 @@ pub(crate) struct ViewState {
     pub(crate) sort: walk::Sort,
     pub(crate) sort_dir: walk::SortDir,
     pub(crate) columns: column::Set,
+    pub(crate) show_headers: bool,
 }
 
 #[derive(Default, Deserialize)]
@@ -33,6 +34,7 @@ pub(crate) struct ViewQuery {
     pub(crate) filter: Option<String>,
     pub(crate) sort: Option<String>,
     pub(crate) dir: Option<String>,
+    pub(crate) headers: Option<String>,
     #[serde(flatten)]
     pub(crate) extra: BTreeMap<String, String>,
 }
@@ -111,7 +113,101 @@ pub(crate) fn from_query(
         sort,
         sort_dir,
         columns,
+        show_headers: q
+            .headers
+            .as_deref()
+            .and_then(parse_bool_param)
+            .unwrap_or(false),
     }
+}
+
+pub(crate) fn toggle_hidden(view: &ViewState) -> ViewState {
+    let mut next = view.clone();
+    next.opts.show_hidden = !view.opts.show_hidden;
+    next
+}
+
+pub(crate) fn toggle_excludes(view: &ViewState, cfg: &ViewConfig) -> ViewState {
+    let mut next = view.clone();
+    if cfg.can_toggle_excludes {
+        next.opts.show_excludes = !view.opts.show_excludes;
+    }
+    next
+}
+
+pub(crate) fn toggle_ignore(view: &ViewState) -> ViewState {
+    let mut next = view.clone();
+    next.use_ignore = !view.use_ignore;
+    next
+}
+
+pub(crate) fn toggle_filter(view: &ViewState, cfg: &ViewConfig) -> ViewState {
+    let mut next = view.clone();
+    next.opts.filter_ext = !view.opts.filter_ext;
+    if next.opts.filter_ext && next.groups.is_empty() {
+        next.groups = cfg.default_groups.clone();
+    }
+    next
+}
+
+pub(crate) fn toggle_group(view: &ViewState, group: &str) -> ViewState {
+    let mut next = view.clone();
+    if !view.opts.filter_ext {
+        next.opts.filter_ext = true;
+        next.groups = vec![group.to_string()];
+        return next;
+    }
+    next.opts.filter_ext = true;
+    if next.groups.iter().any(|current| current == group) {
+        next.groups.retain(|current| current != group);
+        if next.groups.is_empty() {
+            next.opts.filter_ext = false;
+        }
+    } else {
+        next.groups.push(group.to_string());
+    }
+    next
+}
+
+pub(crate) fn set_sort(view: &ViewState, sort: walk::Sort) -> ViewState {
+    let mut next = view.clone();
+    if sort
+        .column_key()
+        .is_some_and(|key| !next.columns.is_visible_key(key))
+    {
+        return next;
+    }
+    next.sort = sort;
+    next.sort_dir = sort.default_dir();
+    next
+}
+
+pub(crate) fn toggle_sort_dir(view: &ViewState) -> ViewState {
+    let mut next = view.clone();
+    next.sort_dir = match view.sort_dir {
+        walk::SortDir::Asc => walk::SortDir::Desc,
+        walk::SortDir::Desc => walk::SortDir::Asc,
+    };
+    next
+}
+
+pub(crate) fn toggle_column(view: &ViewState, key: &str) -> ViewState {
+    let mut next = view.clone();
+    let Some(def) = column::def_for_key(key) else {
+        return next;
+    };
+    next.columns.set_visible(def, !view.columns.is_visible(def));
+    if view.sort.column_key() == Some(key) && !next.columns.is_visible(def) {
+        next.sort = walk::Sort::Name;
+        next.sort_dir = next.sort.default_dir();
+    }
+    next
+}
+
+pub(crate) fn toggle_headers(view: &ViewState) -> ViewState {
+    let mut next = view.clone();
+    next.show_headers = !view.show_headers;
+    next
 }
 
 fn columns_from_query(q: &ViewQuery, defaults: &column::Set) -> column::Set {
@@ -203,6 +299,7 @@ pub(crate) fn with_view(href: &str, view: &ViewState, cfg: &ViewConfig) -> Strin
         view.sort_dir.as_str(),
         view.sort.default_dir().as_str(),
     );
+    set_bool_param(&mut pairs, "headers", view.show_headers, false);
     set_multi_string_param(&mut pairs, "group", &view.groups, &cfg.default_groups);
     for def in column::DEFS {
         set_bool_param(
@@ -334,6 +431,7 @@ mod tests {
             sort: cfg.default_sort,
             sort_dir: cfg.default_sort.default_dir(),
             columns: cfg.default_columns.clone(),
+            show_headers: false,
         };
         assert_eq!(with_view("/", &view, &cfg), "/");
     }
@@ -363,10 +461,11 @@ mod tests {
             sort: walk::Sort::Timestamp,
             sort_dir: walk::Sort::Timestamp.default_dir(),
             columns: columns(false, true, true),
+            show_headers: true,
         };
         assert_eq!(
             with_view("/docs/", &view, &cfg),
-            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp&commit=1&commit_date=1&date=0"
+            "/docs/?hidden=1&excludes=0&ignore=0&filter=1&sort=timestamp&headers=1&commit=1&commit_date=1&date=0"
         );
     }
 
@@ -396,6 +495,7 @@ mod tests {
             sort: walk::Sort::Name,
             sort_dir: walk::Sort::Name.default_dir(),
             columns: cfg.default_columns.clone(),
+            show_headers: false,
         };
 
         assert_eq!(
@@ -430,8 +530,105 @@ mod tests {
             sort: walk::Sort::Name,
             sort_dir: walk::Sort::Name.default_dir(),
             columns: cfg.default_columns.clone(),
+            show_headers: false,
         };
 
         assert_eq!(with_view("/docs/", &view, &cfg), "/docs/?group=");
+    }
+
+    #[test]
+    fn column_toggle_resets_sort_when_hiding_sort_column() {
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: false,
+            },
+            default_use_ignore: true,
+            default_groups: Vec::new(),
+            default_sort: walk::Sort::Name,
+            default_columns: columns(true, true, false),
+            can_toggle_excludes: false,
+        };
+        let view = ViewState {
+            opts: cfg.default,
+            use_ignore: true,
+            groups: Vec::new(),
+            sort: walk::Sort::Timestamp,
+            sort_dir: walk::SortDir::Desc,
+            columns: cfg.default_columns.clone(),
+            show_headers: false,
+        };
+
+        let next = toggle_column(&view, "date");
+
+        assert_eq!(next.sort, walk::Sort::Name);
+        assert_eq!(next.sort_dir, walk::Sort::Name.default_dir());
+        assert_eq!(with_view("/docs/", &next, &cfg), "/docs/?date=0");
+    }
+
+    #[test]
+    fn filter_group_toggle_selects_group_when_filter_is_off() {
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: false,
+            },
+            default_use_ignore: true,
+            default_groups: vec!["docs".to_string()],
+            default_sort: walk::Sort::Name,
+            default_columns: columns(true, true, false),
+            can_toggle_excludes: false,
+        };
+        let view = ViewState {
+            opts: cfg.default,
+            use_ignore: true,
+            groups: cfg.default_groups.clone(),
+            sort: walk::Sort::Name,
+            sort_dir: walk::Sort::Name.default_dir(),
+            columns: cfg.default_columns.clone(),
+            show_headers: false,
+        };
+
+        let next = toggle_group(&view, "docs");
+
+        assert!(next.opts.filter_ext);
+        assert_eq!(next.groups, vec!["docs".to_string()]);
+        assert_eq!(with_view("/docs/", &next, &cfg), "/docs/?filter=1");
+    }
+
+    #[test]
+    fn filter_group_toggle_clears_last_active_group() {
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: false,
+            },
+            default_use_ignore: true,
+            default_groups: vec!["docs".to_string()],
+            default_sort: walk::Sort::Name,
+            default_columns: columns(true, true, false),
+            can_toggle_excludes: false,
+        };
+        let view = ViewState {
+            opts: ViewOpts {
+                filter_ext: true,
+                ..cfg.default
+            },
+            use_ignore: true,
+            groups: cfg.default_groups.clone(),
+            sort: walk::Sort::Name,
+            sort_dir: walk::Sort::Name.default_dir(),
+            columns: cfg.default_columns.clone(),
+            show_headers: false,
+        };
+
+        let next = toggle_group(&view, "docs");
+
+        assert!(!next.opts.filter_ext);
+        assert!(next.groups.is_empty());
+        assert_eq!(with_view("/docs/", &next, &cfg), "/docs/?group=");
     }
 }

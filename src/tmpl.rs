@@ -1,6 +1,4 @@
 use crate::column;
-use crate::filter::GroupMeta;
-use crate::walk;
 
 use anyhow::Result;
 use askama::Template;
@@ -15,15 +13,6 @@ pub struct PageShell<'a> {
     pub project_release_href: &'a str,
     pub project_version: &'static str,
     pub show_logout: bool,
-    pub default_show_hidden: bool,
-    pub default_show_excludes: bool,
-    pub default_use_ignore: bool,
-    pub default_filter_ext: bool,
-    pub default_filter_group: Option<&'a str>,
-    pub default_sort: &'a str,
-    pub columns_json: &'a str,
-    pub sorts_json: &'a str,
-    pub can_toggle_excludes: bool,
     pub asset_json: &'a str,
     pub vendor_styles: &'a [String],
     pub vendor_scripts: &'a [String],
@@ -50,14 +39,52 @@ pub struct ExplorerCtx<'a> {
     pub current_path: &'a str,
     pub has_parent: bool,
     pub parent_href: &'a str,
-    pub show_excludes: bool,
-    pub sort_defs: &'a [walk::SortDef],
+    pub filter_menu_active: bool,
+    pub filter_controls: &'a [FilterControl],
+    pub sort_menu_active: bool,
+    pub sort_controls: &'a [SortControl],
+    pub sort_dir_control: &'a SortDirControl,
+    pub column_menu_active: bool,
+    pub column_controls: &'a [ColumnControl],
+    pub headers_control: &'a ColumnControl,
     pub column_defs: &'a [column::Def],
+    pub show_headers: bool,
     pub empty_cells: &'a [column::Cell],
-    pub content_colspan: usize,
-    pub filter_groups: &'a [GroupMeta],
     pub entries: &'a [ExplorerEntry],
     pub readme: Option<ExplorerReadme<'a>>,
+}
+
+pub struct FilterControl {
+    pub href: String,
+    pub label: String,
+    pub title: String,
+    pub active: bool,
+    pub hidden: bool,
+    pub group: bool,
+}
+
+pub struct SortControl {
+    pub href: String,
+    pub label: &'static str,
+    pub title: &'static str,
+    pub active: bool,
+    pub hidden: bool,
+}
+
+pub struct SortDirControl {
+    pub href: String,
+    pub label: &'static str,
+    pub icon: &'static str,
+    pub active: bool,
+}
+
+pub struct ColumnControl {
+    pub href: String,
+    pub key: &'static str,
+    pub label: &'static str,
+    pub title: &'static str,
+    pub active: bool,
+    pub edge: bool,
 }
 
 pub struct ExplorerEntry {
@@ -72,6 +99,40 @@ pub struct ExplorerReadme<'a> {
     pub html: &'a str,
 }
 
+#[derive(Template)]
+#[template(path = "fragments/search/path.html")]
+pub struct PathSearchCtx<'a> {
+    pub pending: bool,
+    pub rows: &'a [PathSearchRow<'a>],
+    pub empty_colspan: usize,
+}
+
+pub struct PathSearchRow<'a> {
+    pub href: String,
+    pub html: String,
+    pub is_dir: bool,
+    pub cells: &'a [column::Cell],
+}
+
+#[derive(Template)]
+#[template(path = "fragments/search/content.html")]
+pub struct ContentSearchCtx<'a> {
+    pub rows: &'a [ContentSearchRow],
+    pub truncated: bool,
+    pub max_rows: usize,
+    pub empty_colspan: usize,
+    pub content_colspan: usize,
+    pub summary_colspan: usize,
+}
+
+pub struct ContentSearchRow {
+    pub href: String,
+    pub path: String,
+    pub line: u64,
+    pub html: String,
+    pub modified: Option<u64>,
+}
+
 pub fn base(p: PageShell) -> Result<String> {
     Ok(p.render()?)
 }
@@ -81,5 +142,13 @@ pub fn page(ctx: PageCtx<'_>) -> Result<String> {
 }
 
 pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
+    Ok(ctx.render()?)
+}
+
+pub fn path_search(ctx: PathSearchCtx<'_>) -> Result<String> {
+    Ok(ctx.render()?)
+}
+
+pub fn content_search(ctx: ContentSearchCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }

@@ -5,7 +5,10 @@ use crate::delivery;
 use crate::filter;
 use crate::render::{self, Rendered};
 use crate::repo::{RepoSet, SourceState};
-use crate::tmpl::{self, ExplorerCtx, ExplorerEntry, ExplorerReadme, PageShell};
+use crate::tmpl::{
+    self, ColumnControl, ExplorerCtx, ExplorerEntry, ExplorerReadme, FilterControl, PageShell,
+    SortControl, SortDirControl,
+};
 use crate::vendor;
 use crate::view::{self, ViewConfig, ViewQuery, ViewState};
 use crate::walk::{self, NavSet, ViewOpts};
@@ -17,12 +20,13 @@ use axum::{
     Router,
     body::Body,
     extract::{Path as AxPath, Query, RawQuery, State, ws::WebSocketUpgrade},
-    http::{StatusCode, header},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     middleware,
     response::{Html, IntoResponse, Response},
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use std::cmp::Ordering;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::path::{Component, Path, PathBuf};
@@ -54,6 +58,22 @@ pub struct AppState {
 pub enum Mode {
     File,
     Dir,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct HtmxContext {
+    pub(crate) is_htmx: bool,
+}
+
+impl HtmxContext {
+    fn from_headers(headers: &HeaderMap) -> Self {
+        let is_htmx = headers
+            .get("HX-Request")
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value == "true")
+            .unwrap_or(false);
+        Self { is_htmx }
+    }
 }
 
 pub struct Options {
@@ -452,25 +472,29 @@ fn breadcrumb_html(
 
 async fn root(
     State(s): State<AppState>,
+    headers: HeaderMap,
     RawQuery(raw_query): RawQuery,
     Query(q): Query<ViewQuery>,
 ) -> Response {
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
+    let hx = HtmxContext::from_headers(&headers);
     match s.mode {
-        Mode::File => render_target(&s, &s.target, None, view).await,
-        Mode::Dir => render_explorer(&s, "", view).await,
+        Mode::File => render_target(&s, &s.target, None, view, hx).await,
+        Mode::Dir => render_explorer(&s, "", view, hx).await,
     }
 }
 
 async fn any_path(
     State(s): State<AppState>,
     AxPath(path): AxPath<String>,
+    headers: HeaderMap,
     RawQuery(raw_query): RawQuery,
     Query(q): Query<ViewQuery>,
 ) -> Response {
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
+    let hx = HtmxContext::from_headers(&headers);
     if s.mode == Mode::File {
-        return serve_file_mode(&s, &path, view).await;
+        return serve_file_mode(&s, &path, view, hx).await;
     }
     let had_trailing = path.ends_with('/');
     let clean = path.trim_matches('/').to_string();
@@ -489,24 +513,25 @@ async fn any_path(
             return Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
                 .header(header::LOCATION, loc)
+                .header(header::VARY, "HX-Request")
                 .body(Body::empty())
                 .unwrap();
         }
-        return render_explorer(&s, &clean, view).await;
+        return render_explorer(&s, &clean, view, hx).await;
     }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
-        return render_file(&s, &joined, Some(s.target.as_path()), view).await;
+        return render_file(&s, &joined, Some(s.target.as_path()), view, hx).await;
     }
-    dispatch_file(&s, &joined, &s.target, &clean, view).await
+    dispatch_file(&s, &joined, &s.target, &clean, view, hx).await
 }
 
-async fn serve_file_mode(s: &AppState, path: &str, view: ViewState) -> Response {
+async fn serve_file_mode(s: &AppState, path: &str, view: ViewState, hx: HtmxContext) -> Response {
     let Some(root) = s.target.parent() else {
         return not_found();
     };
     let clean = path.trim_matches('/');
     if clean.is_empty() {
-        return render_target(s, &s.target, None, view).await;
+        return render_target(s, &s.target, None, view, hx).await;
     }
     let joined = root.join(clean);
     let meta = match tokio::fs::metadata(&joined).await {
@@ -516,7 +541,7 @@ async fn serve_file_mode(s: &AppState, path: &str, view: ViewState) -> Response 
     if meta.is_dir() {
         return not_found();
     }
-    render_target(s, &joined, None, view).await
+    render_target(s, &joined, None, view, hx).await
 }
 
 async fn render_target(
@@ -524,9 +549,10 @@ async fn render_target(
     path: &Path,
     root: Option<&Path>,
     view: ViewState,
+    hx: HtmxContext,
 ) -> Response {
     if path.extension().and_then(|s| s.to_str()) == Some("md") {
-        render_file(s, path, root, view).await
+        render_file(s, path, root, view, hx).await
     } else {
         let Some(base) = root.or_else(|| path.parent()) else {
             return not_found();
@@ -537,11 +563,17 @@ async fn render_target(
             .map(|p| p.to_string_lossy().into_owned())
             .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_default();
-        dispatch_file(s, path, base, &rel, view).await
+        dispatch_file(s, path, base, &rel, view, hx).await
     }
 }
 
-async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewState) -> Response {
+async fn render_file(
+    s: &AppState,
+    path: &Path,
+    root: Option<&Path>,
+    view: ViewState,
+    hx: HtmxContext,
+) -> Response {
     let md = match tokio::fs::read_to_string(path).await {
         Ok(m) => m,
         Err(_) => return not_found(),
@@ -576,16 +608,19 @@ async fn render_file(s: &AppState, path: &Path, root: Option<&Path>, view: ViewS
             return not_found();
         }
     };
-    respond_html(
-        &rendered,
-        &body,
-        s.repos.source_for(path),
-        &s.view_cfg,
-        s.auth.is_some(),
-    )
+    let source = s.repos.source_for(path);
+    let title = if rendered.title.is_empty() {
+        "Preview"
+    } else {
+        &rendered.title
+    };
+    if hx.is_htmx {
+        return respond_fragment(&body, title, source);
+    }
+    respond_html(&rendered, &body, source, s.auth.is_some())
 }
 
-async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
+async fn render_explorer(s: &AppState, rel: &str, view: ViewState, hx: HtmxContext) -> Response {
     let matcher = view::matcher(&view, &s.filters);
     let filter_exts = view::filter_exts(&view, &s.filter_exts);
     let tree = s.cached_nav_tree(&view, matcher.as_ref());
@@ -735,6 +770,12 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     let crumbs = breadcrumb_html(&s.target, s.home.as_deref(), rel, &view, &s.view_cfg);
     let article_class = view.columns.article_class("markdown-body");
     let empty_cells = view.columns.empty_cells();
+    let current_href = if rel.is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{rel}/")
+    };
+    let controls = explorer_controls(&current_href, &view, &s.view_cfg, &s.filters);
     let (has_mermaid, has_math, has_map) = readme_rendered
         .as_ref()
         .map(|r| (r.has_mermaid, r.has_math, r.has_map))
@@ -755,12 +796,17 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
         current_path: rel,
         has_parent,
         parent_href: &parent_href,
-        show_excludes: s.view_cfg.can_toggle_excludes,
-        sort_defs: walk::SORT_DEFS,
+        filter_menu_active: controls.filter_menu_active,
+        filter_controls: &controls.filter_controls,
+        sort_menu_active: controls.sort_menu_active,
+        sort_controls: &controls.sort_controls,
+        sort_dir_control: &controls.sort_dir_control,
+        column_menu_active: controls.column_menu_active,
+        column_controls: &controls.column_controls,
+        headers_control: &controls.headers_control,
         column_defs: column::DEFS,
+        show_headers: view.show_headers,
         empty_cells: &empty_cells,
-        content_colspan: column::DEFS.len() + 1,
-        filter_groups: s.filters.groups(),
         entries: &entries,
         readme: readme_tmpl,
     }) {
@@ -776,13 +822,11 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState) -> Response {
     } else {
         s.target.join(rel)
     };
-    respond_html(
-        &combined,
-        &body,
-        s.repos.source_for(&current),
-        &s.view_cfg,
-        s.auth.is_some(),
-    )
+    let source = s.repos.source_for(&current);
+    if hx.is_htmx {
+        return respond_fragment(&body, &combined.title, source);
+    }
+    respond_html(&combined, &body, source, s.auth.is_some())
 }
 
 fn cmp_commit_entries(
@@ -810,21 +854,143 @@ fn cmp_commit_entries(
     }
 }
 
-fn respond_html(
-    r: &Rendered,
-    body: &str,
-    source: SourceState,
+struct ExplorerControls {
+    filter_menu_active: bool,
+    filter_controls: Vec<FilterControl>,
+    sort_menu_active: bool,
+    sort_controls: Vec<SortControl>,
+    sort_dir_control: SortDirControl,
+    column_menu_active: bool,
+    column_controls: Vec<ColumnControl>,
+    headers_control: ColumnControl,
+}
+
+fn explorer_controls(
+    href: &str,
+    view: &ViewState,
     cfg: &ViewConfig,
-    show_logout: bool,
-) -> Response {
+    filters: &filter::Set,
+) -> ExplorerControls {
+    let filter_menu_active = view.opts.show_hidden != cfg.default.show_hidden
+        || (cfg.can_toggle_excludes && view.opts.show_excludes != cfg.default.show_excludes)
+        || view.use_ignore != cfg.default_use_ignore
+        || view.opts.filter_ext != cfg.default.filter_ext
+        || view.groups != cfg.default_groups;
+    let mut filter_controls = vec![
+        FilterControl {
+            href: view::with_view(href, &view::toggle_hidden(view), cfg),
+            label: "Show hidden".to_string(),
+            title: "Set by -H".to_string(),
+            active: view.opts.show_hidden,
+            hidden: false,
+            group: false,
+        },
+        FilterControl {
+            href: view::with_view(href, &view::toggle_excludes(view, cfg), cfg),
+            label: "Show excludes".to_string(),
+            title: "Set by -E".to_string(),
+            active: view.opts.show_excludes,
+            hidden: !cfg.can_toggle_excludes,
+            group: false,
+        },
+        FilterControl {
+            href: view::with_view(href, &view::toggle_ignore(view), cfg),
+            label: "Show gitignores".to_string(),
+            title: "Set by -I".to_string(),
+            active: !view.use_ignore,
+            hidden: false,
+            group: false,
+        },
+        FilterControl {
+            href: view::with_view(href, &view::toggle_filter(view, cfg), cfg),
+            label: "Filter files".to_string(),
+            title: "Customize with -e <file extension>".to_string(),
+            active: view.opts.filter_ext,
+            hidden: false,
+            group: false,
+        },
+    ];
+    for group in filters.groups() {
+        filter_controls.push(FilterControl {
+            href: view::with_view(href, &view::toggle_group(view, &group.name), cfg),
+            label: group.label.clone(),
+            title: group.detail.clone(),
+            active: view.opts.filter_ext && view.groups.contains(&group.name),
+            hidden: false,
+            group: true,
+        });
+    }
+
+    let sort_menu_active =
+        view.sort != cfg.default_sort || view.sort_dir != view.sort.default_dir();
+    let sort_controls = walk::SORT_DEFS
+        .iter()
+        .map(|def| SortControl {
+            href: view::with_view(href, &view::set_sort(view, def.sort), cfg),
+            label: def.label,
+            title: def.title,
+            active: view.sort == def.sort,
+            hidden: def
+                .column_key
+                .is_some_and(|key| !view.columns.is_visible_key(key)),
+        })
+        .collect();
+    let sort_dir_desc = view.sort_dir == walk::SortDir::Desc;
+    let sort_dir_control = SortDirControl {
+        href: view::with_view(href, &view::toggle_sort_dir(view), cfg),
+        label: if sort_dir_desc {
+            "Sort descending"
+        } else {
+            "Sort ascending"
+        },
+        icon: if sort_dir_desc {
+            "ghrm-icon-chevron-down"
+        } else {
+            "ghrm-icon-chevron-up"
+        },
+        active: view.sort_dir != view.sort.default_dir(),
+    };
+
+    let column_menu_active = view.columns != cfg.default_columns || view.show_headers;
+    let column_controls = column::DEFS
+        .iter()
+        .map(|def| ColumnControl {
+            href: view::with_view(href, &view::toggle_column(view, def.key), cfg),
+            key: def.key,
+            label: def.label,
+            title: def.title,
+            active: view.columns.is_visible(def),
+            edge: def.edge,
+        })
+        .collect();
+    let headers_control = ColumnControl {
+        href: view::with_view(href, &view::toggle_headers(view), cfg),
+        key: "headers",
+        label: "Show column headers",
+        title: "Show column headers in explorer",
+        active: view.show_headers,
+        edge: false,
+    };
+
+    ExplorerControls {
+        filter_menu_active,
+        filter_controls,
+        sort_menu_active,
+        sort_controls,
+        sort_dir_control,
+        column_menu_active,
+        column_controls,
+        headers_control,
+    }
+}
+
+fn respond_html(r: &Rendered, body: &str, source: SourceState, show_logout: bool) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
     } else {
         &r.title
     };
     let source = source_html(&source);
-    let columns_json = column::client_json(&cfg.default_columns);
-    let sorts_json = walk::client_sort_json();
     let project_version = env!("CARGO_PKG_VERSION");
     let project_release_href = format!("{PROJECT_REMOTE_URL}/releases/tag/v{project_version}");
     let assets = vendor::plan(r);
@@ -836,15 +1002,6 @@ fn respond_html(
         project_release_href: &project_release_href,
         project_version,
         show_logout,
-        default_show_hidden: cfg.default.show_hidden,
-        default_show_excludes: cfg.default.show_excludes,
-        default_use_ignore: cfg.default_use_ignore,
-        default_filter_ext: cfg.default.filter_ext,
-        default_filter_group: cfg.default_groups.first().map(String::as_str),
-        default_sort: cfg.default_sort.as_str(),
-        columns_json: &columns_json,
-        sorts_json: &sorts_json,
-        can_toggle_excludes: cfg.can_toggle_excludes,
         asset_json: vendor::client_json(),
         vendor_styles: &assets.styles,
         vendor_scripts: &assets.scripts,
@@ -856,23 +1013,51 @@ fn respond_html(
             return not_found();
         }
     };
-    Html(html).into_response()
+    let mut res = Html(html).into_response();
+    res.headers_mut()
+        .insert(header::VARY, HeaderValue::from_static("HX-Request"));
+    res
+}
+
+fn respond_fragment(body: &str, title: &str, source: SourceState) -> Response {
+    let source_oob = source_oob_html(&source);
+    let html = format!("{body}{source_oob}");
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .header(header::VARY, "HX-Request")
+        .header("HX-Title", hx_title(title))
+        .body(Body::from(html))
+        .unwrap()
+}
+
+fn source_oob_html(source: &SourceState) -> String {
+    source_html_inner(source, true)
+}
+
+fn hx_title(title: &str) -> String {
+    utf8_percent_encode(title, NON_ALPHANUMERIC).to_string()
 }
 
 fn source_html(source: &SourceState) -> String {
+    source_html_inner(source, false)
+}
+
+fn source_html_inner(source: &SourceState, oob: bool) -> String {
+    let oob_attr = if oob { " hx-swap-oob=\"true\"" } else { "" };
     match source {
-        SourceState::Web { url, label, .. } => web_source_html(url, label),
+        SourceState::Web { url, label, .. } => web_source_html(url, label, oob_attr),
         SourceState::Transport { raw } => format!(
-            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\">{badge}<span class=\"ghrm-source-text\">{text}</span></span>",
+            "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\">{badge}<span class=\"ghrm-source-text\">{text}</span></span>",
             raw = html_escape::encode_double_quoted_attribute(raw),
             badge = status_badge_html(),
             text = html_escape::encode_text(raw),
         ),
         SourceState::NoRemote => format!(
-            "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\">{badge}<span class=\"ghrm-source-text\">no remote</span></span>",
+            "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\">{badge}<span class=\"ghrm-source-text\">no remote</span></span>",
             badge = status_badge_html(),
         ),
-        SourceState::NoRepo => project_source_html(),
+        SourceState::NoRepo => project_source_html(oob_attr),
     }
 }
 
@@ -882,14 +1067,14 @@ fn status_badge_html() -> &'static str {
     "<button type=\"button\" class=\"ghrm-source-badge\" aria-expanded=\"false\" aria-controls=\"ghrm-about-peek\" aria-label=\"Show ghrm status\" title=\"Show ghrm status\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></button>"
 }
 
-fn project_source_html() -> String {
+fn project_source_html(oob_attr: &str) -> String {
     format!(
-        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\"><span class=\"ghrm-source-repo\">ghrm</span></span></span>",
+        "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\"><span class=\"ghrm-source-repo\">ghrm</span></span></span>",
         badge = status_badge_html(),
     )
 }
 
-fn web_source_html(url: &str, label: &str) -> String {
+fn web_source_html(url: &str, label: &str, oob_attr: &str) -> String {
     let href = html_escape::encode_double_quoted_attribute(url);
     let title_attr = html_escape::encode_double_quoted_attribute(url);
     let (host, repo) = source_display(url, label);
@@ -912,7 +1097,7 @@ fn web_source_html(url: &str, label: &str) -> String {
     };
 
     format!(
-        "<span id=\"ghrm-source-slot\" class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
+        "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
         badge = status_badge_html(),
     )
 }
@@ -938,6 +1123,7 @@ async fn dispatch_file(
     root: &Path,
     rel: &str,
     view: ViewState,
+    hx: HtmxContext,
 ) -> Response {
     if path
         .extension()
@@ -984,13 +1170,16 @@ async fn dispatch_file(
             return not_found();
         }
     };
-    respond_html(
-        &rendered,
-        &body,
-        s.repos.source_for(path),
-        &s.view_cfg,
-        s.auth.is_some(),
-    )
+    let source = s.repos.source_for(path);
+    let title = if rendered.title.is_empty() {
+        "Preview"
+    } else {
+        &rendered.title
+    };
+    if hx.is_htmx {
+        return respond_fragment(&body, title, source);
+    }
+    respond_html(&rendered, &body, source, s.auth.is_some())
 }
 
 async fn ws_handler(State(s): State<AppState>, ws: WebSocketUpgrade) -> Response {
@@ -1030,5 +1219,60 @@ mod tests {
         let (host, repo) = source_display("https://github.com/brege/ghrm", "brege / ghrm");
         assert_eq!(host, "github.com");
         assert_eq!(repo, "brege/ghrm");
+    }
+
+    #[test]
+    fn htmx_context_detects_hx_request_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert("HX-Request", "true".parse().unwrap());
+        let hx = HtmxContext::from_headers(&headers);
+        assert!(hx.is_htmx);
+    }
+
+    #[test]
+    fn htmx_context_ignores_missing_header() {
+        let headers = HeaderMap::new();
+        let hx = HtmxContext::from_headers(&headers);
+        assert!(!hx.is_htmx);
+    }
+
+    #[test]
+    fn htmx_context_ignores_non_true_value() {
+        let mut headers = HeaderMap::new();
+        headers.insert("HX-Request", "false".parse().unwrap());
+        let hx = HtmxContext::from_headers(&headers);
+        assert!(!hx.is_htmx);
+    }
+
+    #[test]
+    fn source_oob_includes_swap_attribute() {
+        let html = source_oob_html(&SourceState::NoRepo);
+        assert!(html.contains("hx-swap-oob=\"true\""));
+        assert!(html.contains("id=\"ghrm-source-slot\""));
+    }
+
+    #[test]
+    fn source_html_omits_oob_attribute() {
+        let html = source_html(&SourceState::NoRepo);
+        assert!(!html.contains("hx-swap-oob"));
+        assert!(html.contains("id=\"ghrm-source-slot\""));
+    }
+
+    #[test]
+    fn fragment_response_varies_on_hx_request() {
+        let response = respond_fragment("body", "Test", SourceState::NoRepo);
+
+        assert_eq!(response.headers().get(header::VARY).unwrap(), "HX-Request");
+        assert_eq!(response.headers().get("HX-Title").unwrap(), "Test");
+    }
+
+    #[test]
+    fn fragment_response_encodes_title_header() {
+        let response = respond_fragment("body", "Test Title\nλ", SourceState::NoRepo);
+
+        assert_eq!(
+            response.headers().get("HX-Title").unwrap(),
+            "Test%20Title%0A%CE%BB"
+        );
     }
 }

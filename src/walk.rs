@@ -135,20 +135,6 @@ impl Sort {
     }
 }
 
-pub(crate) fn client_sort_json() -> String {
-    let sorts = SORT_DEFS
-        .iter()
-        .map(|def| {
-            serde_json::json!({
-                "key": def.key,
-                "defaultDir": def.default_dir.as_str(),
-                "columnKey": def.column_key,
-            })
-        })
-        .collect::<Vec<_>>();
-    serde_json::to_string(&sorts).expect("sort config serializes")
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SortSpec {
     pub sort: Sort,

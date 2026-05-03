@@ -170,20 +170,6 @@ pub(crate) fn required_meta(columns: &Set) -> MetaReq {
         .fold(MetaReq::NONE, |acc, def| acc | def.requires)
 }
 
-pub(crate) fn client_json(defaults: &Set) -> String {
-    let columns = DEFS
-        .iter()
-        .map(|def| {
-            serde_json::json!({
-                "key": def.key,
-                "defaultVisible": defaults.is_visible(def),
-                "edge": def.edge,
-            })
-        })
-        .collect::<Vec<_>>();
-    serde_json::to_string(&columns).expect("column config serializes")
-}
-
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct Cell {
     pub(crate) key: &'static str,
@@ -222,6 +208,10 @@ impl Set {
         } else {
             self.visible.remove(def.key);
         }
+    }
+
+    pub(crate) fn visible_len(&self) -> usize {
+        self.visible.len()
     }
 
     pub(crate) fn article_class(&self, base: &str) -> String {

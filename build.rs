@@ -1,5 +1,7 @@
 use std::io::Write;
 
+const THEME_SCHEMA: &[u8] = b"theme-cache-v2";
+
 fn main() {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let assets = std::path::Path::new(&manifest).join("assets");
@@ -10,8 +12,9 @@ fn main() {
     collect(&assets, &assets, &mut files);
     files.sort();
 
-    let mut hash: u64 = 14695981039346656037;
+    let mut hash: u64 = fnv1a(14695981039346656037, THEME_SCHEMA);
     for path in &files {
+        println!("cargo:rerun-if-changed={}", path.display());
         let rel = path.strip_prefix(&assets).unwrap();
         hash = fnv1a(hash, rel.to_string_lossy().as_bytes());
         hash = fnv1a(hash, &std::fs::read(path).unwrap());
@@ -30,6 +33,7 @@ fn collect(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<std::pat
             continue;
         }
         if path.is_dir() {
+            println!("cargo:rerun-if-changed={}", path.display());
             collect(root, &path, out);
         } else {
             out.push(path);

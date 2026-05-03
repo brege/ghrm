@@ -1,0 +1,66 @@
+  <div class="ghrm-explorer-header">
+    <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs|safe }}</nav>
+    <div class="ghrm-header-actions">
+      <div class="ghrm-menu-shell">
+        <button id="ghrm-view-menu-toggle" class="ghrm-view-menu-toggle{% if filter_menu_active %} is-active{% endif %}" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Filter files" title="Filter files">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-filter"></use>
+          </svg>
+        </button>
+        <div id="ghrm-view-menu" class="ghrm-view-menu" role="menu" aria-label="Filter files" hidden>
+{% for option in filter_controls %}          <a class="ghrm-view-option{% if option.active %} is-active{% endif %}{% if option.group %} ghrm-view-group{% endif %}" href="{{ option.href }}" role="menuitemcheckbox" aria-checked="{% if option.active %}true{% else %}false{% endif %}" title="{{ option.title }}"{% if option.hidden %} hidden{% endif %}>
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">{{ option.label }}</span>
+          </a>
+{% endfor %}
+        </div>
+      </div>
+      <div class="ghrm-sort-controls">
+        <div class="ghrm-menu-shell">
+          <button id="ghrm-sort-menu-toggle" class="ghrm-view-menu-toggle{% if sort_menu_active %} is-active{% endif %}" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Sort entries" title="Sort entries">
+            <svg aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-sort-entity"></use>
+            </svg>
+          </button>
+          <div id="ghrm-sort-menu" class="ghrm-view-menu" role="menu" aria-label="Sort entries" hidden>
+{% for sort in sort_controls %}            <a class="ghrm-view-option{% if sort.active %} is-active{% endif %}" href="{{ sort.href }}" role="menuitemradio" aria-checked="{% if sort.active %}true{% else %}false{% endif %}" title="{{ sort.title }}"{% if sort.hidden %} hidden{% endif %}>
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">{{ sort.label }}</span>
+          </a>
+{% endfor %}
+          </div>
+        </div>
+        <a id="ghrm-sort-dir-toggle" class="ghrm-view-menu-toggle{% if sort_dir_control.active %} is-active{% endif %}" href="{{ sort_dir_control.href }}" aria-label="{{ sort_dir_control.label }}" title="{{ sort_dir_control.label }}">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#{{ sort_dir_control.icon }}"></use>
+          </svg>
+        </a>
+      </div>
+      <div class="ghrm-menu-shell">
+        <button id="ghrm-column-menu-toggle" class="ghrm-view-menu-toggle{% if column_menu_active %} is-active{% endif %}" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Display columns" title="Display columns">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-columns"></use>
+          </svg>
+        </button>
+        <div id="ghrm-column-menu" class="ghrm-view-menu" role="menu" aria-label="Display columns" hidden>
+{% for column in column_controls %}          <a class="ghrm-view-option{% if column.active %} is-active{% endif %}" href="{{ column.href }}" data-column-toggle="{{ column.key }}" data-column-edge="{% if column.edge %}1{% else %}0{% endif %}" role="menuitemcheckbox" aria-checked="{% if column.active %}true{% else %}false{% endif %}" title="{{ column.title }}">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">{{ column.label }}</span>
+          </a>
+{% endfor %}          <hr class="ghrm-menu-separator" />
+          <a class="ghrm-view-option{% if headers_control.active %} is-active{% endif %}" href="{{ headers_control.href }}" data-column-toggle="{{ headers_control.key }}" data-column-edge="0" role="menuitemcheckbox" aria-checked="{% if headers_control.active %}true{% else %}false{% endif %}" title="{{ headers_control.title }}">
+            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-check"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Show column headers</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>

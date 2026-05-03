@@ -27,15 +27,10 @@
   <link rel="stylesheet" href="/_ghrm/assets/css/features.css">
 </head>
 <body
-  data-default-show-hidden="{% if default_show_hidden %}1{% else %}0{% endif %}"
-  data-default-show-excludes="{% if default_show_excludes %}1{% else %}0{% endif %}"
-  data-default-use-ignore="{% if default_use_ignore %}1{% else %}0{% endif %}"
-  data-default-filter-ext="{% if default_filter_ext %}1{% else %}0{% endif %}"
-  data-default-filter-group="{% if let Some(group) = default_filter_group %}{{ group }}{% endif %}"
-  data-default-sort="{{ default_sort }}"
-  data-columns="{{ columns_json }}"
-  data-sorts="{{ sorts_json }}"
-  data-can-toggle-excludes="{% if can_toggle_excludes %}1{% else %}0{% endif %}">
+  hx-boost="true"
+  hx-target="article.markdown-body"
+  hx-swap="outerHTML show:none"
+  hx-push-url="true">
 {% include "fragments/icons.html" %}  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">
 {{ source|safe }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
@@ -73,7 +68,7 @@
           <use href="#ghrm-icon-moon"></use>
         </svg>
       </button>
-{% if show_logout %}      <a id="ghrm-logout" href="/_ghrm/logout" aria-label="Log out" title="Log out">
+{% if show_logout %}      <a id="ghrm-logout" href="/_ghrm/logout" hx-boost="false" aria-label="Log out" title="Log out">
         <svg aria-hidden="true" focusable="false">
           <use href="#ghrm-icon-logout"></use>
         </svg>
@@ -102,6 +97,6 @@
 {{ body|safe }}{% for src in vendor_scripts %}  <script defer src="{{ src }}"></script>
 {% endfor %}
   <script type="module" src="/_ghrm/assets/js/preview.js"></script>
-  <script type="module" src="/_ghrm/assets/js/app.js"></script>
+  <script type="module" src="/_ghrm/assets/js/main.js"></script>
 </body>
 </html>

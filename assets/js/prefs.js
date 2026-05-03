@@ -49,3 +49,15 @@ export function setupDocChromeToggle() {
   });
   applyDocChromePref();
 }
+
+export function getWrapPref() {
+  return localStorage.getItem('ghrm-wrap') === '1';
+}
+
+export function setWrapPref(wrap) {
+  localStorage.setItem('ghrm-wrap', wrap ? '1' : '0');
+}
+
+export function applyWrapState(wrap) {
+  document.body.classList.toggle('ghrm-wrap', wrap);
+}

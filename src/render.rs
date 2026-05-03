@@ -733,8 +733,8 @@ mod tests {
 
     #[test]
     fn github_backtick_math_preserves_delimiters() {
-        // preview.js configures KaTeX with `$\`...\`$` delimiters and a
-        // restoreGitHubInlineMath pass that also handles `$<code>...</code>$`.
+        // The math adapter configures KaTeX with `$\`...\`$` delimiters and a
+        // restore pass that also handles `$<code>...</code>$`.
         // Either shape is fine; client does the rendering.
         let md = "text $`\\int x dx`$ text\n";
         let r = render_at(md, None);
