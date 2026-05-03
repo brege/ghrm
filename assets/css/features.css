@@ -264,6 +264,25 @@
 
 .ghrm-map-canvas {
   height: 420px;
+  position: relative;
+}
+
+.ghrm-map-offline {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 1000;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--bgColor-muted, #f6f8fa);
+  color: var(--fgColor-muted, #656d76);
+  pointer-events: none;
+}
+
+.ghrm-map-offline svg {
+  display: block;
+  width: 20px;
+  height: 20px;
 }
 
 .ghrm-mermaid-info {

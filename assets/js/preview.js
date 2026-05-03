@@ -667,6 +667,11 @@ function renderMapBlock(block, kind) {
     window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
     }).addTo(map);
+  } else {
+    const offline = document.createElement('div');
+    offline.className = 'ghrm-map-offline';
+    offline.innerHTML = icon('cloud-offline');
+    canvas.appendChild(offline);
   }
 
   const layer = window.L.geoJSON(geojson, {
