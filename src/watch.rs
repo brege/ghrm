@@ -44,13 +44,13 @@ pub fn spawn_dir(
             if events.is_empty() {
                 continue;
             }
-            let changed = changed_paths(&root, &events, use_ignore, &exclude_names);
+            let changed = changed_paths(&root, &events, use_ignore, &exclude_names, None);
             if changed.is_empty() {
                 continue;
             }
             let nav_dirty = events
                 .iter()
-                .any(|e| is_nav_event(&root, e, use_ignore, &exclude_names));
+                .any(|e| is_nav_event(&root, e, use_ignore, &exclude_names, None));
             if nav_dirty {
                 if let Ok(mut guard) = nav.alternate.write() {
                     *guard = None;
@@ -106,6 +106,7 @@ fn changed_paths(
     events: &[DebouncedEvent],
     use_ignore: bool,
     exclude_names: &[String],
+    global_ignore: Option<&Path>,
 ) -> Vec<PathBuf> {
     use notify::event::EventKind;
     let mut seen: Vec<PathBuf> = Vec::new();
@@ -114,7 +115,7 @@ fn changed_paths(
             continue;
         }
         for p in &ev.event.paths {
-            if !is_relevant_watch_path(root, p, use_ignore, exclude_names) {
+            if !is_relevant_watch_path(root, p, use_ignore, exclude_names, global_ignore) {
                 continue;
             }
             if !seen.contains(p) {
@@ -130,6 +131,7 @@ fn is_nav_event(
     ev: &DebouncedEvent,
     use_ignore: bool,
     exclude_names: &[String],
+    global_ignore: Option<&Path>,
 ) -> bool {
     use notify::event::{EventKind, ModifyKind};
     let kind_nav = matches!(
@@ -142,7 +144,7 @@ fn is_nav_event(
     ev.event
         .paths
         .iter()
-        .any(|p| is_relevant_watch_path(root, p, use_ignore, exclude_names))
+        .any(|p| is_relevant_watch_path(root, p, use_ignore, exclude_names, global_ignore))
 }
 
 fn is_relevant_watch_path(
@@ -150,6 +152,7 @@ fn is_relevant_watch_path(
     path: &Path,
     use_ignore: bool,
     exclude_names: &[String],
+    global_ignore: Option<&Path>,
 ) -> bool {
     let Ok(rel) = path.strip_prefix(root) else {
         return false;
@@ -160,18 +163,23 @@ fn is_relevant_watch_path(
     if !use_ignore {
         return true;
     }
-    !matches_ignore(root, rel, path_kind(path))
+    !matches_ignore(root, rel, path_kind(path), global_ignore)
 }
 
-fn matches_ignore(root: &Path, rel: &Path, is_dir: Option<bool>) -> bool {
+fn matches_ignore(
+    root: &Path,
+    rel: &Path,
+    is_dir: Option<bool>,
+    global_ignore: Option<&Path>,
+) -> bool {
     match is_dir {
-        Some(is_dir) => ignore_state(root, rel, is_dir).is_ignore(),
+        Some(is_dir) => ignore_state(root, rel, is_dir, global_ignore).is_ignore(),
         None => {
-            let file_match = ignore_state(root, rel, false);
+            let file_match = ignore_state(root, rel, false, global_ignore);
             if file_match.is_whitelist() {
                 return false;
             }
-            let dir_match = ignore_state(root, rel, true);
+            let dir_match = ignore_state(root, rel, true, global_ignore);
             if dir_match.is_whitelist() {
                 return false;
             }
@@ -184,7 +192,7 @@ fn path_kind(path: &Path) -> Option<bool> {
     std::fs::metadata(path).ok().map(|meta| meta.is_dir())
 }
 
-fn ignore_state(root: &Path, rel: &Path, is_dir: bool) -> MatchState {
+fn ignore_state(root: &Path, rel: &Path, is_dir: bool, global_ignore: Option<&Path>) -> MatchState {
     match ignore_match(root, rel, is_dir, ".ignore") {
         MatchState::None => {}
         state => return state,
@@ -197,7 +205,7 @@ fn ignore_state(root: &Path, rel: &Path, is_dir: bool) -> MatchState {
         MatchState::None => {}
         state => return state,
     }
-    global_ignore_match(root, rel, is_dir)
+    global_ignore_match(root, rel, is_dir, global_ignore)
 }
 
 fn ignore_match(root: &Path, rel: &Path, is_dir: bool, name: &str) -> MatchState {
@@ -223,8 +231,23 @@ fn ignore_match(root: &Path, rel: &Path, is_dir: bool, name: &str) -> MatchState
     MatchState::from_match(matcher.matched_path_or_any_parents(rel, is_dir))
 }
 
-fn global_ignore_match(root: &Path, rel: &Path, is_dir: bool) -> MatchState {
-    let (matcher, _) = GitignoreBuilder::new(root).build_global();
+fn global_ignore_match(
+    root: &Path,
+    rel: &Path,
+    is_dir: bool,
+    explicit: Option<&Path>,
+) -> MatchState {
+    let mut builder = GitignoreBuilder::new(root);
+    let matcher = match explicit {
+        Some(path) => {
+            let _ = builder.add(path);
+            match builder.build() {
+                Ok(m) => m,
+                Err(_) => return MatchState::None,
+            }
+        }
+        None => builder.build_global().0,
+    };
     MatchState::from_match(matcher.matched_path_or_any_parents(rel, is_dir))
 }
 
@@ -267,7 +290,7 @@ impl MatchState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::{TempDir, env_lock};
+    use crate::testutil::TempDir;
     use notify::Event;
     use std::fs;
     use std::time::Instant;
@@ -287,6 +310,7 @@ mod tests {
             )],
             true,
             &[".venv".to_string()],
+            None,
         );
 
         assert!(changed.is_empty());
@@ -308,6 +332,7 @@ mod tests {
             )],
             true,
             &[],
+            None,
         );
 
         assert!(changed.is_empty());
@@ -315,14 +340,9 @@ mod tests {
 
     #[test]
     fn changed_paths_honor_global_gitignore() {
-        let _guard = env_lock().lock().unwrap();
         let td = TempDir::new("ghrm-watch-test");
-        let xdg = td.path().join("xdg/git");
-        fs::create_dir_all(&xdg).unwrap();
-        fs::write(xdg.join("ignore"), ".venv/\n").unwrap();
-
-        let prev_xdg = std::env::var_os("XDG_CONFIG_HOME");
-        std::env::set_var("XDG_CONFIG_HOME", td.path().join("xdg"));
+        let ignore_file = td.path().join("global-ignore");
+        fs::write(&ignore_file, ".venv/\n").unwrap();
 
         let path = td.path().join(".venv/bin/python");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -336,13 +356,8 @@ mod tests {
             )],
             true,
             &[],
+            Some(&ignore_file),
         );
-
-        if let Some(value) = prev_xdg {
-            std::env::set_var("XDG_CONFIG_HOME", value);
-        } else {
-            std::env::remove_var("XDG_CONFIG_HOME");
-        }
 
         assert!(changed.is_empty());
     }
@@ -362,6 +377,7 @@ mod tests {
             )],
             true,
             &[],
+            None,
         );
 
         assert_eq!(changed, vec![path]);
