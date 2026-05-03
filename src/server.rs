@@ -23,6 +23,7 @@ use axum::{
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use std::cmp::Ordering;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::path::{Component, Path, PathBuf};
@@ -59,7 +60,6 @@ pub enum Mode {
 #[derive(Clone, Default)]
 pub(crate) struct HtmxContext {
     pub(crate) is_htmx: bool,
-    pub(crate) push_url: Option<String>,
 }
 
 impl HtmxContext {
@@ -69,15 +69,7 @@ impl HtmxContext {
             .and_then(|value| value.to_str().ok())
             .map(|value| value == "true")
             .unwrap_or(false);
-        Self {
-            is_htmx,
-            push_url: None,
-        }
-    }
-
-    fn with_push_url(mut self, url: String) -> Self {
-        self.push_url = Some(url);
-        self
+        Self { is_htmx }
     }
 }
 
@@ -515,10 +507,6 @@ async fn any_path(
     if meta.is_dir() {
         if !had_trailing {
             let loc = view::with_view(&format!("/{}/", clean), &view, &s.view_cfg);
-            if hx.is_htmx {
-                let hx = hx.with_push_url(loc.clone());
-                return render_explorer(&s, &clean, view, hx).await;
-            }
             return Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
                 .header(header::LOCATION, loc)
@@ -618,8 +606,13 @@ async fn render_file(
         }
     };
     let source = s.repos.source_for(path);
+    let title = if rendered.title.is_empty() {
+        "Preview"
+    } else {
+        &rendered.title
+    };
     if hx.is_htmx {
-        return respond_fragment(&body, source, hx);
+        return respond_fragment(&body, title, source);
     }
     respond_html(&rendered, &body, source, &s.view_cfg, s.auth.is_some())
 }
@@ -817,7 +810,7 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState, hx: HtmxConte
     };
     let source = s.repos.source_for(&current);
     if hx.is_htmx {
-        return respond_fragment(&body, source, hx);
+        return respond_fragment(&body, &combined.title, source);
     }
     respond_html(&combined, &body, source, &s.view_cfg, s.auth.is_some())
 }
@@ -899,21 +892,24 @@ fn respond_html(
     res
 }
 
-fn respond_fragment(body: &str, source: SourceState, hx: HtmxContext) -> Response {
+fn respond_fragment(body: &str, title: &str, source: SourceState) -> Response {
     let source_oob = source_oob_html(&source);
     let html = format!("{body}{source_oob}");
-    let mut res = Response::builder()
+    Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .header(header::VARY, "HX-Request");
-    if let Some(url) = hx.push_url {
-        res = res.header("HX-Push-Url", url);
-    }
-    res.body(Body::from(html)).unwrap()
+        .header(header::VARY, "HX-Request")
+        .header("HX-Title", hx_title(title))
+        .body(Body::from(html))
+        .unwrap()
 }
 
 fn source_oob_html(source: &SourceState) -> String {
     source_html_inner(source, true)
+}
+
+fn hx_title(title: &str) -> String {
+    utf8_percent_encode(title, NON_ALPHANUMERIC).to_string()
 }
 
 fn source_html(source: &SourceState) -> String {
@@ -1048,8 +1044,13 @@ async fn dispatch_file(
         }
     };
     let source = s.repos.source_for(path);
+    let title = if rendered.title.is_empty() {
+        "Preview"
+    } else {
+        &rendered.title
+    };
     if hx.is_htmx {
-        return respond_fragment(&body, source, hx);
+        return respond_fragment(&body, title, source);
     }
     respond_html(&rendered, &body, source, &s.view_cfg, s.auth.is_some())
 }
@@ -1099,7 +1100,6 @@ mod tests {
         headers.insert("HX-Request", "true".parse().unwrap());
         let hx = HtmxContext::from_headers(&headers);
         assert!(hx.is_htmx);
-        assert!(hx.push_url.is_none());
     }
 
     #[test]
@@ -1118,13 +1118,6 @@ mod tests {
     }
 
     #[test]
-    fn htmx_context_with_push_url() {
-        let headers = HeaderMap::new();
-        let hx = HtmxContext::from_headers(&headers).with_push_url("/foo/".to_string());
-        assert_eq!(hx.push_url, Some("/foo/".to_string()));
-    }
-
-    #[test]
     fn source_oob_includes_swap_attribute() {
         let html = source_oob_html(&SourceState::NoRepo);
         assert!(html.contains("hx-swap-oob=\"true\""));
@@ -1140,8 +1133,19 @@ mod tests {
 
     #[test]
     fn fragment_response_varies_on_hx_request() {
-        let response = respond_fragment("body", SourceState::NoRepo, HtmxContext::default());
+        let response = respond_fragment("body", "Test", SourceState::NoRepo);
 
         assert_eq!(response.headers().get(header::VARY).unwrap(), "HX-Request");
+        assert_eq!(response.headers().get("HX-Title").unwrap(), "Test");
+    }
+
+    #[test]
+    fn fragment_response_encodes_title_header() {
+        let response = respond_fragment("body", "Test Title\nλ", SourceState::NoRepo);
+
+        assert_eq!(
+            response.headers().get("HX-Title").unwrap(),
+            "Test%20Title%0A%CE%BB"
+        );
     }
 }

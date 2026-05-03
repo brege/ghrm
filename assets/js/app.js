@@ -235,7 +235,7 @@ function applyView(next, { closeMenus = false } = {}) {
     return;
   }
   if (closeMenus) closeExplorerMenus();
-  navigate(target);
+  location.assign(target);
 }
 
 function setupViewMenu() {
@@ -622,87 +622,12 @@ function setupLiveReload() {
   connect();
 }
 
-function setupSpaNav() {
-  document.addEventListener('click', (e) => {
-    const a = e.target.closest('a');
-    if (!a || !a.href) return;
-    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
-      return;
-    if (a.dataset.ghrmNative === '1') return;
-    if (a.target && a.target !== '_self') return;
-    if (a.origin !== location.origin) return;
-    if (a.pathname === location.pathname && a.hash) return;
-
-    const { pathname } = a;
-    if (!pathname.endsWith('/') && !pathname.endsWith('.md')) return;
-
-    e.preventDefault();
-    navigate(withView(a.href));
-  });
-
-  window.addEventListener('popstate', () => {
-    const target = `${location.pathname}${location.search}${location.hash}`;
-    navigate(target, false);
-  });
-}
-
 function setupSearch() {
   setSearchCloseHandler(() => {
     const target = `${location.pathname}${location.search}${location.hash}`;
-    navigate(target, false);
+    location.assign(target);
   });
   setupPathSearch({ populateDates, setupNavExternalLinks, syncColumnControls });
-}
-
-async function navigate(path, push = true) {
-  beginActivity();
-  try {
-    const url = new URL(path, location.origin);
-    const target = `${url.pathname}${url.search}${url.hash}`;
-    const res = await fetch(target).catch(() => null);
-    if (!res || !res.ok) return;
-
-    const html = await res.text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const newArticle = doc.querySelector('article.markdown-body');
-    if (!newArticle) return;
-    const nextSource = doc.getElementById('ghrm-source-slot');
-    const currentSource = document.getElementById('ghrm-source-slot');
-    if (currentSource && nextSource) {
-      currentSource.replaceWith(nextSource);
-    } else if (currentSource) {
-      currentSource.remove();
-    } else if (nextSource) {
-      document.querySelector('.ghrm-topbar-inner')?.prepend(nextSource);
-    }
-    syncServerStatus();
-
-    const existing = document.querySelector('article.markdown-body');
-    if (existing) {
-      existing.replaceWith(newArticle);
-    } else {
-      document.body.appendChild(newArticle);
-    }
-
-    document.title = doc.title;
-    if (push) history.pushState(null, '', target);
-    setupFileViews();
-    setupSearch();
-    setupNavExternalLinks();
-    setupViewMenu();
-    syncViewMenu();
-    syncColumnControls();
-    applyDocChromePref();
-    populateDates();
-    buildToc();
-    const hash = url.hash;
-    if (!hash || !scrollToHash(hash)) {
-      window.scrollTo(0, 0);
-    }
-    document.dispatchEvent(new CustomEvent('ghrm:contentready'));
-  } finally {
-    endActivity();
-  }
 }
 
 function setupNavExternalLinks() {
@@ -729,6 +654,63 @@ function setupNavExternalLinks() {
   }
 }
 
+function shouldBoostLink(a) {
+  if (!a.href) return false;
+  if (a.dataset.ghrmNative === '1') return false;
+  if (a.target && a.target !== '_self') return false;
+  if (a.hasAttribute('download')) return false;
+  const url = new URL(a.href, location.origin);
+  if (url.origin !== location.origin) return false;
+  if (url.pathname.startsWith('/_ghrm/')) return false;
+  if (url.pathname === location.pathname && url.hash) return false;
+  return true;
+}
+
+function setupHtmxNav() {
+  document.body.addEventListener('htmx:beforeBoost', (e) => {
+    const link = e.detail.elt?.closest?.('a');
+    if (link && !shouldBoostLink(link)) {
+      e.preventDefault();
+    }
+  });
+
+  document.body.addEventListener('htmx:afterSwap', (e) => {
+    if (e.detail.target?.matches('article.markdown-body')) {
+      const title = e.detail.xhr?.getResponseHeader('HX-Title');
+      if (title !== null) {
+        document.title = decodeURIComponent(title);
+      }
+      syncServerStatus();
+      setupFileViews();
+      setupSearch();
+      setupNavExternalLinks();
+      setupViewMenu();
+      syncViewMenu();
+      syncColumnControls();
+      applyDocChromePref();
+      populateDates();
+      buildToc();
+      const hash = location.hash;
+      if (!hash || !scrollToHash(hash)) {
+        window.scrollTo(0, 0);
+      }
+      document.dispatchEvent(new CustomEvent('ghrm:contentready'));
+    }
+  });
+
+  document.body.addEventListener('htmx:beforeRequest', (e) => {
+    if (e.detail.target?.matches('article.markdown-body')) {
+      beginActivity();
+    }
+  });
+
+  document.body.addEventListener('htmx:afterRequest', (e) => {
+    if (e.detail.target?.matches('article.markdown-body')) {
+      endActivity();
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   setupFileViews();
   setupSearch();
@@ -740,7 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupThemeToggle();
   setupStatusPeek();
   setupLiveReload();
-  setupSpaNav();
+  setupHtmxNav();
   setupNavExternalLinks();
   scrollToHash(location.hash);
 });

@@ -6,6 +6,7 @@
         "github-markdown.css"
       ],
       "scripts": [
+        "htmx.min.js",
         "highlightjs/highlight.min.js"
       ]
     },
@@ -39,6 +40,10 @@
     "path": "mermaid-version.txt"
   },
   "files": [
+    {
+      "url": "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js",
+      "path": "htmx.min.js"
+    },
     {
       "url": "https://cdn.jsdelivr.net/npm/github-markdown-css@5.6.1/github-markdown.css",
       "path": "github-markdown.css"
