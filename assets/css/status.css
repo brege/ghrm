@@ -82,21 +82,27 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 .ghrm-about-peek-inner {
   position: relative;
   z-index: 1;
-  width: min(420px, 100%);
+  width: 100%;
   min-height: 92px;
   padding: 22px 24px;
   display: grid;
-  align-content: center;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px 28px;
+}
+
+.ghrm-about-links {
+  display: grid;
   gap: 8px;
 }
 
 .ghrm-about-stamp {
   position: absolute;
-  top: 8px;
+  bottom: -1px;
   right: 28px;
   width: 92px;
   height: 92px;
-  opacity: 0.6;
+  opacity: 0.8;
   pointer-events: none;
 }
 
@@ -121,6 +127,49 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   color: var(--fgColor-muted, #636c76);
 }
 
+.ghrm-runtime-paths {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  color: var(--fgColor-muted, #636c76);
+}
+
+.ghrm-about-heading {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.ghrm-runtime-paths dl {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.ghrm-runtime-path {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.ghrm-runtime-path dt {
+  color: var(--fgColor-default, #1f2328);
+  font-weight: 600;
+}
+
+.ghrm-runtime-path dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 :root[data-theme="dark"] .ghrm-about-peek {
   background-image:
     linear-gradient(rgba(88, 166, 255, 0.16) 1px, transparent 1px),
@@ -134,7 +183,7 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 
 @media (max-width: 620px) {
   .ghrm-about-peek-inner {
-    width: 100%;
+    grid-template-columns: 1fr;
   }
 }
 

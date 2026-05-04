@@ -1,6 +1,7 @@
 use std::io::Write;
 
-const THEME_SCHEMA: &[u8] = b"theme-cache-v2";
+const THEME_DIRS: &[&str] = &["css", "img", "js"];
+const THEME_SCHEMA: &[u8] = b"theme-cache-v3";
 
 fn main() {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -9,7 +10,9 @@ fn main() {
     println!("cargo:rerun-if-changed=assets");
 
     let mut files: Vec<std::path::PathBuf> = Vec::new();
-    collect(&assets, &assets, &mut files);
+    for dir in THEME_DIRS {
+        collect(&assets.join(dir), &mut files);
+    }
     files.sort();
 
     let mut hash: u64 = fnv1a(14695981039346656037, THEME_SCHEMA);
@@ -25,16 +28,12 @@ fn main() {
     write!(std::fs::File::create(dest).unwrap(), "{:016x}", hash).unwrap();
 }
 
-fn collect(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+fn collect(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     for entry in std::fs::read_dir(dir).unwrap().flatten() {
         let path = entry.path();
-        let rel = path.strip_prefix(root).unwrap().to_owned();
-        if rel.starts_with("vendor") || rel == std::path::Path::new("config.json") {
-            continue;
-        }
         if path.is_dir() {
             println!("cargo:rerun-if-changed={}", path.display());
-            collect(root, &path, out);
+            collect(&path, out);
         } else {
             out.push(path);
         }

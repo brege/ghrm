@@ -134,13 +134,15 @@ impl Config {
 }
 
 pub fn path_default() -> Result<Option<PathBuf>> {
-    if let Some(path) = env::var_os("XDG_CONFIG_HOME") {
-        return Ok(Some(PathBuf::from(path).join("ghrm/config.toml")));
+    Ok(Some(crate::dirs::config()?.join("config.toml")))
+}
+
+pub fn path(path: Option<&Path>) -> Result<Option<PathBuf>> {
+    match path {
+        Some(path) if path.is_absolute() => Ok(Some(path.to_path_buf())),
+        Some(path) => Ok(Some(env::current_dir()?.join(path))),
+        None => path_default(),
     }
-    if let Some(home) = env::var_os("HOME") {
-        return Ok(Some(PathBuf::from(home).join(".config/ghrm/config.toml")));
-    }
-    bail!("missing HOME and XDG_CONFIG_HOME");
 }
 
 #[cfg(test)]

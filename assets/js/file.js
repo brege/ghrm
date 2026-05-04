@@ -83,7 +83,7 @@ function setupFileView(container) {
   toggle.dataset.ghrmRawToggle = '1';
   toggle.innerHTML = icon('code');
 
-  if (kind === 'markdown') {
+  if (kind === 'markdown' || kind === 'dual') {
     toggle.addEventListener('click', () => {
       const raw = toggle.getAttribute('aria-pressed') !== 'true';
       syncFileView(container, raw);
@@ -162,7 +162,7 @@ function setupFileView(container) {
   actions.append(rawLink, copy, download);
   tools.append(toggles, actions);
   host.prepend(tools);
-  syncFileView(container, kind === 'raw');
+  syncFileView(container, kind === 'source');
 }
 
 export function setupFileViews() {

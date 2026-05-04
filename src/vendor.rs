@@ -1,13 +1,12 @@
 use crate::render::Rendered;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::{
-    env, fs,
+    fs, io,
     path::{Component, Path, PathBuf},
-    process::Command,
     sync::OnceLock,
 };
 
@@ -43,13 +42,7 @@ fn feature_names(r: &Rendered) -> Vec<&'static str> {
 }
 
 pub fn dir() -> Result<PathBuf> {
-    if let Some(path) = env::var_os("XDG_CACHE_HOME") {
-        return Ok(PathBuf::from(path).join("ghrm"));
-    }
-    if let Some(home) = env::var_os("HOME") {
-        return Ok(PathBuf::from(home).join(".cache/ghrm"));
-    }
-    bail!("missing HOME and XDG_CACHE_HOME");
+    crate::dirs::cache()
 }
 
 pub fn path(rel: &str) -> Result<PathBuf> {
@@ -58,9 +51,8 @@ pub fn path(rel: &str) -> Result<PathBuf> {
 }
 
 pub fn sync(refresh: bool) -> Result<()> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let vendor_dir = dir()?;
-    let manifest = load_manifest(&root)?;
+    let manifest = manifest();
     for item in &manifest.files {
         let path = vendor_dir.join(&item.path);
         if !refresh && path.is_file() {
@@ -70,18 +62,7 @@ pub fn sync(refresh: bool) -> Result<()> {
             path.parent()
                 .ok_or_else(|| anyhow::anyhow!("missing parent"))?,
         )?;
-        let status = Command::new("curl")
-            .arg("--location")
-            .arg("--fail")
-            .arg("--silent")
-            .arg("--show-error")
-            .arg(&item.url)
-            .arg("--output")
-            .arg(&path)
-            .status()?;
-        if !status.success() {
-            bail!("curl failed for {}", path.display());
-        }
+        download(&item.url, &path)?;
     }
     let mermaid = fs::read_to_string(vendor_dir.join(&manifest.mermaid_version.source))?;
     let version = mermaid
@@ -93,6 +74,16 @@ pub fn sync(refresh: bool) -> Result<()> {
         vendor_dir.join(&manifest.mermaid_version.path),
         format!("{version}\n"),
     )?;
+    Ok(())
+}
+
+fn download(url: &str, path: &Path) -> Result<()> {
+    let response = ureq::get(url)
+        .call()
+        .with_context(|| format!("download failed: {url}"))?;
+    let mut reader = response.into_reader();
+    let mut file = fs::File::create(path)?;
+    io::copy(&mut reader, &mut file)?;
     Ok(())
 }
 
@@ -112,15 +103,17 @@ pub fn ensure() -> Result<()> {
 }
 
 fn missing() -> Result<Option<PathBuf>> {
-    let vendor_dir = dir()?;
-    let manifest = load_manifest(&PathBuf::from(env!("CARGO_MANIFEST_DIR")))?;
-    for item in manifest.files {
-        let path = vendor_dir.join(item.path);
+    missing_in(&dir()?, manifest())
+}
+
+fn missing_in(vendor_dir: &Path, manifest: &Manifest) -> Result<Option<PathBuf>> {
+    for item in &manifest.files {
+        let path = vendor_dir.join(&item.path);
         if !path.is_file() {
             return Ok(Some(path));
         }
     }
-    let generated = vendor_dir.join(manifest.mermaid_version.path);
+    let generated = vendor_dir.join(&manifest.mermaid_version.path);
     if !generated.is_file() {
         return Ok(Some(generated));
     }
@@ -253,10 +246,6 @@ struct FileAsset {
     path: String,
 }
 
-fn load_manifest(root: &Path) -> Result<Manifest> {
-    manifest_from_str(&fs::read_to_string(root.join("assets/config.json"))?)
-}
-
 fn manifest() -> &'static Manifest {
     static MANIFEST: OnceLock<Manifest> = OnceLock::new();
     MANIFEST.get_or_init(|| {
@@ -289,6 +278,8 @@ fn validate_rel(rel: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutil::TempDir;
+    use std::fs;
 
     fn rendered(has_mermaid: bool, has_math: bool, has_map: bool) -> Rendered {
         Rendered {
@@ -348,5 +339,27 @@ mod tests {
             value["mermaidVersion"],
             manifest().public_url(&manifest().mermaid_version.path)
         );
+    }
+
+    #[test]
+    fn missing_uses_manifest_files_and_generated_asset() {
+        let td = TempDir::new("ghrm-vendor-missing");
+
+        let missing = missing_in(td.path(), manifest()).unwrap().unwrap();
+        assert_eq!(missing, td.path().join(&manifest().files[0].path));
+
+        for item in &manifest().files {
+            let path = td.path().join(&item.path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, "asset").unwrap();
+        }
+        let generated = td.path().join(&manifest().mermaid_version.path);
+        assert_eq!(
+            missing_in(td.path(), manifest()).unwrap(),
+            Some(generated.clone())
+        );
+
+        fs::write(&generated, "11.0.0\n").unwrap();
+        assert_eq!(missing_in(td.path(), manifest()).unwrap(), None);
     }
 }
