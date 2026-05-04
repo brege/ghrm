@@ -10,7 +10,6 @@ mod paths;
 mod render;
 mod repo;
 mod search;
-mod searchview;
 mod server;
 mod shell;
 #[cfg(test)]

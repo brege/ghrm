@@ -1,5 +1,4 @@
 use crate::column;
-use crate::search as content_search;
 use crate::tmpl::{self, ContentSearchCtx, ContentSearchRow, PathSearchCtx, PathSearchRow};
 use crate::view::{self, ViewConfig, ViewState};
 use crate::walk;
@@ -107,7 +106,7 @@ pub(crate) fn path_fragment(
 }
 
 pub(crate) fn content_fragment(
-    resp: &content_search::SearchResponse,
+    resp: &super::SearchResponse,
     view: &ViewState,
     cfg: &ViewConfig,
 ) -> Option<Response> {

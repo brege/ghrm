@@ -1,8 +1,7 @@
 use crate::column;
 use crate::render;
 use crate::repo::RepoSet;
-use crate::search as content_search;
-use crate::searchview;
+use crate::search;
 use crate::server::{AppState, Mode};
 use crate::view::{self, ViewQuery};
 use crate::walk;
@@ -79,7 +78,7 @@ pub(crate) async fn search(
     let matcher = view::matcher(&view, &s.filters);
     let filter_exts = view::filter_exts(&view, &s.filter_exts);
 
-    let resp = content_search::search(content_search::SearchOpts {
+    let resp = search::search(search::SearchOpts {
         query,
         root: &s.target,
         use_ignore: view.use_ignore,
@@ -91,7 +90,7 @@ pub(crate) async fn search(
     });
 
     if wants_html(&headers) {
-        return searchview::content_fragment(&resp, &view, &s.view_cfg).unwrap_or_else(not_found);
+        return search::view::content_fragment(&resp, &view, &s.view_cfg).unwrap_or_else(not_found);
     }
 
     json_response(&resp, "api_search")
@@ -125,9 +124,9 @@ pub(crate) async fn path_search(
     let rows = if view.use_ignore == s.use_ignore {
         let nav = s.nav.read().unwrap();
         if !nav.is_ready() {
-            let resp = searchview::PathResponse::pending(s.search_max_rows);
+            let resp = search::view::PathResponse::pending(s.search_max_rows);
             if wants_html(&headers) {
-                return searchview::path_fragment(&resp, query, &view, &s.view_cfg)
+                return search::view::path_fragment(&resp, query, &view, &s.view_cfg)
                     .unwrap_or_else(not_found);
             }
             return json_response(&resp, "api_path_search");
@@ -174,10 +173,10 @@ pub(crate) async fn path_search(
             |rows| load_path_search_commits(rows, Some(&s.target), Some(&s.repos)),
         )
     };
-    let resp = searchview::path_response(rows, &view.columns);
+    let resp = search::view::path_response(rows, &view.columns);
 
     if wants_html(&headers) {
-        return searchview::path_fragment(&resp, query, &view, &s.view_cfg)
+        return search::view::path_fragment(&resp, query, &view, &s.view_cfg)
             .unwrap_or_else(not_found);
     }
 
@@ -198,7 +197,7 @@ struct PathSearchSpec<'a> {
 }
 
 #[cfg(test)]
-fn path_search_results(spec: PathSearchSpec<'_>) -> searchview::PathResponse {
+fn path_search_results(spec: PathSearchSpec<'_>) -> search::view::PathResponse {
     let rows = walk::path_search(
         walk::PathSearchSpec {
             tree: spec.tree,
@@ -211,7 +210,7 @@ fn path_search_results(spec: PathSearchSpec<'_>) -> searchview::PathResponse {
         },
         |rows| load_path_search_commits(rows, spec.target, spec.repos),
     );
-    searchview::path_response(rows, spec.columns)
+    search::view::path_response(rows, spec.columns)
 }
 
 fn load_path_search_commits(
