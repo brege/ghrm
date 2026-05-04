@@ -315,6 +315,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aac0b255932a9cd52fbfd664b67957f9f2e095ae4711cb0e41b4e291edef94c2"
 dependencies = [
  "caseless",
+ "emojis",
  "entities",
  "finl_unicode",
  "jetscii",
@@ -425,6 +426,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "emojis"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afd562179989ec12b5c82f63a9423be4d4f0c5651930837074488ef4d07f2886"
+dependencies = [
+ "phf",
 ]
 
 [[package]]

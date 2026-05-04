@@ -114,6 +114,7 @@ pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     options.extension.autolink = true;
     options.extension.math_dollars = true;
     options.extension.math_code = false;
+    options.extension.shortcodes = true;
     options.extension.header_id_prefix = Some(String::new());
     options.extension.tagfilter = false;
     options.render.r#unsafe = true;
@@ -680,6 +681,16 @@ mod tests {
         let r = render_at(md, None);
         assert!(r.html.contains("<blockquote"));
         assert!(!r.html.contains("markdown-admonition"));
+    }
+
+    #[test]
+    fn emoji_shortcodes_render() {
+        let md = ":wave: :rocket: :white_check_mark:\n";
+        let r = render_at(md, None);
+        assert!(r.html.contains("\u{1f44b}"));
+        assert!(r.html.contains("\u{1f680}"));
+        assert!(r.html.contains("\u{2705}"));
+        assert!(!r.html.contains(":wave:"));
     }
 
     #[test]
