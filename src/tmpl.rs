@@ -1,4 +1,5 @@
 use crate::column;
+use crate::runtime;
 
 use anyhow::Result;
 use askama::Template;
@@ -16,6 +17,7 @@ pub struct PageShell<'a> {
     pub asset_json: &'a str,
     pub vendor_styles: &'a [String],
     pub vendor_scripts: &'a [String],
+    pub runtime_paths: &'a [runtime::PathRow],
 }
 
 #[derive(Template)]

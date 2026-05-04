@@ -223,7 +223,7 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
     if hx.is_htmx {
         return shell::fragment(&body, &combined.title, source);
     }
-    shell::full_page(&combined, &body, source, s.auth.is_some())
+    shell::full_page(&combined, &body, source, s.auth.is_some(), &s.runtime_paths)
 }
 
 fn cmp_commit_entries(

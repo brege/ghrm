@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use serde::{Deserialize, Deserializer};
 use std::{
     collections::BTreeMap,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 
@@ -135,6 +135,14 @@ impl Config {
 
 pub fn path_default() -> Result<Option<PathBuf>> {
     Ok(Some(crate::dirs::config()?.join("config.toml")))
+}
+
+pub fn path(path: Option<&Path>) -> Result<Option<PathBuf>> {
+    match path {
+        Some(path) if path.is_absolute() => Ok(Some(path.to_path_buf())),
+        Some(path) => Ok(Some(env::current_dir()?.join(path))),
+        None => path_default(),
+    }
 }
 
 #[cfg(test)]

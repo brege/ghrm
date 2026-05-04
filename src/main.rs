@@ -10,6 +10,7 @@ mod filter;
 mod paths;
 mod render;
 mod repo;
+mod runtime;
 mod search;
 mod server;
 mod shell;
@@ -96,6 +97,7 @@ fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
+    let config_path = config::path(cli.config.as_deref())?;
     let cfg = config::Config::load(cli.config.as_deref())?;
     if cli.clean {
         vendor::clean()?;
@@ -186,6 +188,7 @@ fn main() -> Result<()> {
         exclude_names,
         no_excludes,
         search_max_rows: max_rows,
+        config_path,
         auth,
     }))
 }

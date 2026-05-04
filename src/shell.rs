@@ -1,5 +1,6 @@
 use crate::render::Rendered;
 use crate::repo::SourceState;
+use crate::runtime;
 use crate::tmpl::{self, PageShell};
 use crate::vendor;
 
@@ -18,6 +19,7 @@ pub(crate) fn full_page(
     body: &str,
     source: SourceState,
     show_logout: bool,
+    runtime_paths: &runtime::Paths,
 ) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
@@ -39,6 +41,7 @@ pub(crate) fn full_page(
         asset_json: vendor::client_json(),
         vendor_styles: &assets.styles,
         vendor_scripts: &assets.scripts,
+        runtime_paths: runtime_paths.rows(),
     };
     let html = match tmpl::base(shell) {
         Ok(h) => h,

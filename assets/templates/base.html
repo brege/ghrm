@@ -79,18 +79,29 @@
   <section id="ghrm-about-peek" class="ghrm-about-peek" hidden>
     <img class="ghrm-about-stamp" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">
     <div class="ghrm-about-peek-inner">
-      <a class="ghrm-about-project" href="{{ project_href }}" target="_blank" rel="noopener noreferrer">
-        <svg aria-hidden="true">
-          <use href="#ghrm-icon-github"></use>
-        </svg>
-        <span>github.com/brege/ghrm</span>
-      </a>
-      <a class="ghrm-about-project" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer">
-        <svg aria-hidden="true">
-          <use href="#ghrm-icon-fork"></use>
-        </svg>
-        <span>v{{ project_version }}</span>
-      </a>
+      <div class="ghrm-about-links">
+        <a class="ghrm-about-project" href="{{ project_href }}" target="_blank" rel="noopener noreferrer">
+          <svg aria-hidden="true">
+            <use href="#ghrm-icon-github"></use>
+          </svg>
+          <span>github.com/brege/ghrm</span>
+        </a>
+        <a class="ghrm-about-project" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer">
+          <svg aria-hidden="true">
+            <use href="#ghrm-icon-fork"></use>
+          </svg>
+          <span>v{{ project_version }}</span>
+        </a>
+      </div>
+      <div class="ghrm-runtime-paths" aria-label="Runtime paths">
+        <div class="ghrm-about-heading">Runtime Paths</div>
+        <dl>
+{% for item in runtime_paths %}          <div class="ghrm-runtime-path">
+            <dt>{{ item.label }}</dt>
+            <dd title="{{ item.value }}">{{ item.value }}</dd>
+          </div>
+{% endfor %}        </dl>
+      </div>
     </div>
   </section>
   <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
