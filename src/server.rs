@@ -1161,10 +1161,38 @@ async fn dispatch_file(
     view: ViewState,
     hx: HtmxContext,
 ) -> Response {
-    if !delivery::previews_text(path).await {
-        return native_file(s, path, rel, &view, hx).await;
+    let mode = delivery::file_mode_async(path).await;
+    match mode {
+        delivery::FileMode::Markdown => render_file(s, path, Some(root), view, hx).await,
+        delivery::FileMode::Source => render_source_file(s, path, root, rel, view, hx).await,
+        delivery::FileMode::Dual => render_dual_file(s, path, root, rel, view, hx).await,
+        delivery::FileMode::Native => native_file(s, path, rel, &view, hx).await,
+        delivery::FileMode::Download => download_file(s, path, rel, &view, hx).await,
     }
+}
 
+async fn download_file(
+    s: &AppState,
+    path: &Path,
+    rel: &str,
+    view: &ViewState,
+    hx: HtmxContext,
+) -> Response {
+    if hx.is_htmx {
+        let href = view::with_view(&format!("/{rel}"), view, &s.view_cfg);
+        return htmx_redirect(&href);
+    }
+    delivery::stream_download(path).await
+}
+
+async fn render_source_file(
+    s: &AppState,
+    path: &Path,
+    root: &Path,
+    rel: &str,
+    view: ViewState,
+    hx: HtmxContext,
+) -> Response {
     let bytes = match tokio::fs::read(path).await {
         Ok(b) => b,
         Err(_) => return not_found(),
@@ -1172,7 +1200,7 @@ async fn dispatch_file(
 
     let text = match String::from_utf8(bytes) {
         Ok(s) => s,
-        Err(_) => return native_file(s, path, rel, &view, hx).await,
+        Err(_) => return download_file(s, path, rel, &view, hx).await,
     };
 
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
@@ -1180,16 +1208,16 @@ async fn dispatch_file(
     let features = vendor::feature_list(&rendered);
     let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, &view, &s.view_cfg);
     let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
-    let view = delivery::FileView::raw();
-    let view_attrs = delivery::file_view_attrs(rel, view);
+    let file_view = delivery::FileView::source();
+    let view_attrs = delivery::file_view_attrs(rel, file_view);
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
         preview_html: &rendered.html,
         raw_html: &raw_html,
         view_attrs: &view_attrs,
-        preview_hidden: view.preview_hidden,
-        raw_hidden: view.raw_hidden,
+        preview_hidden: file_view.preview_hidden,
+        raw_hidden: file_view.raw_hidden,
     }) {
         Ok(b) => b,
         Err(e) => {
@@ -1207,6 +1235,74 @@ async fn dispatch_file(
         return respond_fragment(&body, title, source);
     }
     respond_html(&rendered, &body, source, s.auth.is_some())
+}
+
+async fn render_dual_file(
+    s: &AppState,
+    path: &Path,
+    root: &Path,
+    rel: &str,
+    view: ViewState,
+    hx: HtmxContext,
+) -> Response {
+    let bytes = match tokio::fs::read(path).await {
+        Ok(b) => b,
+        Err(_) => return not_found(),
+    };
+
+    let text = match String::from_utf8(bytes) {
+        Ok(s) => s,
+        Err(_) => return native_file(s, path, rel, &view, hx).await,
+    };
+
+    let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
+    let ext = path.extension().and_then(|s| s.to_str());
+    let native_url = format!("/{}", rel.trim_matches('/'));
+    let preview_html = dual_preview_html(ext, &native_url, filename);
+    let rendered = Rendered {
+        html: preview_html.clone(),
+        title: filename.to_string(),
+        lang: ext.map(String::from),
+        has_mermaid: false,
+        has_math: false,
+        has_map: false,
+    };
+    let features = vendor::feature_list(&rendered);
+    let crumbs = breadcrumb_html(root, s.home.as_deref(), rel, &view, &s.view_cfg);
+    let raw_html = delivery::raw_blob_html(&text, ext);
+    let file_view = delivery::FileView::dual();
+    let view_attrs = delivery::file_view_attrs(rel, file_view);
+    let body = match tmpl::page(tmpl::PageCtx {
+        features: &features,
+        crumbs: &crumbs,
+        preview_html: &preview_html,
+        raw_html: &raw_html,
+        view_attrs: &view_attrs,
+        preview_hidden: file_view.preview_hidden,
+        raw_hidden: file_view.raw_hidden,
+    }) {
+        Ok(b) => b,
+        Err(e) => {
+            warn!("template error: {}", e);
+            return not_found();
+        }
+    };
+    let source = s.repos.source_for(path);
+    if hx.is_htmx {
+        return respond_fragment(&body, &rendered.title, source);
+    }
+    respond_html(&rendered, &body, source, s.auth.is_some())
+}
+
+fn dual_preview_html(ext: Option<&str>, native_url: &str, filename: &str) -> String {
+    let url = html_escape::encode_double_quoted_attribute(native_url);
+    let alt = html_escape::encode_double_quoted_attribute(filename);
+    match ext {
+        Some(e) if e.eq_ignore_ascii_case("svg") => {
+            format!(r#"<div class="ghrm-svg-preview"><img src="{url}" alt="{alt}"></div>"#)
+        }
+        _ => String::new(),
+    }
 }
 
 async fn native_file(

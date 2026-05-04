@@ -15,6 +15,15 @@ use tracing::warn;
 
 const PEEK_BYTES: usize = 8192;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FileMode {
+    Markdown,
+    Source,
+    Dual,
+    Native,
+    Download,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct FileView {
     pub(crate) kind: &'static str,
@@ -31,13 +40,78 @@ impl FileView {
         }
     }
 
-    pub(crate) fn raw() -> Self {
+    pub(crate) fn source() -> Self {
         Self {
-            kind: "raw",
+            kind: "source",
             preview_hidden: true,
             raw_hidden: false,
         }
     }
+
+    pub(crate) fn dual() -> Self {
+        Self {
+            kind: "dual",
+            preview_hidden: false,
+            raw_hidden: true,
+        }
+    }
+}
+
+pub(crate) fn file_mode(path: &Path, bytes: &[u8]) -> FileMode {
+    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    if ext.eq_ignore_ascii_case("md") {
+        return FileMode::Markdown;
+    }
+    if ext.eq_ignore_ascii_case("svg") && is_text_content(bytes) {
+        return FileMode::Dual;
+    }
+    if let Some(kind) = infer::get(bytes) {
+        return match kind.matcher_type() {
+            infer::MatcherType::Image | infer::MatcherType::Video | infer::MatcherType::Audio => {
+                FileMode::Native
+            }
+            infer::MatcherType::App if is_pdf(kind.mime_type()) => FileMode::Native,
+            infer::MatcherType::Text => FileMode::Source,
+            _ => FileMode::Download,
+        };
+    }
+    if is_text_content(bytes) {
+        FileMode::Source
+    } else {
+        FileMode::Download
+    }
+}
+
+pub(crate) fn file_mode_sync(path: &Path) -> FileMode {
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return FileMode::Download;
+    };
+    let mut bytes = [0; PEEK_BYTES];
+    let Ok(n) = file.read(&mut bytes) else {
+        return FileMode::Download;
+    };
+    file_mode(path, &bytes[..n])
+}
+
+pub(crate) async fn file_mode_async(path: &Path) -> FileMode {
+    let Ok(mut file) = tokio::fs::File::open(path).await else {
+        return FileMode::Download;
+    };
+    let mut bytes = vec![0; PEEK_BYTES];
+    let Ok(n) = file.read(&mut bytes).await else {
+        return FileMode::Download;
+    };
+    bytes.truncate(n);
+    file_mode(path, &bytes)
+}
+
+fn is_text_content(bytes: &[u8]) -> bool {
+    infer::get(bytes).is_none_or(|kind| kind.matcher_type() == infer::MatcherType::Text)
+        && content_inspector::inspect(bytes).is_text()
+}
+
+fn is_pdf(mime: &str) -> bool {
+    mime == "application/pdf"
 }
 
 pub(crate) async fn theme_asset(AxPath(path): AxPath<String>) -> Response {
@@ -88,18 +162,22 @@ pub(crate) async fn download_file(
     let Some(path) = resolve_internal_file(&s, &path) else {
         return not_found();
     };
-    let mut res = stream_file(&path).await;
-    if res.status().is_success() {
-        res.headers_mut().insert(
-            header::CONTENT_DISPOSITION,
-            HeaderValue::from_str(&content_disposition(&path)).unwrap(),
-        );
-    }
-    res
+    stream_download(&path).await
 }
 
 pub(crate) async fn stream_file(path: &Path) -> Response {
     serve_file(ServeFile::new(path)).await
+}
+
+pub(crate) async fn stream_download(path: &Path) -> Response {
+    let mut res = stream_file(path).await;
+    if res.status().is_success() {
+        res.headers_mut().insert(
+            header::CONTENT_DISPOSITION,
+            HeaderValue::from_str(&content_disposition(path)).unwrap(),
+        );
+    }
+    res
 }
 
 async fn stream_text_file(path: &Path) -> Response {
@@ -126,31 +204,17 @@ async fn serve_file(mut file: ServeFile) -> Response {
 }
 
 pub(crate) async fn previews_text(path: &Path) -> bool {
-    let Ok(mut file) = tokio::fs::File::open(path).await else {
-        return false;
-    };
-    let mut bytes = vec![0; PEEK_BYTES];
-    let Ok(n) = file.read(&mut bytes).await else {
-        return false;
-    };
-    bytes.truncate(n);
-    previews_bytes(&bytes)
+    matches!(
+        file_mode_async(path).await,
+        FileMode::Markdown | FileMode::Source | FileMode::Dual
+    )
 }
 
 pub(crate) fn previews_text_sync(path: &Path) -> bool {
-    let Ok(mut file) = std::fs::File::open(path) else {
-        return false;
-    };
-    let mut bytes = [0; PEEK_BYTES];
-    let Ok(n) = file.read(&mut bytes) else {
-        return false;
-    };
-    previews_bytes(&bytes[..n])
-}
-
-fn previews_bytes(bytes: &[u8]) -> bool {
-    infer::get(bytes).is_none_or(|kind| kind.matcher_type() == infer::MatcherType::Text)
-        && content_inspector::inspect(bytes).is_text()
+    matches!(
+        file_mode_sync(path),
+        FileMode::Markdown | FileMode::Source | FileMode::Dual
+    )
 }
 
 pub(crate) fn raw_blob_html(text: &str, lang: Option<&str>) -> String {
@@ -229,9 +293,55 @@ mod tests {
     }
 
     #[test]
-    fn preview_detection_uses_file_signatures() {
-        assert!(previews_bytes(b"# hello\n"));
-        assert!(!previews_bytes(&[0x28, 0xb5, 0x2f, 0xfd]));
+    fn file_mode_markdown_by_extension() {
+        assert_eq!(
+            file_mode(Path::new("README.md"), b"# Title\n"),
+            FileMode::Markdown
+        );
+        assert_eq!(file_mode(Path::new("DOC.MD"), b"text"), FileMode::Markdown);
+    }
+
+    #[test]
+    fn file_mode_svg_is_dual() {
+        let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>";
+        assert_eq!(file_mode(Path::new("icon.svg"), svg), FileMode::Dual);
+        assert_eq!(file_mode(Path::new("LOGO.SVG"), svg), FileMode::Dual);
+    }
+
+    #[test]
+    fn file_mode_text_is_source() {
+        assert_eq!(
+            file_mode(Path::new("main.rs"), b"fn main() {}\n"),
+            FileMode::Source
+        );
+        assert_eq!(
+            file_mode(Path::new("script.py"), b"print('hi')\n"),
+            FileMode::Source
+        );
+    }
+
+    #[test]
+    fn file_mode_png_is_native() {
+        let png = &[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+        assert_eq!(file_mode(Path::new("image.png"), png), FileMode::Native);
+    }
+
+    #[test]
+    fn file_mode_zstd_is_download() {
+        let zstd = &[0x28, 0xb5, 0x2f, 0xfd];
+        assert_eq!(
+            file_mode(Path::new("archive.tar.zst"), zstd),
+            FileMode::Download
+        );
+    }
+
+    #[test]
+    fn file_mode_binary_is_download() {
+        let elf = &[
+            0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00,
+        ];
+        assert_eq!(file_mode(Path::new("program"), elf), FileMode::Download);
     }
 
     #[test]
