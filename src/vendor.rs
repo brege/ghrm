@@ -1,13 +1,12 @@
 use crate::render::Rendered;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::{
-    fs,
+    fs, io,
     path::{Component, Path, PathBuf},
-    process::Command,
     sync::OnceLock,
 };
 
@@ -63,18 +62,7 @@ pub fn sync(refresh: bool) -> Result<()> {
             path.parent()
                 .ok_or_else(|| anyhow::anyhow!("missing parent"))?,
         )?;
-        let status = Command::new("curl")
-            .arg("--location")
-            .arg("--fail")
-            .arg("--silent")
-            .arg("--show-error")
-            .arg(&item.url)
-            .arg("--output")
-            .arg(&path)
-            .status()?;
-        if !status.success() {
-            bail!("curl failed for {}", path.display());
-        }
+        download(&item.url, &path)?;
     }
     let mermaid = fs::read_to_string(vendor_dir.join(&manifest.mermaid_version.source))?;
     let version = mermaid
@@ -86,6 +74,16 @@ pub fn sync(refresh: bool) -> Result<()> {
         vendor_dir.join(&manifest.mermaid_version.path),
         format!("{version}\n"),
     )?;
+    Ok(())
+}
+
+fn download(url: &str, path: &Path) -> Result<()> {
+    let response = ureq::get(url)
+        .call()
+        .with_context(|| format!("download failed: {url}"))?;
+    let mut reader = response.into_reader();
+    let mut file = fs::File::create(path)?;
+    io::copy(&mut reader, &mut file)?;
     Ok(())
 }
 

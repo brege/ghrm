@@ -1,8 +1,31 @@
 [package]
 name = "ghrm"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 rust-version = "1.85"
+description = "Fast local GitHub-flavored Markdown and repository browser"
+license = "GPL-3.0-only"
+repository = "https://github.com/brege/ghrm"
+readme = "README.md"
+keywords = ["github", "markdown", "preview", "offline"]
+categories = ["command-line-utilities", "text-processing"]
+include = [
+  "Cargo.lock",
+  "Cargo.toml",
+  "LICENSE",
+  "README.md",
+  "askama.toml",
+  "assets/config.json",
+  "assets/css/**",
+  "assets/img/**",
+  "assets/js/**",
+  "assets/templates/**",
+  "build.rs",
+  "config.example.toml",
+  "lua/**",
+  "smoke/**",
+  "src/**",
+]
 
 [[bin]]
 name = "ghrm"
@@ -16,6 +39,7 @@ html-escape = "0.2"
 content_inspector = "0.2"
 infer = { version = "0.19", default-features = false }
 directories = "6"
+ureq = { version = "2", default-features = false, features = ["tls"] }
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "fs", "time", "io-util", "net"] }
 axum = { version = "0.8", features = ["ws", "macros"] }

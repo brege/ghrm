@@ -5,24 +5,29 @@
 
 Explore your filesystem as if it were on GitHub.
 
-Ghrm supports all **G**it**H**ub-flavored Markdown features, **R**ead**m**e and source code viewing, detects repositories, has instant file retrieval, and works 100% **offline**. It makes file browsing and file reading feel more continuous and much easier to work on projects mixing images, HTML, large tables and JSON and other assets in your browser. You get both the backend performance of Rust and the multimedia performance of your browser.
+Ghrm supports all **G**it**H**ub-flavored Markdown features, **R**ead**m**e and source code viewing, detects repositories, has instant file retrieval, and works completely offline. It makes file browsing and file reading feel more continuous and much easier to work on projects mixing images, HTML, large tables and JSON and other assets in your browser. You get both the backend performance of Rust and the multimedia performance of your browser.
 
 ## Supported Features
 
 - **Works offline**
 - Live reloading
-- File explorer
-- Rendered Markdown and numbered source code
-- Light-and-dark theme, custom theme support
+- Preview Markdown, source code, and images
+- Light-and-dark theme
+
+### File explorer
+
+- Search instantly by path and content
+- Git history metadata
+- Filters for gitignores, excludes, custom groups
+- Sorting and breadcrumb navigation
 
 ### Markdown
 
 - Syntax highlighting
-- Tables
 - Admonitions `[!NOTE]`
 - Mermaid diagrams
 - KaTeX math
-- GeoJSON and TopoJSON maps
+- GeoJSON and TopoJSON maps (exp.)
 
 ### Terminal
 
@@ -38,7 +43,7 @@ ghrm .
 
 ## Ethos
 
-I made Ghrm because when I lose internet/power, I often turn toward documentation and repo-gardening to stay occupied while online resources are unavailable. On first run, ghrm locally downloads the JavaScript libraries from CDNs and never touches the internet again, except for URL sources (or maps) that may already be in your Markdown.  It renders Markdown and file trees the exact same way as GitHub does. There's zero mystery what your docs are going to look like after you push.
+I made Ghrm because when I lose internet/power, I often turn toward documentation and repo-gardening to stay occupied while online resources are unavailable. On first run, ghrm locally downloads the browser libraries from CDNs and, outside of sources or maps you may already have in your Markdown, never touches the internet again. It renders Markdown and file trees the exact same way as GitHub does. There's zero mystery what your docs are going to look like after you push.
 
 Ghrm is non-mutating. It's not meant to be a general git repo manager.
 
@@ -89,8 +94,8 @@ ghrm smoke/languages.md
 ## Uninstall
 
 ```bash
+ghrm --clean
 cargo uninstall ghrm
-rm -r ~/.cache/ghrm
 ```
 
 ## Inspiration
@@ -98,6 +103,11 @@ rm -r ~/.cache/ghrm
 - [fd](https://github.com/sharkdp/fd)
 - [ripgrep](https://github.com/BurntSushi/ripgrep)
 - [tokei](https://github.com/XAMPPRocky/tokei)
+
+## Roadmap
+
+- create bench matrix over each commit
+- publish to crates.io
 
 ## License
 
