@@ -7,7 +7,6 @@ use axum::{
     http::{HeaderValue, Request, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 use tower_http::services::ServeFile;
@@ -82,17 +81,6 @@ pub(crate) fn file_mode(path: &Path, bytes: &[u8]) -> FileMode {
     }
 }
 
-pub(crate) fn file_mode_sync(path: &Path) -> FileMode {
-    let Ok(mut file) = std::fs::File::open(path) else {
-        return FileMode::Download;
-    };
-    let mut bytes = [0; PEEK_BYTES];
-    let Ok(n) = file.read(&mut bytes) else {
-        return FileMode::Download;
-    };
-    file_mode(path, &bytes[..n])
-}
-
 pub(crate) async fn file_mode_async(path: &Path) -> FileMode {
     let Ok(mut file) = tokio::fs::File::open(path).await else {
         return FileMode::Download;
@@ -105,9 +93,8 @@ pub(crate) async fn file_mode_async(path: &Path) -> FileMode {
     file_mode(path, &bytes)
 }
 
-fn is_text_content(bytes: &[u8]) -> bool {
-    infer::get(bytes).is_none_or(|kind| kind.matcher_type() == infer::MatcherType::Text)
-        && content_inspector::inspect(bytes).is_text()
+pub(crate) fn is_text_content(bytes: &[u8]) -> bool {
+    content_inspector::inspect(bytes).is_text()
 }
 
 fn is_pdf(mime: &str) -> bool {
@@ -206,13 +193,6 @@ async fn serve_file(mut file: ServeFile) -> Response {
 pub(crate) async fn previews_text(path: &Path) -> bool {
     matches!(
         file_mode_async(path).await,
-        FileMode::Markdown | FileMode::Source | FileMode::Dual
-    )
-}
-
-pub(crate) fn previews_text_sync(path: &Path) -> bool {
-    matches!(
-        file_mode_sync(path),
         FileMode::Markdown | FileMode::Source | FileMode::Dual
     )
 }
