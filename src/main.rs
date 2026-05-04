@@ -4,6 +4,7 @@ mod column;
 mod config;
 mod crumbs;
 mod delivery;
+mod dirs;
 mod explorer;
 mod filter;
 mod paths;

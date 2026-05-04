@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use serde::{Deserialize, Deserializer};
 use std::{
     collections::BTreeMap,
-    env, fs,
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -134,13 +134,7 @@ impl Config {
 }
 
 pub fn path_default() -> Result<Option<PathBuf>> {
-    if let Some(path) = env::var_os("XDG_CONFIG_HOME") {
-        return Ok(Some(PathBuf::from(path).join("ghrm/config.toml")));
-    }
-    if let Some(home) = env::var_os("HOME") {
-        return Ok(Some(PathBuf::from(home).join(".config/ghrm/config.toml")));
-    }
-    bail!("missing HOME and XDG_CONFIG_HOME");
+    Ok(Some(crate::dirs::config()?.join("config.toml")))
 }
 
 #[cfg(test)]

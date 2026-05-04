@@ -15,6 +15,7 @@ anyhow = "1"
 html-escape = "0.2"
 content_inspector = "0.2"
 infer = { version = "0.19", default-features = false }
+directories = "6"
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "fs", "time", "io-util", "net"] }
 axum = { version = "0.8", features = ["ws", "macros"] }
