@@ -98,11 +98,11 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 
 .ghrm-about-stamp {
   position: absolute;
-  top: 8px;
+  bottom: -1px;
   right: 28px;
   width: 92px;
   height: 92px;
-  opacity: 0.6;
+  opacity: 0.8;
   pointer-events: none;
 }
 
