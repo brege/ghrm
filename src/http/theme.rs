@@ -82,7 +82,8 @@ mod tests {
 
         install(td.path()).unwrap();
 
-        assert!(td.path().join("css/page.css").is_file());
+        assert!(td.path().join("css/theme.css").is_file());
+        assert!(td.path().join("css/explorer.css").is_file());
         assert!(td.path().join("js/main.js").is_file());
         assert!(td.path().join("img/favicon.svg").is_file());
         assert!(td.path().join("VERSION").is_file());

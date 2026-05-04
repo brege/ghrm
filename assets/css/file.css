@@ -1,0 +1,166 @@
+.ghrm-raw-pre {
+  margin: 0;
+}
+
+.ghrm-file-pane > :first-child {
+  margin-top: 0;
+}
+
+.ghrm-file-pane > :last-child {
+  margin-bottom: 0;
+}
+
+.ghrm-file-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ghrm-file-toggles {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.ghrm-file-toggles .ghrm-file-toggle {
+  border-radius: 0;
+  border-left-width: 0;
+}
+
+.ghrm-file-toggles .ghrm-file-toggle:first-child {
+  border-left-width: 1px;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.ghrm-file-toggles .ghrm-file-toggle:last-child {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.ghrm-file-toggle,
+.ghrm-file-action,
+.ghrm-file-link {
+  height: 32px;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+}
+
+.ghrm-file-toggle {
+  width: 32px;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ghrm-file-toggle:hover:not(:disabled),
+.ghrm-file-action:hover,
+.ghrm-file-link:hover {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+.ghrm-file-toggle.is-active {
+  background: var(--bgColor-muted, #f6f8fa);
+}
+
+.ghrm-file-toggle:disabled {
+  cursor: default;
+  color: var(--fgColor-muted, #636c76);
+  opacity: 0.5;
+}
+
+.ghrm-file-actions {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.ghrm-file-action,
+.ghrm-file-link {
+  border-radius: 0;
+  border-left-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fgColor-default, #1f2328);
+  text-decoration: none;
+}
+
+.markdown-body .ghrm-file-link,
+.markdown-body .ghrm-file-link:visited,
+.markdown-body .ghrm-file-link:hover,
+.markdown-body .ghrm-file-link:active,
+.markdown-body .ghrm-file-action,
+.markdown-body .ghrm-file-action:visited,
+.markdown-body .ghrm-file-action:hover,
+.markdown-body .ghrm-file-action:active {
+  color: var(--fgColor-default, #1f2328);
+  text-decoration: none;
+}
+
+.ghrm-file-actions > :first-child {
+  border-left-width: 1px;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.ghrm-file-actions > :last-child {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.ghrm-file-link {
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ghrm-file-action {
+  position: relative;
+  width: 32px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ghrm-file-action::before {
+  content: "";
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--overlay-bgColor, #343942);
+  color: var(--fgColor-onEmphasis, #ffffff);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ghrm-file-action.is-copied {
+  color: var(--fgColor-success, #1a7f37);
+}
+
+.ghrm-file-action.is-copied::before {
+  content: attr(data-copy-feedback);
+  display: block;
+}
+
+.ghrm-file-action.is-copied .ghrm-copy-icon-copy {
+  display: none;
+}
+
+.ghrm-file-action.is-copied .ghrm-copy-icon-check {
+  display: block;
+}
+
+.ghrm-file-icon {
+  fill: currentColor;
+}
