@@ -2,9 +2,8 @@ use crate::paths;
 
 use ignore::{WalkBuilder, WalkState};
 use serde::Serialize;
-use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BinaryHeap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
@@ -218,47 +217,6 @@ pub struct NavTree {
 }
 
 #[derive(Clone, Debug)]
-pub struct PathSearchRow {
-    pub href: String,
-    pub display: String,
-    pub is_dir: bool,
-    pub modified: Option<u64>,
-    pub size: Option<u64>,
-    pub lines: Option<u64>,
-    pub commit_subject: Option<String>,
-    pub commit_timestamp: Option<u64>,
-}
-
-#[cfg(test)]
-pub struct PathSearchSpec<'a> {
-    pub tree: &'a NavTree,
-    pub current_path: &'a str,
-    pub query: &'a str,
-    pub max_rows: usize,
-    pub sort: Sort,
-    pub dir: SortDir,
-    pub load_commit_meta: bool,
-}
-
-pub struct NavPathSearchSpec<'a> {
-    pub current_path: &'a str,
-    pub query: &'a str,
-    pub max_rows: usize,
-    pub sort: Sort,
-    pub dir: SortDir,
-    pub opts: ViewOpts,
-    pub matcher: Option<&'a crate::filter::Matcher>,
-    pub load_lines: bool,
-    pub load_commit_meta: bool,
-}
-
-pub struct PathSearchRows {
-    pub rows: Vec<PathSearchRow>,
-    pub truncated: bool,
-    pub max_rows: usize,
-}
-
-#[derive(Clone, Debug)]
 pub struct NavSet {
     trees: Arc<Mutex<BTreeMap<usize, Arc<NavTree>>>>,
     snapshot: Arc<Snapshot>,
@@ -270,6 +228,47 @@ pub struct NavSet {
 impl NavSet {
     pub fn is_ready(&self) -> bool {
         self.ready
+    }
+
+    pub(crate) fn root(&self) -> &Path {
+        &self.snapshot.root
+    }
+
+    pub(crate) fn entries(&self) -> impl Iterator<Item = IndexedEntry<'_>> {
+        self.snapshot.entries.iter().map(|entry| IndexedEntry {
+            path: &entry.path,
+            key: &entry.key,
+            key_lower: &entry.key_lower,
+            is_dir: entry.is_dir,
+            modified: entry.modified,
+            size: entry.size,
+        })
+    }
+
+    pub(crate) fn allow_path(&self, path: &Path, opts: ViewOpts) -> bool {
+        allow_path(path, &self.exclude_names, opts)
+    }
+
+    pub(crate) fn matches_filter(
+        &self,
+        path: &Path,
+        matcher: Option<&crate::filter::Matcher>,
+    ) -> bool {
+        matches_filter(path, &self.extensions, matcher)
+    }
+
+    pub(crate) fn dirs_with_files(
+        &self,
+        matcher: Option<&crate::filter::Matcher>,
+        opts: ViewOpts,
+    ) -> HashSet<PathBuf> {
+        compute_dirs_with_files(
+            &self.snapshot,
+            &self.exclude_names,
+            &self.extensions,
+            matcher,
+            opts,
+        )
     }
 
     pub fn get(
@@ -307,6 +306,16 @@ impl NavSet {
         }
         tree
     }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct IndexedEntry<'a> {
+    pub(crate) path: &'a Path,
+    pub(crate) key: &'a str,
+    pub(crate) key_lower: &'a str,
+    pub(crate) is_dir: bool,
+    pub(crate) modified: Option<u64>,
+    pub(crate) size: Option<u64>,
 }
 
 impl Default for NavSet {
@@ -685,11 +694,11 @@ fn file_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-fn file_href(path: &Path) -> String {
+pub(crate) fn file_href(path: &Path) -> String {
     format!("/{}", path_key(path))
 }
 
-fn dir_href(path: &Path) -> String {
+pub(crate) fn dir_href(path: &Path) -> String {
     let key = path_key(path);
     if key.is_empty() {
         "/".to_string()
@@ -768,392 +777,6 @@ pub fn list_dir(root: &Path, rel: &Path, spec: ListSpec<'_>) -> Option<NavDir> {
 
     sort_entries(&mut entries, spec.order.sort, spec.order.dir);
     Some(NavDir { entries, readme })
-}
-
-#[cfg(test)]
-pub fn path_search(
-    spec: PathSearchSpec<'_>,
-    mut load_commits: impl FnMut(&mut [PathSearchRow]),
-) -> PathSearchRows {
-    let needle = spec.query.trim().to_lowercase();
-    if needle.is_empty() {
-        return PathSearchRows {
-            rows: Vec::new(),
-            truncated: false,
-            max_rows: spec.max_rows,
-        };
-    }
-
-    if matches!(spec.sort, Sort::CommitMessage | Sort::CommitDate) {
-        let mut rows = Vec::new();
-        visit_path_search_rows(&spec, &needle, |row| rows.push(row));
-        load_commits(&mut rows);
-        let mut rows = sort_path_search_rows(rows, &needle, spec.sort, spec.dir);
-        let truncated = rows.len() > spec.max_rows;
-        rows.truncate(spec.max_rows);
-        return PathSearchRows {
-            rows,
-            truncated,
-            max_rows: spec.max_rows,
-        };
-    }
-
-    let mut selector = PathSearchSelector::new(spec.max_rows, &needle, spec.sort, spec.dir);
-    visit_path_search_rows(&spec, &needle, |row| selector.push(row));
-    let (mut rows, truncated) = selector.finish();
-    if spec.load_commit_meta {
-        load_commits(&mut rows);
-    }
-    PathSearchRows {
-        rows,
-        truncated,
-        max_rows: spec.max_rows,
-    }
-}
-
-pub fn path_search_nav(
-    nav: &NavSet,
-    spec: NavPathSearchSpec<'_>,
-    mut load_commits: impl FnMut(&mut [PathSearchRow]),
-) -> PathSearchRows {
-    let needle = spec.query.trim().to_lowercase();
-    if needle.is_empty() {
-        return PathSearchRows {
-            rows: Vec::new(),
-            truncated: false,
-            max_rows: spec.max_rows,
-        };
-    }
-
-    if matches!(spec.sort, Sort::CommitMessage | Sort::CommitDate) {
-        let mut rows = Vec::new();
-        visit_nav_path_search_rows(nav, &spec, &needle, |row| rows.push(row));
-        load_commits(&mut rows);
-        let mut rows = sort_path_search_rows(rows, &needle, spec.sort, spec.dir);
-        let truncated = rows.len() > spec.max_rows;
-        rows.truncate(spec.max_rows);
-        return PathSearchRows {
-            rows,
-            truncated,
-            max_rows: spec.max_rows,
-        };
-    }
-
-    let mut selector = PathSearchSelector::new(spec.max_rows, &needle, spec.sort, spec.dir);
-    visit_nav_path_search_rows(nav, &spec, &needle, |row| selector.push(row));
-    let (mut rows, truncated) = selector.finish();
-    if spec.load_commit_meta {
-        load_commits(&mut rows);
-    }
-    PathSearchRows {
-        rows,
-        truncated,
-        max_rows: spec.max_rows,
-    }
-}
-
-#[cfg(test)]
-fn visit_path_search_rows(
-    spec: &PathSearchSpec<'_>,
-    needle: &str,
-    mut visit: impl FnMut(PathSearchRow),
-) {
-    let prefix = (!spec.current_path.is_empty()).then(|| format!("{}/", spec.current_path));
-    for (dir, nav_dir) in &spec.tree.dirs {
-        if let Some(prefix) = &prefix {
-            if dir != spec.current_path && !dir.starts_with(prefix) {
-                continue;
-            }
-        }
-
-        let rel_dir = if dir == spec.current_path {
-            ""
-        } else if let Some(prefix) = &prefix {
-            dir.strip_prefix(prefix).unwrap_or(dir.as_str())
-        } else {
-            dir.as_str()
-        };
-
-        for entry in &nav_dir.entries {
-            let rel_path = if rel_dir.is_empty() {
-                entry.name.clone()
-            } else {
-                format!("{rel_dir}/{}", entry.name)
-            };
-            if !rel_path.to_lowercase().contains(needle) {
-                continue;
-            }
-            visit(PathSearchRow {
-                href: entry.href.clone(),
-                display: if entry.is_dir {
-                    format!("{rel_path}/")
-                } else {
-                    rel_path
-                },
-                is_dir: entry.is_dir,
-                modified: entry.modified,
-                size: entry.size,
-                lines: entry.lines,
-                commit_subject: None,
-                commit_timestamp: None,
-            });
-        }
-    }
-}
-
-fn visit_nav_path_search_rows(
-    nav: &NavSet,
-    spec: &NavPathSearchSpec<'_>,
-    needle: &str,
-    mut visit: impl FnMut(PathSearchRow),
-) {
-    let load_lines = spec.load_lines || spec.sort == Sort::Lines;
-    let prune_empty = spec.opts.filter_ext;
-    let dirs_with_files = if prune_empty {
-        compute_dirs_with_files(
-            &nav.snapshot,
-            &nav.exclude_names,
-            &nav.extensions,
-            spec.matcher,
-            spec.opts,
-        )
-    } else {
-        HashSet::new()
-    };
-    let prefix = (!spec.current_path.is_empty()).then(|| format!("{}/", spec.current_path));
-
-    for entry in &nav.snapshot.entries {
-        if !allow_path(&entry.path, &nav.exclude_names, spec.opts) {
-            continue;
-        }
-        if prune_empty {
-            if entry.is_dir {
-                if !dirs_with_files.contains(&entry.path) {
-                    continue;
-                }
-            } else if !matches_filter(&entry.path, &nav.extensions, spec.matcher) {
-                continue;
-            }
-        }
-
-        let (display, display_lower) = if let Some(prefix) = &prefix {
-            let Some(display) = entry.key.strip_prefix(prefix) else {
-                continue;
-            };
-            (display, Cow::Owned(display.to_lowercase()))
-        } else {
-            (entry.key.as_str(), Cow::Borrowed(entry.key_lower.as_str()))
-        };
-        if !display_lower.contains(needle) {
-            continue;
-        }
-
-        visit(PathSearchRow {
-            href: if entry.is_dir {
-                dir_href(&entry.path)
-            } else {
-                file_href(&entry.path)
-            },
-            display: if entry.is_dir {
-                format!("{display}/")
-            } else {
-                display.to_string()
-            },
-            is_dir: entry.is_dir,
-            modified: entry.modified,
-            size: entry.size,
-            lines: if load_lines && !entry.is_dir {
-                line_count(&nav.snapshot.root.join(&entry.path), entry.size)
-            } else {
-                None
-            },
-            commit_subject: None,
-            commit_timestamp: None,
-        });
-    }
-}
-
-fn sort_path_search_rows(
-    rows: Vec<PathSearchRow>,
-    needle: &str,
-    sort: Sort,
-    dir: SortDir,
-) -> Vec<PathSearchRow> {
-    let mut ranked = rows
-        .into_iter()
-        .map(|row| RankedPathSearchRow::new(row, needle, sort, dir))
-        .collect::<Vec<_>>();
-    ranked.sort();
-    ranked.into_iter().map(|ranked| ranked.row).collect()
-}
-
-struct PathSearchSelector<'a> {
-    heap: BinaryHeap<RankedPathSearchRow>,
-    count: usize,
-    max_rows: usize,
-    needle: &'a str,
-    sort: Sort,
-    dir: SortDir,
-}
-
-impl<'a> PathSearchSelector<'a> {
-    fn new(max_rows: usize, needle: &'a str, sort: Sort, dir: SortDir) -> Self {
-        Self {
-            heap: BinaryHeap::with_capacity(max_rows),
-            count: 0,
-            max_rows,
-            needle,
-            sort,
-            dir,
-        }
-    }
-
-    fn push(&mut self, row: PathSearchRow) {
-        self.count += 1;
-        if self.max_rows == 0 {
-            return;
-        }
-
-        let ranked = RankedPathSearchRow::new(row, self.needle, self.sort, self.dir);
-        if self.heap.len() < self.max_rows {
-            self.heap.push(ranked);
-            return;
-        }
-        if self
-            .heap
-            .peek()
-            .is_some_and(|worst| ranked.cmp(worst) == Ordering::Less)
-        {
-            self.heap.pop();
-            self.heap.push(ranked);
-        }
-    }
-
-    fn finish(self) -> (Vec<PathSearchRow>, bool) {
-        let truncated = self.count > self.max_rows;
-        let mut ranked = self.heap.into_vec();
-        ranked.sort();
-        (
-            ranked.into_iter().map(|ranked| ranked.row).collect(),
-            truncated,
-        )
-    }
-}
-
-struct RankedPathSearchRow {
-    row: PathSearchRow,
-    base_match: bool,
-    display_lower: String,
-    ext: String,
-    commit_subject_lower: Option<String>,
-    sort: Sort,
-    dir: SortDir,
-}
-
-impl RankedPathSearchRow {
-    fn new(row: PathSearchRow, needle: &str, sort: Sort, dir: SortDir) -> Self {
-        let display_lower = row.display.to_lowercase();
-        let base_match = display_lower
-            .rsplit('/')
-            .next()
-            .is_some_and(|name| name.contains(needle));
-        let ext = path_ext(&row.display);
-        let commit_subject_lower = row
-            .commit_subject
-            .as_ref()
-            .map(|subject| subject.to_lowercase());
-        Self {
-            row,
-            base_match,
-            display_lower,
-            ext,
-            commit_subject_lower,
-            sort,
-            dir,
-        }
-    }
-}
-
-impl PartialEq for RankedPathSearchRow {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-
-impl Eq for RankedPathSearchRow {}
-
-impl PartialOrd for RankedPathSearchRow {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for RankedPathSearchRow {
-    fn cmp(&self, other: &Self) -> Ordering {
-        cmp_path_search_rows(self, other, self.sort, self.dir)
-    }
-}
-
-fn cmp_path_search_rows(
-    a: &RankedPathSearchRow,
-    b: &RankedPathSearchRow,
-    sort: Sort,
-    dir: SortDir,
-) -> Ordering {
-    b.base_match
-        .cmp(&a.base_match)
-        .then_with(|| dir_first(a.row.is_dir, b.row.is_dir))
-        .then_with(|| match sort {
-            Sort::Name => apply_dir(a.display_lower.cmp(&b.display_lower), dir),
-            Sort::Type => apply_dir(
-                a.ext
-                    .cmp(&b.ext)
-                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
-                dir,
-            ),
-            Sort::Timestamp => apply_dir(
-                a.row
-                    .modified
-                    .cmp(&b.row.modified)
-                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
-                dir,
-            ),
-            Sort::Size => apply_dir(
-                a.row
-                    .size
-                    .cmp(&b.row.size)
-                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
-                dir,
-            ),
-            Sort::Lines => apply_dir(
-                a.row
-                    .lines
-                    .cmp(&b.row.lines)
-                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
-                dir,
-            ),
-            Sort::CommitMessage => apply_dir(
-                a.commit_subject_lower
-                    .cmp(&b.commit_subject_lower)
-                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
-                dir,
-            ),
-            Sort::CommitDate => apply_dir(
-                a.row
-                    .commit_timestamp
-                    .cmp(&b.row.commit_timestamp)
-                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
-                dir,
-            ),
-        })
-}
-
-fn path_ext(display: &str) -> String {
-    Path::new(display.trim_end_matches('/'))
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or("")
-        .to_lowercase()
 }
 
 fn sort_entries(entries: &mut [NavEntry], sort: Sort, dir: SortDir) {

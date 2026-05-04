@@ -131,9 +131,9 @@ pub(crate) async fn path_search(
             }
             return json_response(&resp, "api_path_search");
         }
-        walk::path_search_nav(
+        search::path::nav(
             &nav,
-            walk::NavPathSearchSpec {
+            search::path::NavSpec {
                 current_path,
                 query,
                 max_rows: s.search_max_rows,
@@ -157,9 +157,9 @@ pub(crate) async fn path_search(
                 s.no_excludes,
             ));
         }
-        walk::path_search_nav(
+        search::path::nav(
             guard.as_ref().unwrap(),
-            walk::NavPathSearchSpec {
+            search::path::NavSpec {
                 current_path,
                 query,
                 max_rows: s.search_max_rows,
@@ -198,8 +198,8 @@ struct PathSearchSpec<'a> {
 
 #[cfg(test)]
 fn path_search_results(spec: PathSearchSpec<'_>) -> search::view::PathResponse {
-    let rows = walk::path_search(
-        walk::PathSearchSpec {
+    let rows = search::path::tree(
+        search::path::TreeSpec {
             tree: spec.tree,
             current_path: spec.current_path,
             query: spec.query,
@@ -214,7 +214,7 @@ fn path_search_results(spec: PathSearchSpec<'_>) -> search::view::PathResponse {
 }
 
 fn load_path_search_commits(
-    rows: &mut [walk::PathSearchRow],
+    rows: &mut [search::path::Row],
     target: Option<&Path>,
     repos: Option<&RepoSet>,
 ) {

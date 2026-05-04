@@ -1,7 +1,6 @@
 use crate::column;
 use crate::tmpl::{self, ContentSearchCtx, ContentSearchRow, PathSearchCtx, PathSearchRow};
 use crate::view::{self, ViewConfig, ViewState};
-use crate::walk;
 
 use axum::{
     body::Body,
@@ -40,7 +39,7 @@ impl PathResponse {
     }
 }
 
-pub(crate) fn path_response(rows: walk::PathSearchRows, columns: &column::Set) -> PathResponse {
+pub(crate) fn path_response(rows: super::path::Rows, columns: &column::Set) -> PathResponse {
     let results = rows
         .rows
         .into_iter()
