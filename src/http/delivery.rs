@@ -1,5 +1,5 @@
+use crate::http::server::{AppState, Mode};
 use crate::paths;
-use crate::server::{AppState, Mode};
 
 use axum::{
     body::Body,
@@ -102,7 +102,7 @@ fn is_pdf(mime: &str) -> bool {
 }
 
 pub(crate) async fn theme_asset(AxPath(path): AxPath<String>) -> Response {
-    let base = match crate::theme::dir() {
+    let base = match crate::http::theme::dir() {
         Ok(d) => d,
         Err(e) => {
             warn!("theme dir error: {}", e);
@@ -117,7 +117,7 @@ pub(crate) async fn theme_asset(AxPath(path): AxPath<String>) -> Response {
 }
 
 pub(crate) async fn vendor(AxPath(path): AxPath<String>) -> Response {
-    let path = match crate::vendor::path(&path) {
+    let path = match crate::http::vendor::path(&path) {
         Ok(p) => p,
         Err(_) => return not_found(),
     };

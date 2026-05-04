@@ -164,7 +164,7 @@ pub fn line_count(path: &Path, size: Option<u64>) -> Option<u64> {
     }
 
     let bytes = std::fs::read(path).ok()?;
-    if !crate::delivery::is_text_content(&bytes) {
+    if !crate::http::delivery::is_text_content(&bytes) {
         return None;
     }
     if bytes.contains(&0) {

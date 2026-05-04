@@ -18,8 +18,8 @@ impl Paths {
         if let Some(config) = config {
             rows.push(row("config", config));
         }
-        rows.push(row("theme", crate::theme::dir()?));
-        rows.push(row("vendor", crate::vendor::dir()?));
+        rows.push(row("theme", crate::http::theme::dir()?));
+        rows.push(row("vendor", crate::http::vendor::dir()?));
         Ok(Self { rows })
     }
 

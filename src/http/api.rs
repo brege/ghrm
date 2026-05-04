@@ -1,8 +1,8 @@
 use crate::column;
+use crate::http::server::{AppState, Mode};
 use crate::render;
 use crate::repo::RepoSet;
 use crate::search;
-use crate::server::{AppState, Mode};
 use crate::view::{self, ViewQuery};
 use crate::walk;
 

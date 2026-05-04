@@ -1,8 +1,8 @@
+use crate::http::vendor;
 use crate::render::Rendered;
 use crate::repo::SourceState;
 use crate::runtime;
 use crate::tmpl::{self, PageShell};
-use crate::vendor;
 
 use axum::{
     body::Body,

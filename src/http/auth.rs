@@ -1,4 +1,4 @@
-use crate::server::AppState;
+use crate::http::server::AppState;
 
 use anyhow::Result;
 use axum::{
