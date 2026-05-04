@@ -4,10 +4,11 @@ use crate::column;
 use crate::delivery;
 use crate::filter;
 use crate::render::{self, Rendered};
-use crate::repo::{RepoSet, SourceState};
+use crate::repo::RepoSet;
+use crate::shell;
 use crate::tmpl::{
-    self, ColumnControl, ExplorerCtx, ExplorerEntry, ExplorerReadme, FilterControl, PageShell,
-    SortControl, SortDirControl,
+    self, ColumnControl, ExplorerCtx, ExplorerEntry, ExplorerReadme, FilterControl, SortControl,
+    SortDirControl,
 };
 use crate::vendor;
 use crate::view::{self, ViewConfig, ViewQuery, ViewState};
@@ -20,13 +21,12 @@ use axum::{
     Router,
     body::Body,
     extract::{Path as AxPath, Query, RawQuery, State, ws::WebSocketUpgrade},
-    http::{HeaderMap, HeaderValue, StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     middleware,
-    response::{Html, IntoResponse, Response},
+    response::Response,
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
-use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use std::cmp::Ordering;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::path::{Component, Path, PathBuf};
@@ -651,9 +651,9 @@ async fn render_file(
         &rendered.title
     };
     if hx.is_htmx {
-        return respond_fragment(&body, title, source);
+        return shell::fragment(&body, title, source);
     }
-    respond_html(&rendered, &body, source, s.auth.is_some())
+    shell::full_page(&rendered, &body, source, s.auth.is_some())
 }
 
 async fn render_explorer(s: &AppState, rel: &str, view: ViewState, hx: HtmxContext) -> Response {
@@ -860,9 +860,9 @@ async fn render_explorer(s: &AppState, rel: &str, view: ViewState, hx: HtmxConte
     };
     let source = s.repos.source_for(&current);
     if hx.is_htmx {
-        return respond_fragment(&body, &combined.title, source);
+        return shell::fragment(&body, &combined.title, source);
     }
-    respond_html(&combined, &body, source, s.auth.is_some())
+    shell::full_page(&combined, &body, source, s.auth.is_some())
 }
 
 fn cmp_commit_entries(
@@ -1020,139 +1020,6 @@ fn explorer_controls(
     }
 }
 
-fn respond_html(r: &Rendered, body: &str, source: SourceState, show_logout: bool) -> Response {
-    let title = if r.title.is_empty() {
-        "Preview"
-    } else {
-        &r.title
-    };
-    let source = source_html(&source);
-    let project_version = env!("CARGO_PKG_VERSION");
-    let project_release_href = format!("{PROJECT_REMOTE_URL}/releases/tag/v{project_version}");
-    let assets = vendor::plan(r);
-    let shell = PageShell {
-        title,
-        body,
-        source: &source,
-        project_href: PROJECT_REMOTE_URL,
-        project_release_href: &project_release_href,
-        project_version,
-        show_logout,
-        asset_json: vendor::client_json(),
-        vendor_styles: &assets.styles,
-        vendor_scripts: &assets.scripts,
-    };
-    let html = match tmpl::base(shell) {
-        Ok(h) => h,
-        Err(e) => {
-            warn!("template error: {}", e);
-            return not_found();
-        }
-    };
-    let mut res = Html(html).into_response();
-    res.headers_mut()
-        .insert(header::VARY, HeaderValue::from_static("HX-Request"));
-    res
-}
-
-fn respond_fragment(body: &str, title: &str, source: SourceState) -> Response {
-    let source_oob = source_oob_html(&source);
-    let html = format!("{body}{source_oob}");
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .header(header::VARY, "HX-Request")
-        .header("HX-Title", hx_title(title))
-        .body(Body::from(html))
-        .unwrap()
-}
-
-fn source_oob_html(source: &SourceState) -> String {
-    source_html_inner(source, true)
-}
-
-fn hx_title(title: &str) -> String {
-    utf8_percent_encode(title, NON_ALPHANUMERIC).to_string()
-}
-
-fn source_html(source: &SourceState) -> String {
-    source_html_inner(source, false)
-}
-
-fn source_html_inner(source: &SourceState, oob: bool) -> String {
-    let oob_attr = if oob { " hx-swap-oob=\"true\"" } else { "" };
-    match source {
-        SourceState::Web { url, label, .. } => web_source_html(url, label, oob_attr),
-        SourceState::Transport { raw } => format!(
-            "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\">{badge}<span class=\"ghrm-source-text\">{text}</span></span>",
-            raw = html_escape::encode_double_quoted_attribute(raw),
-            badge = status_badge_html(),
-            text = html_escape::encode_text(raw),
-        ),
-        SourceState::NoRemote => format!(
-            "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\">{badge}<span class=\"ghrm-source-text\">no remote</span></span>",
-            badge = status_badge_html(),
-        ),
-        SourceState::NoRepo => project_source_html(oob_attr),
-    }
-}
-
-const PROJECT_REMOTE_URL: &str = "https://github.com/brege/ghrm";
-
-fn status_badge_html() -> &'static str {
-    "<button type=\"button\" class=\"ghrm-source-badge\" aria-expanded=\"false\" aria-controls=\"ghrm-about-peek\" aria-label=\"Show ghrm status\" title=\"Show ghrm status\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></button>"
-}
-
-fn project_source_html(oob_attr: &str) -> String {
-    format!(
-        "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\"><span class=\"ghrm-source-repo\">ghrm</span></span></span>",
-        badge = status_badge_html(),
-    )
-}
-
-fn web_source_html(url: &str, label: &str, oob_attr: &str) -> String {
-    let href = html_escape::encode_double_quoted_attribute(url);
-    let title_attr = html_escape::encode_double_quoted_attribute(url);
-    let (host, repo) = source_display(url, label);
-    let host_href = if host.is_empty() {
-        None
-    } else {
-        Some(format!("https://{host}"))
-    };
-    let host = html_escape::encode_text(&host);
-    let repo = html_escape::encode_text(&repo);
-
-    let host_html = match host_href {
-        Some(host_href) => {
-            let host_href = html_escape::encode_double_quoted_attribute(&host_href);
-            format!(
-                "<a class=\"ghrm-source-host\" href=\"{host_href}\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"Open {host}\">{host}</a>"
-            )
-        }
-        None => String::new(),
-    };
-
-    format!(
-        "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
-        badge = status_badge_html(),
-    )
-}
-
-fn source_display(url: &str, label: &str) -> (String, String) {
-    let after_scheme = url.find("://").map_or(0, |i| i + 3);
-    let host_end = after_scheme
-        + url[after_scheme..]
-            .find('/')
-            .unwrap_or(url.len() - after_scheme);
-    let host = url[after_scheme..host_end].trim_end_matches('/');
-    let repo = url[host_end..].trim_matches('/');
-    if host.is_empty() || repo.is_empty() {
-        let repo = label.replace(" / ", "/");
-        return (String::new(), repo);
-    }
-    (host.to_string(), repo.to_string())
-}
-
 async fn dispatch_file(
     s: &AppState,
     path: &Path,
@@ -1180,7 +1047,7 @@ async fn download_file(
 ) -> Response {
     if hx.is_htmx {
         let href = view::with_view(&format!("/{rel}"), view, &s.view_cfg);
-        return htmx_redirect(&href);
+        return shell::redirect(&href);
     }
     delivery::stream_download(path).await
 }
@@ -1232,9 +1099,9 @@ async fn render_source_file(
         &rendered.title
     };
     if hx.is_htmx {
-        return respond_fragment(&body, title, source);
+        return shell::fragment(&body, title, source);
     }
-    respond_html(&rendered, &body, source, s.auth.is_some())
+    shell::full_page(&rendered, &body, source, s.auth.is_some())
 }
 
 async fn render_dual_file(
@@ -1289,9 +1156,9 @@ async fn render_dual_file(
     };
     let source = s.repos.source_for(path);
     if hx.is_htmx {
-        return respond_fragment(&body, &rendered.title, source);
+        return shell::fragment(&body, &rendered.title, source);
     }
-    respond_html(&rendered, &body, source, s.auth.is_some())
+    shell::full_page(&rendered, &body, source, s.auth.is_some())
 }
 
 fn dual_preview_html(ext: Option<&str>, native_url: &str, filename: &str) -> String {
@@ -1314,18 +1181,9 @@ async fn native_file(
 ) -> Response {
     if hx.is_htmx {
         let href = view::with_view(&format!("/{rel}"), view, &s.view_cfg);
-        return htmx_redirect(&href);
+        return shell::redirect(&href);
     }
     delivery::stream_file(path).await
-}
-
-fn htmx_redirect(location: &str) -> Response {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("HX-Redirect", location)
-        .header(header::VARY, "HX-Request")
-        .body(Body::empty())
-        .unwrap()
 }
 
 async fn ws_handler(State(s): State<AppState>, ws: WebSocketUpgrade) -> Response {
@@ -1359,13 +1217,6 @@ fn not_found() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn source_display_splits_host_and_repo() {
-        let (host, repo) = source_display("https://github.com/brege/ghrm", "brege / ghrm");
-        assert_eq!(host, "github.com");
-        assert_eq!(repo, "brege/ghrm");
-    }
 
     #[test]
     fn htmx_context_detects_hx_request_header() {
@@ -1410,37 +1261,5 @@ mod tests {
         headers.insert("HX-Request", "true".parse().unwrap());
         headers.insert("Sec-Fetch-Dest", "image".parse().unwrap());
         assert!(!native_file_request(&headers));
-    }
-
-    #[test]
-    fn source_oob_includes_swap_attribute() {
-        let html = source_oob_html(&SourceState::NoRepo);
-        assert!(html.contains("hx-swap-oob=\"true\""));
-        assert!(html.contains("id=\"ghrm-source-slot\""));
-    }
-
-    #[test]
-    fn source_html_omits_oob_attribute() {
-        let html = source_html(&SourceState::NoRepo);
-        assert!(!html.contains("hx-swap-oob"));
-        assert!(html.contains("id=\"ghrm-source-slot\""));
-    }
-
-    #[test]
-    fn fragment_response_varies_on_hx_request() {
-        let response = respond_fragment("body", "Test", SourceState::NoRepo);
-
-        assert_eq!(response.headers().get(header::VARY).unwrap(), "HX-Request");
-        assert_eq!(response.headers().get("HX-Title").unwrap(), "Test");
-    }
-
-    #[test]
-    fn fragment_response_encodes_title_header() {
-        let response = respond_fragment("body", "Test Title\nλ", SourceState::NoRepo);
-
-        assert_eq!(
-            response.headers().get("HX-Title").unwrap(),
-            "Test%20Title%0A%CE%BB"
-        );
     }
 }

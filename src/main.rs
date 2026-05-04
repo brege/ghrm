@@ -9,6 +9,7 @@ mod render;
 mod repo;
 mod search;
 mod server;
+mod shell;
 #[cfg(test)]
 mod testutil;
 mod theme;
