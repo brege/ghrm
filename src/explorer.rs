@@ -1,6 +1,10 @@
-use crate::column;
-use crate::crumbs;
-use crate::filter;
+pub(crate) mod column;
+pub(crate) mod crumbs;
+pub(crate) mod filter;
+pub(crate) mod view;
+pub(crate) mod walk;
+pub(crate) mod watch;
+
 use crate::http::server::{AppState, HtmxContext};
 use crate::http::{shell, vendor};
 use crate::render::{self, Rendered};
@@ -8,8 +12,7 @@ use crate::tmpl::{
     self, ColumnControl, ExplorerCtx, ExplorerEntry, ExplorerReadme, FilterControl, SortControl,
     SortDirControl,
 };
-use crate::view::{self, ViewConfig, ViewState};
-use crate::walk;
+use view::{ViewConfig, ViewState};
 
 use axum::{body::Body, http::StatusCode, response::Response};
 use std::cmp::Ordering;

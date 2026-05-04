@@ -1,6 +1,6 @@
-use crate::column;
+use crate::explorer::column;
+use crate::explorer::view::{self, ViewConfig, ViewState};
 use crate::tmpl::{self, ContentSearchCtx, ContentSearchRow, PathSearchCtx, PathSearchRow};
-use crate::view::{self, ViewConfig, ViewState};
 
 use axum::{
     body::Body,

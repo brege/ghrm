@@ -1,4 +1,4 @@
-use crate::view::{self, ViewConfig, ViewState};
+use crate::explorer::view::{self, ViewConfig, ViewState};
 
 use std::path::{Component, Path};
 

@@ -1,4 +1,4 @@
-use crate::walk::{self, NavSet, Sort, SortDir, ViewOpts};
+use crate::explorer::walk::{self, NavSet, Sort, SortDir, ViewOpts};
 
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -41,7 +41,7 @@ pub(crate) struct NavSpec<'a> {
     pub(crate) sort: Sort,
     pub(crate) dir: SortDir,
     pub(crate) opts: ViewOpts,
-    pub(crate) matcher: Option<&'a crate::filter::Matcher>,
+    pub(crate) matcher: Option<&'a crate::explorer::filter::Matcher>,
     pub(crate) load_lines: bool,
     pub(crate) load_commit_meta: bool,
 }

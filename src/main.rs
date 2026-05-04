@@ -1,9 +1,6 @@
-mod column;
 mod config;
-mod crumbs;
 mod dirs;
 mod explorer;
-mod filter;
 mod http;
 mod paths;
 mod render;
@@ -13,10 +10,8 @@ mod search;
 #[cfg(test)]
 mod testutil;
 mod tmpl;
-mod view;
-mod walk;
-mod watch;
 
+use crate::explorer::{column, filter};
 use crate::http::{auth::AuthConfig, server, theme, vendor};
 use anyhow::Result;
 use clap::Parser;

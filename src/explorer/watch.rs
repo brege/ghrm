@@ -1,5 +1,5 @@
+use crate::explorer::walk::{self, NavSet};
 use crate::paths;
-use crate::walk::{self, NavSet};
 use ignore::gitignore::GitignoreBuilder;
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebouncedEvent, new_debouncer};

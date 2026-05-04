@@ -2,7 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{config, filter, walk};
+use crate::config;
+use crate::explorer::{filter, walk};
 
 pub(crate) struct TempDir {
     path: PathBuf,

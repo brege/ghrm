@@ -1,6 +1,6 @@
-use crate::column;
-use crate::filter;
-use crate::walk::{self, ViewOpts};
+use crate::explorer::column;
+use crate::explorer::filter;
+use crate::explorer::walk::{self, ViewOpts};
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -383,7 +383,7 @@ fn set_multi_string_param(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::column;
+    use crate::explorer::column;
     use crate::testutil::group_filters;
 
     fn columns(date: bool, commit: bool, commit_date: bool) -> column::Set {
