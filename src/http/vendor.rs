@@ -249,7 +249,7 @@ struct FileAsset {
 fn manifest() -> &'static Manifest {
     static MANIFEST: OnceLock<Manifest> = OnceLock::new();
     MANIFEST.get_or_init(|| {
-        manifest_from_str(include_str!("../assets/config.json"))
+        manifest_from_str(include_str!("../../assets/config.json"))
             .expect("embedded vendor manifest is valid")
     })
 }

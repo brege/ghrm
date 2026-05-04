@@ -1,29 +1,18 @@
-mod api;
-mod auth;
-mod column;
 mod config;
-mod crumbs;
-mod delivery;
 mod dirs;
 mod explorer;
-mod filter;
+mod http;
 mod paths;
 mod render;
 mod repo;
 mod runtime;
 mod search;
-mod server;
-mod shell;
 #[cfg(test)]
 mod testutil;
-mod theme;
 mod tmpl;
-mod vendor;
-mod view;
-mod walk;
-mod watch;
 
-use crate::auth::AuthConfig;
+use crate::explorer::{column, filter};
+use crate::http::{auth::AuthConfig, server, theme, vendor};
 use anyhow::Result;
 use clap::Parser;
 use std::collections::BTreeSet;

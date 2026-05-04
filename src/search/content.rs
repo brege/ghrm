@@ -1,4 +1,4 @@
-use crate::filter;
+use crate::explorer::filter;
 use crate::paths;
 
 use grep_matcher::Matcher;

@@ -1,4 +1,4 @@
-use crate::column;
+use crate::explorer::column;
 
 use anyhow::{Result, bail};
 use serde::{Deserialize, Deserializer};

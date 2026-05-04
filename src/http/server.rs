@@ -1,19 +1,12 @@
-use crate::api;
-use crate::auth;
-use crate::column;
-use crate::crumbs;
-use crate::delivery;
 use crate::explorer;
-use crate::filter;
+use crate::explorer::view::{ViewConfig, ViewQuery, ViewState};
+use crate::explorer::walk::{NavSet, ViewOpts};
+use crate::explorer::{column, crumbs, filter, view, walk, watch};
+use crate::http::{api, auth, delivery, shell, vendor};
 use crate::render::{self, Rendered};
 use crate::repo::RepoSet;
 use crate::runtime;
-use crate::shell;
 use crate::tmpl;
-use crate::vendor;
-use crate::view::{self, ViewConfig, ViewQuery, ViewState};
-use crate::walk::{self, NavSet, ViewOpts};
-use crate::watch;
 
 use anyhow::Result;
 use anyhow::anyhow;

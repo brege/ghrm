@@ -1,10 +1,9 @@
-use crate::column;
+use crate::explorer::view::ViewQuery;
+use crate::explorer::{column, view, walk};
+use crate::http::server::{AppState, Mode};
 use crate::render;
 use crate::repo::RepoSet;
 use crate::search;
-use crate::server::{AppState, Mode};
-use crate::view::{self, ViewQuery};
-use crate::walk;
 
 use axum::{
     body::Body,
@@ -22,7 +21,7 @@ struct TreeResponse {
     mode: &'static str,
     root: String,
     ready: bool,
-    dirs: BTreeMap<String, crate::walk::NavDir>,
+    dirs: BTreeMap<String, walk::NavDir>,
 }
 
 pub(crate) async fn tree(

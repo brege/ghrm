@@ -144,7 +144,7 @@ pub struct ListSpec<'a> {
     pub use_ignore: bool,
     pub exclude_names: &'a [String],
     pub extensions: &'a [String],
-    pub matcher: Option<&'a crate::filter::Matcher>,
+    pub matcher: Option<&'a crate::explorer::filter::Matcher>,
     pub opts: ViewOpts,
     pub order: SortSpec,
 }
@@ -152,7 +152,7 @@ pub struct ListSpec<'a> {
 struct TreeBuildSpec<'a> {
     exclude_names: &'a [String],
     extensions: &'a [String],
-    matcher: Option<&'a crate::filter::Matcher>,
+    matcher: Option<&'a crate::explorer::filter::Matcher>,
     opts: ViewOpts,
     order: SortSpec,
     load_lines: bool,
@@ -164,7 +164,7 @@ pub fn line_count(path: &Path, size: Option<u64>) -> Option<u64> {
     }
 
     let bytes = std::fs::read(path).ok()?;
-    if !crate::delivery::is_text_content(&bytes) {
+    if !crate::http::delivery::is_text_content(&bytes) {
         return None;
     }
     if bytes.contains(&0) {
@@ -252,14 +252,14 @@ impl NavSet {
     pub(crate) fn matches_filter(
         &self,
         path: &Path,
-        matcher: Option<&crate::filter::Matcher>,
+        matcher: Option<&crate::explorer::filter::Matcher>,
     ) -> bool {
         matches_filter(path, &self.extensions, matcher)
     }
 
     pub(crate) fn dirs_with_files(
         &self,
-        matcher: Option<&crate::filter::Matcher>,
+        matcher: Option<&crate::explorer::filter::Matcher>,
         opts: ViewOpts,
     ) -> HashSet<PathBuf> {
         compute_dirs_with_files(
@@ -276,7 +276,7 @@ impl NavSet {
         opts: ViewOpts,
         sort: Sort,
         dir: SortDir,
-        matcher: Option<&crate::filter::Matcher>,
+        matcher: Option<&crate::explorer::filter::Matcher>,
         load_lines: bool,
     ) -> Arc<NavTree> {
         let load_lines = load_lines || sort == Sort::Lines;
@@ -619,7 +619,7 @@ fn compute_dirs_with_files(
     snap: &Snapshot,
     exclude_names: &[String],
     extensions: &[String],
-    matcher: Option<&crate::filter::Matcher>,
+    matcher: Option<&crate::explorer::filter::Matcher>,
     opts: ViewOpts,
 ) -> HashSet<PathBuf> {
     let mut dirs_with_files = HashSet::new();
@@ -661,7 +661,7 @@ fn allow_path(path: &Path, exclude_names: &[String], opts: ViewOpts) -> bool {
 fn matches_filter(
     path: &Path,
     extensions: &[String],
-    matcher: Option<&crate::filter::Matcher>,
+    matcher: Option<&crate::explorer::filter::Matcher>,
 ) -> bool {
     if let Some(matcher) = matcher {
         matcher.matches(path)
