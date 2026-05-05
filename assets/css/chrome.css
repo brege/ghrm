@@ -67,6 +67,10 @@ body.ghrm-doc-flat #ghrm-source-slot {
   padding: 0;
 }
 
+#doc-chrome-toggle[hidden] {
+  display: none;
+}
+
 #ghrm-logout {
   width: 32px;
   padding: 0;
