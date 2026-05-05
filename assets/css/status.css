@@ -59,7 +59,6 @@
   display: flex;
   align-items: stretch;
   border-inline: 1px solid var(--borderColor-default, #d0d7de);
-  background-color: var(--bgColor-muted, #f6f8fa);
   background-image:
     linear-gradient(rgba(9, 105, 218, 0.16) 1px, transparent 1px),
     linear-gradient(90deg, rgba(9, 105, 218, 0.16) 1px, transparent 1px),
