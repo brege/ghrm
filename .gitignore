@@ -1,2 +1,7 @@
 /target/
 assets/vendor/
+bench/.asv/
+bench/.home/
+bench/.uv-cache/
+bench/.venv/
+__pycache__/

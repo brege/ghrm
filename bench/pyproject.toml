@@ -1,0 +1,11 @@
+[project]
+name = "ghrm-bench"
+version = "0.1.0"
+description = "ASV benchmark harness for ghrm"
+requires-python = ">=3.10"
+dependencies = [
+  "asv>=0.6.5,<0.7",
+]
+
+[tool.uv]
+package = false

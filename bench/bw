@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+ORIGINAL_HOME="${HOME:-}"
+export CARGO_HOME="${CARGO_HOME:-$ORIGINAL_HOME/.cargo}"
+export RUSTUP_HOME="${RUSTUP_HOME:-$ORIGINAL_HOME/.rustup}"
+export HOME="${GHRM_BENCH_HOME:-$ROOT/.home}"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$ROOT/.uv-cache}"
+
+usage() {
+    printf '%s\n' 'Usage: ./bw <check|run|publish|open|preview|machine|show|compare> [args...]'
+    printf '%s\n' 'Examples:'
+    printf '%s\n' '  ./bw check'
+    printf '%s\n' '  ./bw run HEAD^!'
+    printf '%s\n' '  ./bw run HASHFILE:hashes.txt'
+    printf '%s\n' '  ./bw open'
+}
+
+asv() {
+    uv run asv "$@"
+}
+
+cmd="${1:-}"
+if [[ -z "$cmd" ]]; then
+    usage
+    exit 2
+fi
+shift
+
+case "$cmd" in
+check)
+    exec uv run asv check "$@"
+    ;;
+run)
+    if [[ $# -eq 0 ]]; then
+        printf '%s\n' 'bw: run requires an ASV commit range or hash spec' >&2
+        exit 2
+    fi
+    exec uv run asv run "$@"
+    ;;
+publish)
+    exec uv run asv publish "$@"
+    ;;
+open)
+    asv publish
+    exec uv run asv preview "$@"
+    ;;
+preview | machine | show | compare)
+    exec uv run asv "$cmd" "$@"
+    ;;
+*)
+    usage >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "project": "ghrm",
+  "project_url": "https://github.com/brege/ghrm",
+  "repo": "..",
+  "show_commit_url": "https://github.com/brege/ghrm/commit/",
+  "branches": ["main"],
+  "benchmark_dir": "benchmarks",
+  "env_dir": ".asv/env",
+  "results_dir": ".asv/results",
+  "html_dir": ".asv/html",
+  "environment_type": "virtualenv",
+  "pythons": ["3"],
+  "install_timeout": 300,
+  "default_benchmark_timeout": 60,
+  "build_cache_size": 3,
+  "build_command": [
+    "/usr/bin/env cargo build --release --locked",
+    "/usr/bin/env cp target/release/ghrm {build_cache_dir}/ghrm"
+  ],
+  "install_command": [
+    "/usr/bin/env cp {build_cache_dir}/ghrm {env_dir}/bin/ghrm"
+  ],
+  "uninstall_command": []
+}
