@@ -111,7 +111,7 @@ body.ghrm-doc-flat #ghrm-source-slot {
   align-self: center;
   align-items: center;
   justify-content: center;
-  line-height: 0;
+  line-height: 1;
 }
 
 .ghrm-source-link.is-disabled {
@@ -121,7 +121,7 @@ body.ghrm-doc-flat #ghrm-source-slot {
 
 .ghrm-source-text {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   min-width: 0;
   flex: 1 1 auto;
@@ -130,13 +130,7 @@ body.ghrm-doc-flat #ghrm-source-slot {
   font-size: 14px;
 }
 
-.ghrm-source-host {
-  color: var(--fgColor-muted, #636c76);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ghrm-source-repo {
+.ghrm-source-value {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -207,8 +201,7 @@ body.ghrm-doc-flat #doc-chrome-toggle .icon-flat {
     font-size: 13px;
   }
 
-  .ghrm-source-host,
-  .ghrm-source-repo {
+  .ghrm-source-value {
     flex: 0 0 auto;
     overflow: visible;
     text-overflow: clip;

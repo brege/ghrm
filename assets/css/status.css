@@ -1,9 +1,10 @@
 .ghrm-source-badge {
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
+  border-radius: 4px;
   color: var(--fgColor-accent, #0969da);
   background: transparent;
   cursor: pointer;
@@ -17,6 +18,10 @@
   border-radius: 50%;
   background: currentColor;
   color: var(--fgColor-accent, #0969da);
+  transform-origin: center;
+  transition:
+    color 120ms ease,
+    transform 120ms ease;
 }
 
 .ghrm-source-link.is-muted .ghrm-status-dot {
@@ -43,6 +48,7 @@
 
 .ghrm-source-badge:hover .ghrm-status-dot {
   color: var(--borderColor-accent-emphasis, #0969da);
+  transform: scale(1.25);
 }
 
 .ghrm-about-peek {

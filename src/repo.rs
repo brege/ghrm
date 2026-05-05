@@ -27,7 +27,7 @@ struct RepoEntry {
 pub enum SourceState {
     Web {
         url: String,
-        label: String,
+        raw: String,
         forge: Forge,
     },
     Transport {
@@ -333,22 +333,18 @@ fn classify_remote(raw: &str) -> SourceState {
         return match scheme {
             "http" | "https" => {
                 let url = canonical_http_url(scheme, host, path);
-                let label = web_label(host, path);
                 SourceState::Web {
                     url,
-                    label,
+                    raw: raw.to_string(),
                     forge: forge_for_host(host),
                 }
             }
             "ssh" => match ssh_web_url(host, raw, path) {
-                Some(url) => {
-                    let label = web_label(host, path);
-                    SourceState::Web {
-                        url,
-                        label,
-                        forge: forge_for_host(host),
-                    }
-                }
+                Some(url) => SourceState::Web {
+                    url,
+                    raw: raw.to_string(),
+                    forge: forge_for_host(host),
+                },
                 None => SourceState::Transport {
                     raw: raw.to_string(),
                 },
@@ -361,10 +357,9 @@ fn classify_remote(raw: &str) -> SourceState {
 
     if let Some((host, path)) = parse_scp_remote(raw) {
         if let Some(url) = scp_web_url(host, path) {
-            let label = web_label(host, path);
             return SourceState::Web {
                 url,
-                label,
+                raw: raw.to_string(),
                 forge: forge_for_host(host),
             };
         }
@@ -485,14 +480,6 @@ fn strip_git_suffix(path: &str) -> String {
         .to_string()
 }
 
-fn web_label(host: &str, path: &str) -> String {
-    let rel = strip_git_suffix(path);
-    match forge_for_host(host) {
-        Forge::Generic => format!("{host}/{rel}"),
-        _ => rel.replace('/', " / "),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
@@ -506,7 +493,7 @@ mod tests {
             classify_remote("git@github.com:brege/oshea.git"),
             SourceState::Web {
                 url: "https://github.com/brege/oshea".to_string(),
-                label: "brege / oshea".to_string(),
+                raw: "git@github.com:brege/oshea.git".to_string(),
                 forge: Forge::GitHub,
             }
         );
@@ -518,7 +505,7 @@ mod tests {
             classify_remote("git@gitlab.com:group/subgroup/repo.git"),
             SourceState::Web {
                 url: "https://gitlab.com/group/subgroup/repo".to_string(),
-                label: "group / subgroup / repo".to_string(),
+                raw: "git@gitlab.com:group/subgroup/repo.git".to_string(),
                 forge: Forge::GitLab,
             }
         );
@@ -530,7 +517,7 @@ mod tests {
             classify_remote("https://example.com/org/project.git"),
             SourceState::Web {
                 url: "https://example.com/org/project".to_string(),
-                label: "example.com/org/project".to_string(),
+                raw: "https://example.com/org/project.git".to_string(),
                 forge: Forge::Generic,
             }
         );
@@ -552,7 +539,7 @@ mod tests {
             classify_remote("git@git.sr.ht:~sircmpwn/core.sr.ht"),
             SourceState::Web {
                 url: "https://git.sr.ht/~sircmpwn/core.sr.ht".to_string(),
-                label: "~sircmpwn / core.sr.ht".to_string(),
+                raw: "git@git.sr.ht:~sircmpwn/core.sr.ht".to_string(),
                 forge: Forge::SourceHut,
             }
         );

@@ -92,18 +92,22 @@ pub(crate) fn source_oob_html(source: &SourceState) -> String {
 fn source_html_inner(source: &SourceState, oob: bool) -> String {
     let oob_attr = if oob { " hx-swap-oob=\"true\"" } else { "" };
     match source {
-        SourceState::Web { url, label, .. } => web_source_html(url, label, oob_attr),
-        SourceState::Transport { raw } => format!(
-            "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\" aria-label=\"Transport-only remote\" title=\"Transport-only remote: {raw}\">{badge}<span class=\"ghrm-source-text\">{text}</span></span>",
-            raw = html_escape::encode_double_quoted_attribute(raw),
-            badge = status_badge_html(),
-            text = html_escape::encode_text(raw),
+        SourceState::Web { url, raw, .. } => linked_source_html(url, raw, oob_attr),
+        SourceState::Transport { raw } => plain_source_html(
+            "Transport-only remote",
+            raw,
+            &format!("Transport-only remote: {raw}"),
+            oob_attr,
         ),
-        SourceState::NoRemote => format!(
-            "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\" aria-label=\"Git repository has no remote\" title=\"Git repository has no remote\">{badge}<span class=\"ghrm-source-text\">no remote</span></span>",
-            badge = status_badge_html(),
+        SourceState::NoRemote => plain_source_html(
+            "Git repository has no remote",
+            "git repo / no remote",
+            "Git repository has no remote",
+            oob_attr,
         ),
-        SourceState::NoRepo => project_source_html(oob_attr),
+        SourceState::NoRepo => {
+            plain_source_html("Local path", "local path", "Local path", oob_attr)
+        }
     }
 }
 
@@ -111,54 +115,25 @@ fn status_badge_html() -> &'static str {
     "<button type=\"button\" class=\"ghrm-source-badge\" aria-expanded=\"false\" aria-controls=\"ghrm-about-peek\" aria-label=\"Show ghrm status\" title=\"Show ghrm status\"><span class=\"ghrm-status-dot\" aria-hidden=\"true\"></span></button>"
 }
 
-fn project_source_html(oob_attr: &str) -> String {
+fn plain_source_html(aria: &str, text: &str, title: &str, oob_attr: &str) -> String {
+    let aria = html_escape::encode_double_quoted_attribute(aria);
+    let title = html_escape::encode_double_quoted_attribute(title);
+    let text = html_escape::encode_text(text);
     format!(
-        "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\"><span class=\"ghrm-source-repo\">ghrm</span></span></span>",
+        "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\" aria-label=\"{aria}\" title=\"{title}\">{badge}<span class=\"ghrm-source-text\"><span class=\"ghrm-source-value\">{text}</span></span></span>",
         badge = status_badge_html(),
     )
 }
 
-fn web_source_html(url: &str, label: &str, oob_attr: &str) -> String {
+fn linked_source_html(url: &str, raw: &str, oob_attr: &str) -> String {
     let href = html_escape::encode_double_quoted_attribute(url);
     let title_attr = html_escape::encode_double_quoted_attribute(url);
-    let (host, repo) = source_display(url, label);
-    let host_href = if host.is_empty() {
-        None
-    } else {
-        Some(format!("https://{host}"))
-    };
-    let host = html_escape::encode_text(&host);
-    let repo = html_escape::encode_text(&repo);
-
-    let host_html = match host_href {
-        Some(host_href) => {
-            let host_href = html_escape::encode_double_quoted_attribute(&host_href);
-            format!(
-                "<a class=\"ghrm-source-host\" href=\"{host_href}\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"Open {host}\">{host}</a>"
-            )
-        }
-        None => String::new(),
-    };
+    let text = html_escape::encode_text(raw);
 
     format!(
-        "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\">{host_html}<a class=\"ghrm-source-repo\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{repo}</a></span></span>",
+        "<span id=\"ghrm-source-slot\"{oob_attr} class=\"ghrm-source-link is-muted\">{badge}<span class=\"ghrm-source-text\"><a class=\"ghrm-source-value\" href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Open source remote: {title_attr}\" title=\"Open source remote: {title_attr}\">{text}</a></span></span>",
         badge = status_badge_html(),
     )
-}
-
-fn source_display(url: &str, label: &str) -> (String, String) {
-    let after_scheme = url.find("://").map_or(0, |i| i + 3);
-    let host_end = after_scheme
-        + url[after_scheme..]
-            .find('/')
-            .unwrap_or(url.len() - after_scheme);
-    let host = url[after_scheme..host_end].trim_end_matches('/');
-    let repo = url[host_end..].trim_matches('/');
-    if host.is_empty() || repo.is_empty() {
-        let repo = label.replace(" / ", "/");
-        return (String::new(), repo);
-    }
-    (host.to_string(), repo.to_string())
 }
 
 fn not_found() -> Response {
@@ -174,10 +149,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn source_display_splits_host_and_repo() {
-        let (host, repo) = source_display("https://github.com/brege/ghrm", "brege / ghrm");
-        assert_eq!(host, "github.com");
-        assert_eq!(repo, "brege/ghrm");
+    fn web_source_displays_configured_remote() {
+        let html = source_html(&SourceState::Web {
+            url: "https://github.com/brege/ghrm".to_string(),
+            raw: "git@github.com:brege/ghrm.git".to_string(),
+            forge: crate::repo::Forge::GitHub,
+        });
+        assert!(html.contains("href=\"https://github.com/brege/ghrm\""));
+        assert!(html.contains(">git@github.com:brege/ghrm.git</a>"));
+        assert!(!html.contains("github.com/brege/ghrm</a>"));
+    }
+
+    #[test]
+    fn no_remote_source_is_descriptive() {
+        let html = source_html(&SourceState::NoRemote);
+        assert!(html.contains("git repo / no remote"));
+    }
+
+    #[test]
+    fn no_repo_source_is_local_path() {
+        let html = source_html(&SourceState::NoRepo);
+        assert!(html.contains("local path"));
     }
 
     #[test]

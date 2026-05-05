@@ -13,7 +13,7 @@ export function setupThemeToggle() {
 }
 
 function hasDocChrome() {
-  return !!document.querySelector('.ghrm-page-shell, .ghrm-readme-box');
+  return !!document.querySelector('.ghrm-page-shell[data-ghrm-view-kind]');
 }
 
 function syncDocChromeToggle() {
