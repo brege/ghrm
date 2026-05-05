@@ -104,14 +104,10 @@ cargo uninstall ghrm
 - [ripgrep](https://github.com/BurntSushi/ripgrep)
 - [tokei](https://github.com/XAMPPRocky/tokei)
 
-## Roadmap
-
-- create bench matrix over each commit
-- publish to crates.io
-
 ## Reference
 
 - [Server](src/README.md)
+- [Benchmarks](bench/README.md)
 
 ## License
 
