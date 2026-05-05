@@ -1,5 +1,9 @@
 import { icon } from '../dom.js';
 
+// ghrm is often opened over plain HTTP from another LAN device. Browsers treat
+// localhost as a secure context, but not http://192.168.x.x, so the Clipboard
+// API may fail on Android or a second machine even when it works on the host.
+// Use the platform API first, then fall back to user-initiated textarea copy.
 const copyResetDelay = 1000;
 
 export function copyIcon() {
@@ -24,10 +28,36 @@ function getCopyText(pre) {
 }
 
 export async function writeClipboard(text) {
-  if (!navigator.clipboard?.writeText) {
-    throw new Error('Clipboard API unavailable');
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      fallbackCopy(text);
+      return;
+    }
   }
-  await navigator.clipboard.writeText(text);
+
+  fallbackCopy(text);
+}
+
+function fallbackCopy(text) {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.inset = '0 auto auto 0';
+  area.style.width = '1px';
+  area.style.height = '1px';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  area.setSelectionRange(0, area.value.length);
+  const ok = document.execCommand('copy');
+  area.remove();
+  if (!ok) {
+    throw new Error('Clipboard copy failed');
+  }
 }
 
 export function showCopied(button) {

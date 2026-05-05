@@ -32,21 +32,29 @@ function syncFileView(container, raw) {
   toggle.setAttribute('aria-label', label);
   toggle.title = label;
 
-  syncWrapToggle(container, raw);
+  syncWrapToggle(container);
 }
 
-function syncWrapToggle(container, isRaw) {
+function wrapApplies(container) {
+  const kind = container.dataset.ghrmViewKind;
+  const rawPane = container.querySelector('[data-ghrm-raw-pane]');
+  const raw = rawPane && !rawPane.hidden;
+  return raw || kind === 'markdown';
+}
+
+function syncWrapToggle(container) {
   const wrapToggle = container.querySelector('[data-ghrm-wrap-toggle]');
   if (!wrapToggle) return;
 
-  const disabled = !isRaw;
+  const disabled = !wrapApplies(container);
   wrapToggle.disabled = disabled;
+  wrapToggle.hidden = disabled;
 
   if (disabled) {
     wrapToggle.classList.remove('is-active');
     wrapToggle.setAttribute('aria-pressed', 'false');
-    wrapToggle.setAttribute('aria-label', 'Wrap lines (code view only)');
-    wrapToggle.title = 'Wrap lines (code view only)';
+    wrapToggle.setAttribute('aria-label', 'Wrap lines');
+    wrapToggle.title = 'Wrap lines';
     applyWrapState(false);
   } else {
     const wrap = getWrapPref();
@@ -105,7 +113,7 @@ function setupFileView(container) {
 
   wrapToggle.addEventListener('click', () => {
     setWrapPref(!getWrapPref());
-    syncWrapToggle(container, true);
+    syncWrapToggle(container);
   });
 
   toggles.append(toggle, wrapToggle);

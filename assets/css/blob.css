@@ -123,6 +123,19 @@ body.ghrm-wrap .ghrm-blob-line-code .hljs {
   overflow-wrap: anywhere;
 }
 
+body.ghrm-wrap .markdown-body [data-ghrm-preview-pane] pre,
+body.ghrm-wrap .markdown-body [data-ghrm-preview-pane] pre code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+body.ghrm-wrap .markdown-body [data-ghrm-preview-pane] pre .hljs {
+  white-space: inherit;
+  word-break: inherit;
+  overflow-wrap: inherit;
+}
+
 .ghrm-raw-pane .ghrm-blob {
   margin: -16px -32px -32px;
 }
