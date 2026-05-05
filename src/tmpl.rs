@@ -10,14 +10,29 @@ pub struct PageShell<'a> {
     pub title: &'a str,
     pub body: &'a str,
     pub source: &'a str,
-    pub project_href: &'a str,
-    pub project_release_href: &'a str,
-    pub project_version: &'static str,
+    pub about: &'a str,
     pub show_logout: bool,
     pub asset_json: &'a str,
     pub vendor_styles: &'a [String],
     pub vendor_scripts: &'a [String],
+}
+
+#[derive(Template)]
+#[template(path = "fragments/about.html")]
+pub struct AboutPeek<'a> {
+    pub oob: bool,
     pub runtime_paths: &'a [runtime::PathRow],
+    pub source: &'a AboutSource,
+    pub project_href: &'a str,
+    pub project_release_href: &'a str,
+    pub project_version: &'static str,
+}
+
+pub struct AboutSource {
+    pub label: &'static str,
+    pub value: String,
+    pub href: Option<String>,
+    pub title: String,
 }
 
 #[derive(Template)]
@@ -136,6 +151,10 @@ pub struct ContentSearchRow {
 }
 
 pub fn base(p: PageShell) -> Result<String> {
+    Ok(p.render()?)
+}
+
+pub fn about(p: AboutPeek) -> Result<String> {
     Ok(p.render()?)
 }
 
