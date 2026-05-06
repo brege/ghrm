@@ -63,15 +63,6 @@ pub fn relative_time(epoch: Option<u64>) -> String {
     plural(amount, unit)
 }
 
-pub fn shorten_path(path: &str, depth: usize) -> String {
-    let parts = path.split('/').collect::<Vec<_>>();
-    if depth == 0 || parts.len() <= depth {
-        return path.to_string();
-    }
-    let start = parts.len() - depth;
-    format!(".../{}", parts[start..].join("/"))
-}
-
 fn parse(output: &str, churn_limit: usize) -> History {
     let mut authors = HashMap::<Signature, usize>::new();
     let mut churn = HashMap::<String, usize>::new();
@@ -191,10 +182,5 @@ mod tests {
         assert_eq!(history.churn_limit, 1);
         assert_eq!(history.churn.len(), 1);
         assert_eq!(history.churn[0].path, "src/lib.rs");
-    }
-
-    #[test]
-    fn shortens_deep_paths() {
-        assert_eq!(shorten_path("a/b/c/d.rs", 2), ".../c/d.rs");
     }
 }

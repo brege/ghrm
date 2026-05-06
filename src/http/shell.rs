@@ -25,7 +25,7 @@ pub(crate) fn full_page(
         &r.title
     };
     let stats = AboutStats::default();
-    let about = about::html(runtime_paths, &stats, false, false);
+    let about = about::html(runtime_paths, &stats, false);
     let source = source_html(&source);
     let assets = vendor::plan(r);
     let shell = PageShell {
@@ -51,16 +51,9 @@ pub(crate) fn full_page(
     res
 }
 
-pub(crate) fn fragment(
-    body: &str,
-    title: &str,
-    source: SourceState,
-    runtime_paths: &runtime::Paths,
-) -> Response {
+pub(crate) fn fragment(body: &str, title: &str, source: SourceState) -> Response {
     let source_oob = source_oob_html(&source);
-    let stats = AboutStats::default();
-    let about_oob = about::html(runtime_paths, &stats, true, false);
-    let html = format!("{body}{source_oob}{about_oob}");
+    let html = format!("{body}{source_oob}");
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -149,12 +142,6 @@ fn not_found() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::TempDir;
-
-    fn test_runtime_paths() -> runtime::Paths {
-        let td = TempDir::new("ghrm-shell-runtime-paths");
-        runtime::Paths::new(td.path(), None).unwrap()
-    }
 
     #[test]
     fn web_source_displays_configured_remote() {
@@ -196,16 +183,14 @@ mod tests {
 
     #[test]
     fn fragment_response_varies_on_hx_request() {
-        let runtime_paths = test_runtime_paths();
-        let response = fragment("body", "Test", SourceState::NoRepo, &runtime_paths);
+        let response = fragment("body", "Test", SourceState::NoRepo);
         assert_eq!(response.headers().get(header::VARY).unwrap(), "HX-Request");
         assert_eq!(response.headers().get("HX-Title").unwrap(), "Test");
     }
 
     #[test]
     fn fragment_response_encodes_title_header() {
-        let runtime_paths = test_runtime_paths();
-        let response = fragment("body", "Test Title\nλ", SourceState::NoRepo, &runtime_paths);
+        let response = fragment("body", "Test Title\nλ", SourceState::NoRepo);
         assert_eq!(
             response.headers().get("HX-Title").unwrap(),
             "Test%20Title%0A%CE%BB"

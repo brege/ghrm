@@ -20,7 +20,6 @@ pub struct PageShell<'a> {
 #[derive(Template)]
 #[template(path = "fragments/about.html")]
 pub struct AboutPeek<'a> {
-    pub oob: bool,
     pub runtime_paths: &'a [runtime::PathRow],
     pub stats_loaded: bool,
     pub stats: &'a AboutStats,

@@ -27,10 +27,11 @@ pub(crate) struct AboutQuery {
 pub(crate) async fn show(State(s): State<AppState>, Query(q): Query<AboutQuery>) -> Response {
     let stats_path = about_path(&s, q.path.as_deref());
     let source = s.repos.source_for(&stats_path);
+    let stats_input = stats_input_path(&stats_path);
     let stats_cfg = s.stats.clone();
     let stats = if stats_cfg.enabled {
         tokio::task::spawn_blocking(move || {
-            ghrm_stat::resolve_with_config(&stats_path, stats_cfg)
+            ghrm_stat::resolve_with_config(&stats_input, stats_cfg)
                 .map(|report| stats_model(report, &source))
                 .unwrap_or_default()
         })
@@ -40,19 +41,17 @@ pub(crate) async fn show(State(s): State<AppState>, Query(q): Query<AboutQuery>)
         AboutStats::default()
     };
 
-    html_response(&html(&s.runtime_paths, &stats, false, true))
+    html_response(&html(&s.runtime_paths, &stats, true))
 }
 
 pub(crate) fn html(
     runtime_paths: &runtime::Paths,
     stats: &AboutStats,
-    oob: bool,
     stats_loaded: bool,
 ) -> String {
     let project_version = env!("CARGO_PKG_VERSION");
     let project_release_href = format!("{PROJECT_URL}/releases/tag/v{project_version}");
     let about = AboutPeek {
-        oob,
         runtime_paths: runtime_paths.rows(),
         stats_loaded,
         stats,
@@ -81,6 +80,13 @@ fn about_path(s: &AppState, raw_path: Option<&str>) -> PathBuf {
             .map(|rel| s.target.join(rel))
             .unwrap_or_else(|| s.target.clone()),
     }
+}
+
+fn stats_input_path(path: &std::path::Path) -> PathBuf {
+    if path.is_file() {
+        return path.parent().unwrap_or(path).to_path_buf();
+    }
+    path.to_path_buf()
 }
 
 fn html_response(html: &str) -> Response {
@@ -311,6 +317,7 @@ fn forge_icon(value: &str) -> &'static str {
 mod tests {
     use super::*;
     use crate::testutil::TempDir;
+    use std::fs;
 
     fn test_runtime_paths() -> runtime::Paths {
         let td = TempDir::new("ghrm-about-runtime-paths");
@@ -321,7 +328,7 @@ mod tests {
     fn about_html_renders_runtime_and_app_links() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, false, false);
+        let html = html(&runtime_paths, &stats, false);
 
         assert!(html.contains("Runtime Paths"));
         assert!(html.contains("href=\"https://github.com/brege/ghrm\""));
@@ -333,19 +340,18 @@ mod tests {
     fn about_html_omits_current_source() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, false, false);
+        let html = html(&runtime_paths, &stats, false);
 
         assert!(!html.contains("Current Source"));
     }
 
     #[test]
-    fn about_oob_includes_swap_attribute() {
-        let runtime_paths = test_runtime_paths();
-        let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, true, false);
+    fn stats_input_path_uses_parent_for_files() {
+        let td = TempDir::new("ghrm-about-stats-input");
+        let file = td.path().join("README.md");
+        fs::write(&file, "# title\n").unwrap();
 
-        assert!(html.contains("id=\"ghrm-about-peek\""));
-        assert!(html.contains("hx-swap-oob=\"true\""));
+        assert_eq!(stats_input_path(&file), td.path());
     }
 
     #[test]
@@ -368,7 +374,7 @@ mod tests {
                 title: "Rust 60.0%".to_string(),
             }],
         };
-        let html = html(&runtime_paths, &stats, false, true);
+        let html = html(&runtime_paths, &stats, true);
 
         assert!(html.contains("About"));
         assert!(html.contains("Languages"));

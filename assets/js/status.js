@@ -3,20 +3,46 @@ let connected = false;
 let peekOpen = false;
 let detailsOpen = false;
 
+function holdPeekHeight(peek, path) {
+  if (!peekOpen || peek.hidden) {
+    return 0;
+  }
+  const height = Math.ceil(peek.getBoundingClientRect().height);
+  if (height <= 0) {
+    return 0;
+  }
+  peek.style.minHeight = `${height}px`;
+  peek.dataset.heightHold = path;
+  return height;
+}
+
+function releasePeekHeight(peek, path) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (peek.dataset.heightHold !== path) {
+        return;
+      }
+      delete peek.dataset.heightHold;
+      peek.style.minHeight = '';
+    });
+  });
+}
+
 async function loadAboutPeek() {
   const peek = document.getElementById('ghrm-about-peek');
+  const path = window.location.pathname || '/';
   if (
     !peek ||
-    peek.dataset.statsLoaded === 'true' ||
-    peek.dataset.statsLoading === 'true'
+    (peek.dataset.statsLoaded === 'true' && peek.dataset.statsPath === path) ||
+    peek.dataset.statsLoading === path
   ) {
     return;
   }
 
-  peek.dataset.statsLoading = 'true';
+  peek.dataset.statsLoading = path;
+  const heldHeight = holdPeekHeight(peek, path);
   beginActivity();
   try {
-    const path = window.location.pathname || '/';
     const response = await fetch(
       `/_ghrm/about?path=${encodeURIComponent(path)}`,
       {
@@ -32,12 +58,23 @@ async function loadAboutPeek() {
     if (next?.id !== 'ghrm-about-peek') {
       return;
     }
+    if ((window.location.pathname || '/') !== path) {
+      return;
+    }
     next.hidden = !peekOpen;
+    next.dataset.statsPath = path;
+    if (heldHeight > 0) {
+      next.style.minHeight = `${heldHeight}px`;
+      next.dataset.heightHold = path;
+    }
     peek.replaceWith(next);
   } finally {
     const current = document.getElementById('ghrm-about-peek');
-    if (current?.dataset.statsLoaded !== 'true') {
-      delete current?.dataset.statsLoading;
+    if (current?.dataset.statsLoading === path) {
+      delete current.dataset.statsLoading;
+    }
+    if (current && heldHeight > 0) {
+      releasePeekHeight(current, path);
     }
     endActivity();
     sync();
