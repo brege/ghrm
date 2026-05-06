@@ -1,18 +1,6 @@
 <section id="ghrm-about-peek" class="ghrm-about-peek"{% if oob %} hx-swap-oob="true"{% endif %} hidden>
   <div class="ghrm-about-peek-inner">
     <div class="ghrm-about-main">
-      <div class="ghrm-about-source" aria-label="Current source">
-        <div class="ghrm-about-heading">Current Source</div>
-        <dl>
-          <div class="ghrm-about-source-row">
-            <dt>{{ source.label }}</dt>
-            <dd title="{{ source.title }}">
-{% if let Some(href) = source.href %}            <a href="{{ href }}" target="_blank" rel="noopener noreferrer">{{ source.value }}</a>
-{% else %}            <span>{{ source.value }}</span>
-{% endif %}            </dd>
-          </div>
-        </dl>
-      </div>
       <div class="ghrm-runtime-paths" aria-label="Runtime paths">
         <div class="ghrm-about-heading">Runtime Paths</div>
         <dl>

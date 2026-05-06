@@ -22,17 +22,9 @@ pub struct PageShell<'a> {
 pub struct AboutPeek<'a> {
     pub oob: bool,
     pub runtime_paths: &'a [runtime::PathRow],
-    pub source: &'a AboutSource,
     pub project_href: &'a str,
     pub project_release_href: &'a str,
     pub project_version: &'static str,
-}
-
-pub struct AboutSource {
-    pub label: &'static str,
-    pub value: String,
-    pub href: Option<String>,
-    pub title: String,
 }
 
 #[derive(Template)]
