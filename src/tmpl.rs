@@ -20,18 +20,40 @@ pub struct PageShell<'a> {
 #[derive(Template)]
 #[template(path = "fragments/about.html")]
 pub struct AboutPeek<'a> {
-    pub oob: bool,
     pub runtime_paths: &'a [runtime::PathRow],
-    pub source: &'a AboutSource,
+    pub stats_loaded: bool,
+    pub stats: &'a AboutStats,
     pub project_href: &'a str,
     pub project_release_href: &'a str,
     pub project_version: &'static str,
 }
 
-pub struct AboutSource {
-    pub label: &'static str,
+#[derive(Default)]
+pub struct AboutStats {
+    pub metadata: Vec<AboutStatRow>,
+    pub stats: Vec<AboutStatRow>,
+    pub languages: Vec<AboutLanguage>,
+}
+
+pub struct AboutStatRow {
+    pub label: String,
     pub value: String,
-    pub href: Option<String>,
+    pub icon: &'static str,
+    pub href: String,
+    pub items: Vec<AboutStatItem>,
+}
+
+pub struct AboutStatItem {
+    pub label: String,
+    pub value: String,
+    pub href: String,
+}
+
+pub struct AboutLanguage {
+    pub name: String,
+    pub value: String,
+    pub color: String,
+    pub style: String,
     pub title: String,
 }
 

@@ -1,4 +1,6 @@
 /target/
+ghrm-stat/target/
+bench/data/snapshots/
 assets/vendor/
 bench/.asv/
 bench/.home/

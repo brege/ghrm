@@ -103,6 +103,7 @@ cargo uninstall ghrm
 - [fd](https://github.com/sharkdp/fd)
 - [ripgrep](https://github.com/BurntSushi/ripgrep)
 - [tokei](https://github.com/XAMPPRocky/tokei)
+- [onefetch](https://github.com/o2sh/onefetch)
 
 ## Reference
 

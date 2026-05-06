@@ -129,10 +129,11 @@ fn empty(max_rows: usize) -> Rows {
 fn visit_tree_rows(spec: &TreeSpec<'_>, needle: &str, mut visit: impl FnMut(Row)) {
     let prefix = (!spec.current_path.is_empty()).then(|| format!("{}/", spec.current_path));
     for (dir, nav_dir) in &spec.tree.dirs {
-        if let Some(prefix) = &prefix {
-            if dir != spec.current_path && !dir.starts_with(prefix) {
-                continue;
-            }
+        if let Some(prefix) = &prefix
+            && dir != spec.current_path
+            && !dir.starts_with(prefix)
+        {
+            continue;
         }
 
         let rel_dir = if dir == spec.current_path {

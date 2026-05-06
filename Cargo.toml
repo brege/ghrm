@@ -2,7 +2,7 @@
 name = "ghrm"
 version = "0.4.3"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "Fast local GitHub-flavored Markdown and repository browser"
 license = "GPL-3.0-only"
 repository = "https://github.com/brege/ghrm"
@@ -22,6 +22,8 @@ include = [
   "assets/templates/**",
   "build.rs",
   "config.example.toml",
+  "ghrm-stat/Cargo.toml",
+  "ghrm-stat/src/**",
   "lua/**",
   "smoke/**",
   "src/**",
@@ -64,6 +66,7 @@ askama = "0.12"
 hmac = "0.12"
 percent-encoding = "2"
 sha2 = "0.10"
+ghrm-stat = { version = "0.1.0", path = "ghrm-stat" }
 
 [profile.release]
 lto = "thin"

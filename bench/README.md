@@ -2,6 +2,12 @@
 
 This directory contains the [ASV](https://asv.readthedocs.io/en/latest/) (airspeed velocity) contract for ghrm benchmarks.
 
+## Benchmark Types
+
+ASV benchmarks in `bench/benchmarks/` are commit-history contracts. They build selected ghrm commits, run against deterministic fixtures, and record results that can be compared over time.
+
+Snapshot scripts in `bench/scripts/` are current-tree comparisons. They may bootstrap real reference repositories, compare ghrm-adjacent tools against outside tools, and write JSONL captures under `bench/data/snapshots/`. These outputs are ignored by default and should only be promoted when a specific result needs to be preserved.
+
 ## Post-commit check
 
 This is the general two-command workflow for running benchmarks after a commit.

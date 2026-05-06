@@ -1,18 +1,59 @@
-<section id="ghrm-about-peek" class="ghrm-about-peek"{% if oob %} hx-swap-oob="true"{% endif %} hidden>
+<section id="ghrm-about-peek" class="ghrm-about-peek" data-stats-loaded="{% if stats_loaded %}true{% else %}false{% endif %}" hidden>
   <div class="ghrm-about-peek-inner">
-    <div class="ghrm-about-main">
-      <div class="ghrm-about-source" aria-label="Current source">
-        <div class="ghrm-about-heading">Current Source</div>
-        <dl>
-          <div class="ghrm-about-source-row">
-            <dt>{{ source.label }}</dt>
-            <dd title="{{ source.title }}">
-{% if let Some(href) = source.href %}            <a href="{{ href }}" target="_blank" rel="noopener noreferrer">{{ source.value }}</a>
-{% else %}            <span>{{ source.value }}</span>
-{% endif %}            </dd>
+    <div class="ghrm-about-summary">
+      <div class="ghrm-about-main">
+{% if !stats.metadata.is_empty() %}        <div class="ghrm-about-stats" aria-label="Repository metadata">
+          <div class="ghrm-about-heading">About</div>
+          <dl class="ghrm-stat-list">
+{% for row in stats.metadata %}            <div class="ghrm-stat-row">
+              <dt>{% if !row.icon.is_empty() %}<svg aria-hidden="true"><use href="#{{ row.icon }}"></use></svg>{% endif %}<span>{{ row.label }}</span></dt>
+              <dd title="{{ row.value }}">
+{% if !row.items.is_empty() %}                <dl class="ghrm-stat-sublist">
+{% for item in row.items %}                  <div>
+                    <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
+                    <dd>{{ item.value }}</dd>
+                  </div>
+{% endfor %}                </dl>
+{% else %}{% if !row.href.is_empty() %}                <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
+{% else %}                {{ row.value }}
+{% endif %}{% endif %}              </dd>
+            </div>
+{% endfor %}          </dl>
+        </div>
+{% endif %}
+{% if !stats.languages.is_empty() %}        <div class="ghrm-languages" aria-label="Languages">
+          <div class="ghrm-about-heading">Languages</div>
+          <div class="ghrm-lang-bar" aria-hidden="true">
+{% for lang in stats.languages %}            <span title="{{ lang.title }}" style="{{ lang.style }}"></span>
+{% endfor %}          </div>
+          <dl class="ghrm-lang-list">
+{% for lang in stats.languages %}            <div class="ghrm-lang-row">
+              <dt><span class="ghrm-lang-dot" style="--ghrm-lang-color: {{ lang.color }}"></span><span>{{ lang.name }}</span></dt>
+              <dd>{{ lang.value }}</dd>
+            </div>
+{% endfor %}          </dl>
+        </div>
+{% endif %}      </div>
+{% if !stats.stats.is_empty() %}      <div class="ghrm-about-stats ghrm-repo-stats" aria-label="Repository stats">
+        <div class="ghrm-about-heading">Stats</div>
+        <dl class="ghrm-stat-list">
+{% for row in stats.stats %}          <div class="ghrm-stat-row">
+            <dt>{% if !row.icon.is_empty() %}<svg aria-hidden="true"><use href="#{{ row.icon }}"></use></svg>{% endif %}<span>{{ row.label }}</span></dt>
+            <dd title="{{ row.value }}">
+{% if !row.items.is_empty() %}              <dl class="ghrm-stat-sublist">
+{% for item in row.items %}                <div>
+                  <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
+                  <dd>{{ item.value }}</dd>
+                </div>
+{% endfor %}              </dl>
+{% else %}{% if !row.href.is_empty() %}              <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
+{% else %}              {{ row.value }}
+{% endif %}{% endif %}            </dd>
           </div>
-        </dl>
+{% endfor %}        </dl>
       </div>
+{% endif %}    </div>
+    <div class="ghrm-about-details" aria-label="ghrm details">
       <div class="ghrm-runtime-paths" aria-label="Runtime paths">
         <div class="ghrm-about-heading">Runtime Paths</div>
         <dl>
@@ -22,24 +63,26 @@
           </div>
 {% endfor %}        </dl>
       </div>
-    </div>
-    <div class="ghrm-about-app" aria-label="ghrm app">
-      <img class="ghrm-about-stamp" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">
-      <div class="ghrm-about-heading">ghrm</div>
-      <div class="ghrm-about-links">
-        <a class="ghrm-about-project" href="{{ project_href }}" target="_blank" rel="noopener noreferrer">
-          <svg aria-hidden="true">
-            <use href="#ghrm-icon-github"></use>
-          </svg>
-          <span>brege/ghrm</span>
-        </a>
-        <a class="ghrm-about-project" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer">
-          <svg aria-hidden="true">
-            <use href="#ghrm-icon-fork"></use>
-          </svg>
-          <span>v{{ project_version }}</span>
-        </a>
+      <div class="ghrm-about-app" aria-label="ghrm app">
+        <div class="ghrm-about-heading">ghrm</div>
+        <div class="ghrm-about-links">
+          <a class="ghrm-about-project" href="{{ project_href }}" target="_blank" rel="noopener noreferrer">
+            <svg aria-hidden="true">
+              <use href="#ghrm-icon-github"></use>
+            </svg>
+            <span>brege/ghrm</span>
+          </a>
+          <a class="ghrm-about-project" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer">
+            <svg aria-hidden="true">
+              <use href="#ghrm-icon-fork"></use>
+            </svg>
+            <span>v{{ project_version }}</span>
+          </a>
+        </div>
       </div>
     </div>
+    <button class="ghrm-about-stamp-button" type="button" aria-label="Toggle ghrm details" aria-expanded="false">
+      <img class="ghrm-about-stamp" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">
+    </button>
   </div>
 </section>

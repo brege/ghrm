@@ -1,8 +1,8 @@
-use crate::http::vendor;
+use crate::http::{about, vendor};
 use crate::render::Rendered;
 use crate::repo::SourceState;
 use crate::runtime;
-use crate::tmpl::{self, AboutPeek, AboutSource, PageShell};
+use crate::tmpl::{self, AboutStats, PageShell};
 
 use axum::{
     body::Body,
@@ -11,8 +11,6 @@ use axum::{
 };
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use tracing::warn;
-
-pub(crate) const PROJECT_URL: &str = "https://github.com/brege/ghrm";
 
 pub(crate) fn full_page(
     r: &Rendered,
@@ -26,7 +24,8 @@ pub(crate) fn full_page(
     } else {
         &r.title
     };
-    let about = about_html(&source, runtime_paths, false);
+    let stats = AboutStats::default();
+    let about = about::html(runtime_paths, &stats, false);
     let source = source_html(&source);
     let assets = vendor::plan(r);
     let shell = PageShell {
@@ -52,15 +51,9 @@ pub(crate) fn full_page(
     res
 }
 
-pub(crate) fn fragment(
-    body: &str,
-    title: &str,
-    source: SourceState,
-    runtime_paths: &runtime::Paths,
-) -> Response {
+pub(crate) fn fragment(body: &str, title: &str, source: SourceState) -> Response {
     let source_oob = source_oob_html(&source);
-    let about_oob = about_html(&source, runtime_paths, true);
-    let html = format!("{body}{source_oob}{about_oob}");
+    let html = format!("{body}{source_oob}");
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -89,56 +82,6 @@ pub(crate) fn source_html(source: &SourceState) -> String {
 
 pub(crate) fn source_oob_html(source: &SourceState) -> String {
     source_html_inner(source, true)
-}
-
-fn about_html(source: &SourceState, runtime_paths: &runtime::Paths, oob: bool) -> String {
-    let project_version = env!("CARGO_PKG_VERSION");
-    let project_release_href = format!("{PROJECT_URL}/releases/tag/v{project_version}");
-    let source = about_source(source);
-    let about = AboutPeek {
-        oob,
-        runtime_paths: runtime_paths.rows(),
-        source: &source,
-        project_href: PROJECT_URL,
-        project_release_href: &project_release_href,
-        project_version,
-    };
-    match tmpl::about(about) {
-        Ok(html) => html,
-        Err(e) => {
-            warn!("about template error: {}", e);
-            String::new()
-        }
-    }
-}
-
-fn about_source(source: &SourceState) -> AboutSource {
-    match source {
-        SourceState::Web { url, raw, .. } => AboutSource {
-            label: "remote",
-            value: raw.clone(),
-            href: Some(url.clone()),
-            title: format!("Open source remote: {url}"),
-        },
-        SourceState::Transport { raw } => AboutSource {
-            label: "remote",
-            value: raw.clone(),
-            href: None,
-            title: format!("Transport-only remote: {raw}"),
-        },
-        SourceState::NoRemote => AboutSource {
-            label: "source",
-            value: "git repo / no remote".to_string(),
-            href: None,
-            title: "Git repository has no remote".to_string(),
-        },
-        SourceState::NoRepo => AboutSource {
-            label: "source",
-            value: "local path".to_string(),
-            href: None,
-            title: "Local path".to_string(),
-        },
-    }
 }
 
 fn source_html_inner(source: &SourceState, oob: bool) -> String {
@@ -199,12 +142,6 @@ fn not_found() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::TempDir;
-
-    fn test_runtime_paths() -> runtime::Paths {
-        let td = TempDir::new("ghrm-shell-runtime-paths");
-        runtime::Paths::new(td.path(), None).unwrap()
-    }
 
     #[test]
     fn web_source_displays_configured_remote() {
@@ -245,42 +182,15 @@ mod tests {
     }
 
     #[test]
-    fn about_html_renders_current_source() {
-        let runtime_paths = test_runtime_paths();
-        let html = about_html(
-            &SourceState::Web {
-                url: "https://github.com/brege/ghrm".to_string(),
-                raw: "git@github.com:brege/ghrm.git".to_string(),
-                forge: crate::repo::Forge::GitHub,
-            },
-            &runtime_paths,
-            false,
-        );
-        assert!(html.contains("Current Source"));
-        assert!(html.contains(">git@github.com:brege/ghrm.git</a>"));
-        assert!(html.contains(">brege/ghrm</span>"));
-    }
-
-    #[test]
-    fn about_oob_includes_swap_attribute() {
-        let runtime_paths = test_runtime_paths();
-        let html = about_html(&SourceState::NoRepo, &runtime_paths, true);
-        assert!(html.contains("id=\"ghrm-about-peek\""));
-        assert!(html.contains("hx-swap-oob=\"true\""));
-    }
-
-    #[test]
     fn fragment_response_varies_on_hx_request() {
-        let runtime_paths = test_runtime_paths();
-        let response = fragment("body", "Test", SourceState::NoRepo, &runtime_paths);
+        let response = fragment("body", "Test", SourceState::NoRepo);
         assert_eq!(response.headers().get(header::VARY).unwrap(), "HX-Request");
         assert_eq!(response.headers().get("HX-Title").unwrap(), "Test");
     }
 
     #[test]
     fn fragment_response_encodes_title_header() {
-        let runtime_paths = test_runtime_paths();
-        let response = fragment("body", "Test Title\nλ", SourceState::NoRepo, &runtime_paths);
+        let response = fragment("body", "Test Title\nλ", SourceState::NoRepo);
         assert_eq!(
             response.headers().get("HX-Title").unwrap(),
             "Test%20Title%0A%CE%BB"

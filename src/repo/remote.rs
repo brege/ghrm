@@ -82,14 +82,14 @@ fn classify_remote(raw: &str) -> SourceState {
         };
     }
 
-    if let Some((host, path)) = parse_scp_remote(raw) {
-        if let Some(url) = scp_web_url(host, path) {
-            return SourceState::Web {
-                url,
-                raw: raw.to_string(),
-                forge: forge_for_host(host),
-            };
-        }
+    if let Some((host, path)) = parse_scp_remote(raw)
+        && let Some(url) = scp_web_url(host, path)
+    {
+        return SourceState::Web {
+            url,
+            raw: raw.to_string(),
+            forge: forge_for_host(host),
+        };
     }
 
     SourceState::Transport {

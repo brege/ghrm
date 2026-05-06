@@ -21,6 +21,8 @@ pub struct Config {
     pub explorer: ExplorerConfig,
     #[serde(default)]
     pub auth: AuthConfig,
+    #[serde(default)]
+    pub stats: StatsConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -98,6 +100,67 @@ pub struct AuthConfig {
     pub username: Option<String>,
     pub password: Option<String>,
     pub password_hash: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StatsConfig {
+    pub enabled: Option<bool>,
+    pub tools: Option<Vec<ghrm_stat::Tool>>,
+    pub max_languages: Option<usize>,
+    pub max_authors: Option<usize>,
+    pub max_churn: Option<usize>,
+    pub churn_limit: Option<usize>,
+    pub include_hidden: Option<bool>,
+}
+
+impl StatsConfig {
+    pub(crate) fn resolve(self) -> ghrm_stat::Config {
+        let mut stats = ghrm_stat::Config {
+            tools: default_stats_tools(),
+            ..ghrm_stat::Config::default()
+        };
+        if let Some(enabled) = self.enabled {
+            stats.enabled = enabled;
+        }
+        if let Some(tools) = self.tools {
+            stats.tools = tools;
+        }
+        if let Some(max_languages) = self.max_languages {
+            stats.max_languages = max_languages;
+        }
+        if let Some(max_authors) = self.max_authors {
+            stats.max_authors = max_authors;
+        }
+        if let Some(max_churn) = self.max_churn {
+            stats.max_churn = max_churn;
+        }
+        if let Some(churn_limit) = self.churn_limit {
+            stats.churn_limit = churn_limit;
+        }
+        if let Some(include_hidden) = self.include_hidden {
+            stats.include_hidden = include_hidden;
+        }
+        stats
+    }
+}
+
+fn default_stats_tools() -> Vec<ghrm_stat::Tool> {
+    vec![
+        ghrm_stat::Tool::Project,
+        ghrm_stat::Tool::Version,
+        ghrm_stat::Tool::License,
+        ghrm_stat::Tool::Url,
+        ghrm_stat::Tool::Head,
+        ghrm_stat::Tool::LastChange,
+        ghrm_stat::Tool::Authors,
+        ghrm_stat::Tool::Commits,
+        ghrm_stat::Tool::Dependencies,
+        ghrm_stat::Tool::Churn,
+        ghrm_stat::Tool::Size,
+        ghrm_stat::Tool::Loc,
+        ghrm_stat::Tool::Languages,
+    ]
 }
 
 pub fn default_exclude_names() -> Vec<String> {
@@ -269,5 +332,47 @@ mod tests {
         .to_string();
 
         assert!(err.contains("unknown explorer column `bogus`"));
+    }
+
+    #[test]
+    fn parses_stats_config() {
+        let config: Config = toml::from_str(
+            r#"
+                [stats]
+                enabled = true
+                tools = ["project", "languages", "size"]
+                max_languages = 4
+                max_authors = 2
+                max_churn = 5
+                churn_limit = 20
+                include_hidden = true
+            "#,
+        )
+        .unwrap();
+        let stats = config.stats.resolve();
+
+        assert!(stats.enabled);
+        assert_eq!(
+            stats.tools,
+            vec![
+                ghrm_stat::Tool::Project,
+                ghrm_stat::Tool::Languages,
+                ghrm_stat::Tool::Size
+            ]
+        );
+        assert_eq!(stats.max_languages, 4);
+        assert_eq!(stats.max_authors, 2);
+        assert_eq!(stats.max_churn, 5);
+        assert_eq!(stats.churn_limit, 20);
+        assert!(stats.include_hidden);
+    }
+
+    #[test]
+    fn default_stats_config_uses_about_pane_tools() {
+        let stats = StatsConfig::default().resolve();
+
+        assert_eq!(stats.tools, default_stats_tools());
+        assert!(!stats.tools.contains(&ghrm_stat::Tool::Title));
+        assert!(!stats.tools.contains(&ghrm_stat::Tool::Description));
     }
 }

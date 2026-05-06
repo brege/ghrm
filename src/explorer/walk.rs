@@ -281,10 +281,10 @@ impl NavSet {
     ) -> Arc<NavTree> {
         let load_lines = load_lines || sort == Sort::Lines;
         let key = tree_cache_key(opts, sort, dir, load_lines);
-        if matcher.is_none() {
-            if let Some(tree) = self.trees.lock().unwrap().get(&key).cloned() {
-                return tree;
-            }
+        if matcher.is_none()
+            && let Some(tree) = self.trees.lock().unwrap().get(&key).cloned()
+        {
+            return tree;
         }
         let tree = Arc::new(build_tree(
             &self.snapshot,

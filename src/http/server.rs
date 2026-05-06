@@ -2,7 +2,7 @@ use crate::explorer;
 use crate::explorer::view::{ViewConfig, ViewQuery, ViewState};
 use crate::explorer::walk::{NavSet, ViewOpts};
 use crate::explorer::{column, crumbs, filter, view, walk, watch};
-use crate::http::{api, auth, delivery, shell, vendor};
+use crate::http::{about, api, auth, delivery, shell, vendor};
 use crate::render::{self, Rendered};
 use crate::repo::RepoSet;
 use crate::runtime;
@@ -44,6 +44,7 @@ pub struct AppState {
     pub search_max_rows: usize,
     pub home: Option<PathBuf>,
     pub runtime_paths: runtime::Paths,
+    pub stats: ghrm_stat::Config,
     pub auth: Option<Arc<auth::AuthState>>,
 }
 
@@ -107,6 +108,7 @@ pub struct Options {
     pub no_excludes: bool,
     pub search_max_rows: usize,
     pub config_path: Option<PathBuf>,
+    pub stats: ghrm_stat::Config,
     pub auth: Option<auth::AuthConfig>,
 }
 
@@ -126,6 +128,7 @@ pub async fn run(options: Options) -> Result<()> {
         no_excludes,
         search_max_rows,
         config_path,
+        stats,
         auth,
     } = options;
 
@@ -227,6 +230,7 @@ pub async fn run(options: Options) -> Result<()> {
         search_max_rows,
         home: std::env::var_os("HOME").map(PathBuf::from),
         runtime_paths: runtime::Paths::new(&target, config_path.as_deref())?,
+        stats,
         auth,
     };
 
@@ -237,6 +241,7 @@ pub async fn run(options: Options) -> Result<()> {
         .route("/_ghrm/path-search", get(api::path_search))
         .route("/_ghrm/search", get(api::search))
         .route("/_ghrm/render", get(api::render))
+        .route("/_ghrm/about", get(about::show))
         .route("/_ghrm/raw/{*path}", get(delivery::raw_file))
         .route("/_ghrm/html/{*path}", get(delivery::html_file))
         .route("/_ghrm/download/{*path}", get(delivery::download_file))
@@ -572,7 +577,7 @@ async fn render_file(
         &rendered.title
     };
     if hx.is_htmx {
-        return shell::fragment(&body, title, source, &s.runtime_paths);
+        return shell::fragment(&body, title, source);
     }
     shell::full_page(&rendered, &body, source, s.auth.is_some(), &s.runtime_paths)
 }
@@ -656,7 +661,7 @@ async fn render_source_file(
         &rendered.title
     };
     if hx.is_htmx {
-        return shell::fragment(&body, title, source, &s.runtime_paths);
+        return shell::fragment(&body, title, source);
     }
     shell::full_page(&rendered, &body, source, s.auth.is_some(), &s.runtime_paths)
 }
@@ -713,7 +718,7 @@ async fn render_dual_file(
     };
     let source = s.repos.source_for(path);
     if hx.is_htmx {
-        return shell::fragment(&body, &rendered.title, source, &s.runtime_paths);
+        return shell::fragment(&body, &rendered.title, source);
     }
     shell::full_page(&rendered, &body, source, s.auth.is_some(), &s.runtime_paths)
 }

@@ -1,0 +1,25 @@
+[package]
+name = "ghrm-stat"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "GPL-3.0-only"
+publish = false
+
+[[bin]]
+name = "ghrm-stat"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+gix = { version = "0.83", default-features = false, features = [
+  "index",
+  "max-performance-safe",
+  "sha1",
+  "status",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokei = "14"
+toml = "0.8"

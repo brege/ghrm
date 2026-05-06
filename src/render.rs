@@ -547,10 +547,10 @@ fn rewrite_heading_anchors(html: &str) -> String {
         let mut open_tag = at[..=open_end].to_string();
         let (anchor_id, inner) = split_heading_anchor(&at[open_end + 1..close_pos]);
         let id = attr_value(&open_tag, "id").or(anchor_id);
-        if let Some(id_value) = id.as_ref() {
-            if !open_tag.contains(" id=\"") {
-                open_tag.insert_str(open_tag.len() - 1, &format!(r#" id="{id_value}""#));
-            }
+        if let Some(id_value) = id.as_ref()
+            && !open_tag.contains(" id=\"")
+        {
+            open_tag.insert_str(open_tag.len() - 1, &format!(r#" id="{id_value}""#));
         }
         out.push_str(&open_tag);
         out.push_str(inner);
