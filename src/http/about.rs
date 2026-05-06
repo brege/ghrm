@@ -1,3 +1,4 @@
+use crate::explorer::walk;
 use crate::http::server::{AppState, Mode};
 use crate::paths;
 use crate::repo::SourceState;
@@ -11,7 +12,7 @@ use axum::{
     response::Response,
 };
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::warn;
 
 const PROJECT_URL: &str = "https://github.com/brege/ghrm";
@@ -28,11 +29,12 @@ pub(crate) async fn show(State(s): State<AppState>, Query(q): Query<AboutQuery>)
     let stats_path = about_path(&s, q.path.as_deref());
     let source = s.repos.source_for(&stats_path);
     let stats_input = stats_input_path(&stats_path);
+    let served_root = served_root(&s);
     let stats_cfg = s.stats.clone();
     let stats = if stats_cfg.enabled {
         tokio::task::spawn_blocking(move || {
             ghrm_stat::resolve_with_config(&stats_input, stats_cfg)
-                .map(|report| stats_model(report, &source))
+                .map(|report| stats_model(report, &source, &served_root))
                 .unwrap_or_default()
         })
         .await
@@ -89,6 +91,13 @@ fn stats_input_path(path: &std::path::Path) -> PathBuf {
     path.to_path_buf()
 }
 
+fn served_root(s: &AppState) -> PathBuf {
+    match s.mode {
+        Mode::File => s.target.parent().unwrap_or(&s.target).to_path_buf(),
+        Mode::Dir => s.target.clone(),
+    }
+}
+
 fn html_response(html: &str) -> Response {
     Response::builder()
         .status(StatusCode::OK)
@@ -98,8 +107,9 @@ fn html_response(html: &str) -> Response {
         .unwrap()
 }
 
-fn stats_model(report: ghrm_stat::Report, source: &SourceState) -> AboutStats {
+fn stats_model(report: ghrm_stat::Report, source: &SourceState, served_root: &Path) -> AboutStats {
     let mut about = AboutStats::default();
+    let repo_root = report.root.clone();
     for section in report.sections {
         match section.tool {
             ghrm_stat::Tool::Languages => about.languages = language_rows(&section.rows),
@@ -107,12 +117,12 @@ fn stats_model(report: ghrm_stat::Report, source: &SourceState) -> AboutStats {
             | ghrm_stat::Tool::Version
             | ghrm_stat::Tool::License
             | ghrm_stat::Tool::Url => {
-                if let Some(row) = stat_row(section, source) {
+                if let Some(row) = stat_row(section, source, &repo_root, served_root) {
                     about.metadata.push(row);
                 }
             }
             _ => {
-                if let Some(row) = stat_row(section, source) {
+                if let Some(row) = stat_row(section, source, &repo_root, served_root) {
                     about.stats.push(row);
                 }
             }
@@ -137,12 +147,17 @@ fn language_rows(rows: &[ghrm_stat::Row]) -> Vec<AboutLanguage> {
         .collect()
 }
 
-fn stat_row(section: ghrm_stat::Section, source: &SourceState) -> Option<AboutStatRow> {
+fn stat_row(
+    section: ghrm_stat::Section,
+    source: &SourceState,
+    repo_root: &Path,
+    served_root: &Path,
+) -> Option<AboutStatRow> {
     let label = stat_title(section.tool);
     let value = stat_value(section.tool, &section.rows)?;
     let icon = stat_icon(section.tool, &value);
     let href = stat_href(section.tool, &value, source);
-    let items = stat_items(section.tool, &section.rows);
+    let items = stat_items(section.tool, &section.rows, repo_root, served_root);
     Some(AboutStatRow {
         label: label.to_string(),
         value,
@@ -214,7 +229,12 @@ fn pair_list(rows: &[ghrm_stat::Row]) -> Option<String> {
     (!pairs.is_empty()).then(|| pairs.join(", "))
 }
 
-fn stat_items(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Vec<AboutStatItem> {
+fn stat_items(
+    tool: ghrm_stat::Tool,
+    rows: &[ghrm_stat::Row],
+    repo_root: &Path,
+    served_root: &Path,
+) -> Vec<AboutStatItem> {
     if !matches!(tool, ghrm_stat::Tool::Authors | ghrm_stat::Tool::Churn) {
         return Vec::new();
     }
@@ -222,8 +242,29 @@ fn stat_items(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Vec<AboutStatIt
         .map(|row| AboutStatItem {
             label: row.key.clone(),
             value: row.value.clone(),
+            href: stat_item_href(tool, row, repo_root, served_root),
         })
         .collect()
+}
+
+fn stat_item_href(
+    tool: ghrm_stat::Tool,
+    row: &ghrm_stat::Row,
+    repo_root: &Path,
+    served_root: &Path,
+) -> String {
+    if !matches!(tool, ghrm_stat::Tool::Churn) {
+        return String::new();
+    }
+    let path = repo_root.join(&row.key);
+    if !path.is_file() {
+        return String::new();
+    }
+    path.strip_prefix(served_root)
+        .ok()
+        .filter(|rel| !rel.as_os_str().is_empty())
+        .map(walk::file_href)
+        .unwrap_or_default()
 }
 
 fn compact_value(rows: &[ghrm_stat::Row]) -> Option<String> {
@@ -405,7 +446,7 @@ mod tests {
                 ),
             ],
         };
-        let stats = stats_model(report, &SourceState::NoRepo);
+        let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
 
         assert_eq!(stats.metadata[0].label, "Project");
         assert_eq!(stats.metadata[0].value, "ghrm / 1 branch / 7 tags");
@@ -422,13 +463,52 @@ mod tests {
                 vec![ghrm_stat::Row::new("Wyatt Brege", "100% 147")],
             )],
         };
-        let stats = stats_model(report, &SourceState::NoRepo);
+        let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
 
         assert!(stats.metadata.is_empty());
         assert_eq!(stats.stats[0].label, "Authors");
         assert_eq!(stats.stats[0].value, "Wyatt Brege 100% 147");
         assert_eq!(stats.stats[0].items[0].label, "Wyatt Brege");
         assert_eq!(stats.stats[0].items[0].value, "100% 147");
+        assert!(stats.stats[0].items[0].href.is_empty());
+    }
+
+    #[test]
+    fn stats_model_links_churn_paths_under_served_root() {
+        let td = TempDir::new("ghrm-about-churn-links");
+        let file = td.path().join("src/main.rs");
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(&file, "fn main() {}\n").unwrap();
+        let report = ghrm_stat::Report {
+            root: td.path().to_path_buf(),
+            sections: vec![ghrm_stat::Section::new(
+                ghrm_stat::Tool::Churn,
+                vec![ghrm_stat::Row::new("src/main.rs", "7")],
+            )],
+        };
+        let stats = stats_model(report, &SourceState::NoRepo, td.path());
+
+        assert_eq!(stats.stats[0].items[0].label, "src/main.rs");
+        assert_eq!(stats.stats[0].items[0].href, "/src/main.rs");
+    }
+
+    #[test]
+    fn stats_model_omits_churn_links_outside_served_root() {
+        let repo = TempDir::new("ghrm-about-churn-repo");
+        let served = TempDir::new("ghrm-about-churn-served");
+        let file = repo.path().join("src/main.rs");
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(&file, "fn main() {}\n").unwrap();
+        let report = ghrm_stat::Report {
+            root: repo.path().to_path_buf(),
+            sections: vec![ghrm_stat::Section::new(
+                ghrm_stat::Tool::Churn,
+                vec![ghrm_stat::Row::new("src/main.rs", "7")],
+            )],
+        };
+        let stats = stats_model(report, &SourceState::NoRepo, served.path());
+
+        assert!(stats.stats[0].items[0].href.is_empty());
     }
 
     #[test]
@@ -440,7 +520,7 @@ mod tests {
                 vec![ghrm_stat::Row::new("url", "git@gitlab.com:team/repo.git")],
             )],
         };
-        let stats = stats_model(report, &SourceState::NoRepo);
+        let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
 
         assert_eq!(stats.metadata[0].icon, "ghrm-icon-gitlab");
     }
@@ -459,7 +539,7 @@ mod tests {
             raw: "git@github.com:brege/ghrm.git".to_string(),
             forge: crate::repo::Forge::GitHub,
         };
-        let stats = stats_model(report, &source);
+        let stats = stats_model(report, &source, Path::new("/tmp/repo"));
 
         assert_eq!(stats.metadata[0].href, "https://github.com/brege/ghrm");
     }

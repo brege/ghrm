@@ -46,6 +46,7 @@ pub struct AboutStatRow {
 pub struct AboutStatItem {
     pub label: String,
     pub value: String,
+    pub href: String,
 }
 
 pub struct AboutLanguage {

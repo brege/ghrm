@@ -10,7 +10,7 @@
               <dd title="{{ row.value }}">
 {% if !row.items.is_empty() %}                <dl class="ghrm-stat-sublist">
 {% for item in row.items %}                  <div>
-                    <dt>{{ item.label }}</dt>
+                    <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
                     <dd>{{ item.value }}</dd>
                   </div>
 {% endfor %}                </dl>
@@ -42,7 +42,7 @@
             <dd title="{{ row.value }}">
 {% if !row.items.is_empty() %}              <dl class="ghrm-stat-sublist">
 {% for item in row.items %}                <div>
-                  <dt>{{ item.label }}</dt>
+                  <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
                   <dd>{{ item.value }}</dd>
                 </div>
 {% endfor %}              </dl>
