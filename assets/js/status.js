@@ -1,6 +1,7 @@
 let active = 0;
 let connected = false;
 let peekOpen = false;
+let detailsOpen = false;
 
 async function loadAboutPeek() {
   const peek = document.getElementById('ghrm-about-peek');
@@ -47,6 +48,7 @@ function sync() {
   const source = document.getElementById('ghrm-source-slot');
   const button = source?.querySelector('.ghrm-source-badge');
   const peek = document.getElementById('ghrm-about-peek');
+  const detailsButton = peek?.querySelector('.ghrm-about-stamp-button');
 
   if (source) {
     source.classList.toggle('is-active', active > 0);
@@ -57,6 +59,10 @@ function sync() {
   }
   if (peek) {
     peek.hidden = !peekOpen;
+    peek.classList.toggle('is-details-open', detailsOpen);
+  }
+  if (detailsButton) {
+    detailsButton.setAttribute('aria-expanded', detailsOpen ? 'true' : 'false');
   }
   document.body?.classList.toggle('ghrm-about-open', peekOpen);
 }
@@ -85,6 +91,13 @@ export function syncServerStatus() {
 
 export function setupStatusPeek() {
   document.addEventListener('click', (event) => {
+    if (event.target.closest('.ghrm-about-stamp-button')) {
+      event.preventDefault();
+      detailsOpen = !detailsOpen;
+      sync();
+      return;
+    }
+
     if (!event.target.closest('.ghrm-source-badge')) return;
     event.preventDefault();
     peekOpen = !peekOpen;

@@ -148,19 +148,18 @@ impl StatsConfig {
 fn default_stats_tools() -> Vec<ghrm_stat::Tool> {
     vec![
         ghrm_stat::Tool::Project,
-        ghrm_stat::Tool::Head,
-        ghrm_stat::Tool::Pending,
         ghrm_stat::Tool::Version,
-        ghrm_stat::Tool::Languages,
-        ghrm_stat::Tool::Dependencies,
-        ghrm_stat::Tool::Authors,
-        ghrm_stat::Tool::LastChange,
-        ghrm_stat::Tool::Url,
-        ghrm_stat::Tool::Commits,
-        ghrm_stat::Tool::Churn,
-        ghrm_stat::Tool::Loc,
-        ghrm_stat::Tool::Size,
         ghrm_stat::Tool::License,
+        ghrm_stat::Tool::Url,
+        ghrm_stat::Tool::Head,
+        ghrm_stat::Tool::LastChange,
+        ghrm_stat::Tool::Authors,
+        ghrm_stat::Tool::Commits,
+        ghrm_stat::Tool::Dependencies,
+        ghrm_stat::Tool::Churn,
+        ghrm_stat::Tool::Size,
+        ghrm_stat::Tool::Loc,
+        ghrm_stat::Tool::Languages,
     ]
 }
 

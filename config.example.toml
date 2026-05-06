@@ -39,19 +39,18 @@ max_rows = 1000
 enabled = true
 tools = [
   "project",
-  "head",
-  "pending",
   "version",
-  "languages",
-  "dependencies",
-  "authors",
-  "last-change",
-  "url",
-  "commits",
-  "churn",
-  "loc",
-  "size",
   "license",
+  "url",
+  "head",
+  "last-change",
+  "authors",
+  "commits",
+  "dependencies",
+  "churn",
+  "size",
+  "loc",
+  "languages",
 ]
 max_languages = 6
 max_authors = 3
