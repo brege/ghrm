@@ -3,7 +3,27 @@ use anyhow::Result;
 
 const LIMIT: usize = 6;
 
+pub struct Summary {
+    pub total: usize,
+    languages: Vec<(String, usize)>,
+}
+
 pub fn run(ctx: &Context) -> Result<Vec<Row>> {
+    let summary = summary(ctx)?;
+    let mut rows = Vec::new();
+    for (name, lines) in summary.languages.into_iter().take(LIMIT) {
+        let percent = if summary.total == 0 {
+            0.0
+        } else {
+            lines as f64 / summary.total as f64 * 100.0
+        };
+        rows.push(Row::new(name, format!("{percent:.1}%")));
+    }
+
+    Ok(rows)
+}
+
+pub fn summary(ctx: &Context) -> Result<Summary> {
     let mut languages = tokei::Languages::new();
     let config = tokei::Config {
         hidden: Some(false),
@@ -20,18 +40,10 @@ pub fn run(ctx: &Context) -> Result<Vec<Row>> {
         .collect::<Vec<_>>();
     counts.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
-    let total = counts.iter().map(|(_, lines)| lines).sum::<usize>();
-    let mut rows = vec![Row::new("lines", total.to_string())];
-    for (name, lines) in counts.into_iter().take(LIMIT) {
-        let percent = if total == 0 {
-            0.0
-        } else {
-            lines as f64 / total as f64 * 100.0
-        };
-        rows.push(Row::new(name, format!("{percent:.1}%")));
-    }
-
-    Ok(rows)
+    Ok(Summary {
+        total: counts.iter().map(|(_, lines)| lines).sum::<usize>(),
+        languages: counts,
+    })
 }
 
 fn loc(kind: &tokei::LanguageType, language: &tokei::Language) -> usize {
