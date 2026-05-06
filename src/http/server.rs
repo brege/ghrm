@@ -8,8 +8,7 @@ use crate::repo::RepoSet;
 use crate::runtime;
 use crate::tmpl;
 
-use anyhow::Result;
-use anyhow::anyhow;
+use anyhow::{Context, Result, anyhow};
 use axum::{
     Router,
     body::Body,
@@ -96,6 +95,7 @@ fn native_file_request(headers: &HeaderMap) -> bool {
 pub struct Options {
     pub bind: String,
     pub port: u16,
+    pub exact_port: bool,
     pub open: bool,
     pub target: PathBuf,
     pub use_ignore: bool,
@@ -116,6 +116,7 @@ pub async fn run(options: Options) -> Result<()> {
     let Options {
         bind,
         port,
+        exact_port,
         open,
         target,
         use_ignore,
@@ -267,8 +268,7 @@ pub async fn run(options: Options) -> Result<()> {
             .with_state(state)
     };
 
-    let addr = find_addr(&bind, port).await?;
-    let listener = TcpListener::bind(addr).await?;
+    let listener = bind_listener(&bind, port, exact_port).await?;
     let actual = listener.local_addr()?;
     let url = server_url(&actual);
     info!(%actual, "ghrm listening");
@@ -361,18 +361,31 @@ fn load_lines_for_view(view: &ViewState) -> bool {
         || column::required_meta(&view.columns).contains(column::MetaReq::LINES)
 }
 
-async fn find_addr(bind: &str, start_port: u16) -> Result<SocketAddr> {
-    for port in start_port..start_port.saturating_add(50) {
-        let addr: SocketAddr = format!("{}:{}", bind, port).parse()?;
+async fn bind_listener(bind: &str, start_port: u16, exact_port: bool) -> Result<TcpListener> {
+    if exact_port {
+        let addr = parse_addr(bind, start_port)?;
+        return TcpListener::bind(addr)
+            .await
+            .with_context(|| format!("failed to bind {addr}"));
+    }
+
+    for offset in 0..50 {
+        let Some(port) = start_port.checked_add(offset) else {
+            break;
+        };
+        let addr = parse_addr(bind, port)?;
         match TcpListener::bind(addr).await {
-            Ok(l) => {
-                drop(l);
-                return Ok(addr);
-            }
+            Ok(listener) => return Ok(listener),
             Err(_) => continue,
         }
     }
-    Err(anyhow!("no free port in range"))
+    Err(anyhow!("no free port in range from {bind}:{start_port}"))
+}
+
+fn parse_addr(bind: &str, port: u16) -> Result<SocketAddr> {
+    format!("{bind}:{port}")
+        .parse()
+        .with_context(|| format!("invalid bind address {bind}:{port}"))
 }
 
 fn server_url(addr: &SocketAddr) -> String {
@@ -823,5 +836,23 @@ mod tests {
         headers.insert("HX-Request", "true".parse().unwrap());
         headers.insert("Sec-Fetch-Dest", "image".parse().unwrap());
         assert!(!native_file_request(&headers));
+    }
+
+    #[tokio::test]
+    async fn bind_listener_exact_fails_when_port_is_taken() {
+        let occupied = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = occupied.local_addr().unwrap().port();
+
+        assert!(bind_listener("127.0.0.1", port, true).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn bind_listener_auto_uses_next_free_port() {
+        let occupied = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = occupied.local_addr().unwrap().port();
+
+        let listener = bind_listener("127.0.0.1", port, false).await.unwrap();
+
+        assert_ne!(listener.local_addr().unwrap().port(), port);
     }
 }

@@ -101,6 +101,7 @@ fn main() -> Result<()> {
     let target = cli.target.unwrap_or(std::env::current_dir()?);
     let abs = target.canonicalize()?;
 
+    let exact_port = cli.port.is_some();
     let port = cli.port.or(cfg.port).unwrap_or(1331);
     let bind = cli
         .bind
@@ -166,6 +167,7 @@ fn main() -> Result<()> {
     runtime.block_on(server::run(server::Options {
         bind,
         port,
+        exact_port,
         open,
         target: abs,
         use_ignore: !no_ignore,
