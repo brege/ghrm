@@ -1,13 +1,11 @@
-use crate::{Context, Row, history};
+use crate::{Context, Row, config, history};
 use anyhow::Result;
-
-const LIMIT: usize = 3;
 
 pub fn run(ctx: &Context) -> Result<Vec<Row>> {
     let rows = history(ctx)?
         .authors
         .iter()
-        .take(LIMIT)
+        .take(config(ctx).max_authors)
         .map(|author| {
             Row::new(
                 &author.name,

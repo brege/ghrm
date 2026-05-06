@@ -22,6 +22,10 @@ pub fn run(ctx: &Context) -> Result<Vec<Row>> {
             }
         });
 
+    if added == 0 && deleted == 0 && modified == 0 {
+        return Ok(Vec::new());
+    }
+
     Ok(vec![
         Row::new("added", added.to_string()),
         Row::new("deleted", deleted.to_string()),

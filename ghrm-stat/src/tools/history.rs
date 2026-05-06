@@ -10,6 +10,7 @@ pub struct History {
     pub commits: usize,
     pub authors: Vec<Author>,
     pub churn: Vec<Churn>,
+    pub churn_limit: usize,
     pub first_commit: Option<u64>,
     pub last_commit: Option<u64>,
 }
@@ -34,12 +35,12 @@ struct Signature {
     email: String,
 }
 
-pub fn load(root: &Path) -> Result<History> {
+pub fn load(root: &Path, churn_limit: usize) -> Result<History> {
     let output = git::output(
         root,
         &["log", "--format=%x1e%H%x1f%an%x1f%ae%x1f%ct", "--name-only"],
     )?;
-    Ok(parse(&output))
+    Ok(parse(&output, churn_limit))
 }
 
 pub fn relative_time(epoch: Option<u64>) -> String {
@@ -71,17 +72,23 @@ pub fn shorten_path(path: &str, depth: usize) -> String {
     format!(".../{}", parts[start..].join("/"))
 }
 
-fn parse(output: &str) -> History {
+fn parse(output: &str, churn_limit: usize) -> History {
     let mut authors = HashMap::<Signature, usize>::new();
     let mut churn = HashMap::<String, usize>::new();
     let mut current_paths = HashSet::<String>::new();
     let mut commits = 0;
+    let mut churn_commits = 0;
+    let mut count_churn = false;
     let mut first_commit = None;
     let mut last_commit = None;
 
     for line in output.lines() {
         if let Some(header) = line.strip_prefix('\x1e') {
             current_paths.clear();
+            count_churn = churn_limit == 0 || churn_commits < churn_limit;
+            if count_churn {
+                churn_commits += 1;
+            }
             let mut fields = header.split('\x1f');
             let _hash = fields.next();
             let name = fields.next().unwrap_or_default().to_string();
@@ -97,7 +104,7 @@ fn parse(output: &str) -> History {
             continue;
         }
 
-        if line.is_empty() || !current_paths.insert(line.to_string()) {
+        if !count_churn || line.is_empty() || !current_paths.insert(line.to_string()) {
             continue;
         }
         *churn.entry(line.to_string()).or_insert(0) += 1;
@@ -107,6 +114,11 @@ fn parse(output: &str) -> History {
         commits,
         authors: authors_vec(authors, commits),
         churn: churn_vec(churn),
+        churn_limit: if churn_limit == 0 {
+            churn_commits
+        } else {
+            churn_limit.min(commits)
+        },
         first_commit,
         last_commit,
     }
@@ -158,6 +170,7 @@ mod tests {
     fn parses_authors_and_churn() {
         let history = parse(
             "\x1eabc\x1fA\x1fa@example.com\x1f10\nsrc/lib.rs\n\n\x1edef\x1fA\x1fa@example.com\x1f20\nsrc/lib.rs\nREADME.md\n",
+            30,
         );
 
         assert_eq!(history.commits, 2);
@@ -165,6 +178,19 @@ mod tests {
         assert_eq!(history.churn[0].path, "src/lib.rs");
         assert_eq!(history.first_commit, Some(20));
         assert_eq!(history.last_commit, Some(10));
+    }
+
+    #[test]
+    fn limits_churn_window_without_limiting_commits() {
+        let history = parse(
+            "\x1eabc\x1fA\x1fa@example.com\x1f10\nsrc/lib.rs\n\n\x1edef\x1fA\x1fa@example.com\x1f20\nREADME.md\n",
+            1,
+        );
+
+        assert_eq!(history.commits, 2);
+        assert_eq!(history.churn_limit, 1);
+        assert_eq!(history.churn.len(), 1);
+        assert_eq!(history.churn[0].path, "src/lib.rs");
     }
 
     #[test]

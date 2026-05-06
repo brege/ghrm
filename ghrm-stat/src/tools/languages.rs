@@ -1,7 +1,5 @@
-use crate::{Context, Row};
+use crate::{Context, Row, config};
 use anyhow::Result;
-
-const LIMIT: usize = 6;
 
 pub struct Summary {
     pub total: usize,
@@ -11,7 +9,11 @@ pub struct Summary {
 pub fn run(ctx: &Context) -> Result<Vec<Row>> {
     let summary = summary(ctx)?;
     let mut rows = Vec::new();
-    for (name, lines) in summary.languages.into_iter().take(LIMIT) {
+    for (name, lines) in summary
+        .languages
+        .into_iter()
+        .take(config(ctx).max_languages)
+    {
         let percent = if summary.total == 0 {
             0.0
         } else {
@@ -26,7 +28,7 @@ pub fn run(ctx: &Context) -> Result<Vec<Row>> {
 pub fn summary(ctx: &Context) -> Result<Summary> {
     let mut languages = tokei::Languages::new();
     let config = tokei::Config {
-        hidden: Some(false),
+        hidden: Some(config(ctx).include_hidden),
         ..tokei::Config::default()
     };
     languages.get_statistics(&[&ctx.root], &[], &config);

@@ -26,8 +26,6 @@ ONEFETCH_ARGS = (
     "--no-bold",
     "--true-color",
     "never",
-    "--churn-pool-size",
-    "1000000",
 )
 
 
