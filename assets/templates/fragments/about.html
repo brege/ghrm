@@ -1,4 +1,4 @@
-<section id="ghrm-about-peek" class="ghrm-about-peek"{% if oob %} hx-swap-oob="true"{% endif %} hidden>
+<section id="ghrm-about-peek" class="ghrm-about-peek" data-stats-loaded="{% if stats_loaded %}true{% else %}false{% endif %}"{% if oob %} hx-swap-oob="true"{% endif %} hidden>
   <div class="ghrm-about-peek-inner">
     <div class="ghrm-about-main">
       <div class="ghrm-runtime-paths" aria-label="Runtime paths">
@@ -10,6 +10,16 @@
           </div>
 {% endfor %}        </dl>
       </div>
+{% if !stats.is_empty() %}      <div class="ghrm-about-stats" aria-label="Repository stats">
+        <div class="ghrm-about-heading">Repository Stats</div>
+        <dl class="ghrm-stat-list">
+{% for row in stats %}          <div class="ghrm-stat-row">
+            <dt>{{ row.label }}</dt>
+            <dd title="{{ row.value }}">{{ row.value }}</dd>
+          </div>
+{% endfor %}        </dl>
+      </div>
+{% endif %}
     </div>
     <div class="ghrm-about-app" aria-label="ghrm app">
       <img class="ghrm-about-stamp" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">

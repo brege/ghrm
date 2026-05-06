@@ -24,7 +24,7 @@ pub(crate) fn full_page(
     } else {
         &r.title
     };
-    let about = about::html(runtime_paths, false);
+    let about = about::html(runtime_paths, &[], false, false);
     let source = source_html(&source);
     let assets = vendor::plan(r);
     let shell = PageShell {
@@ -57,7 +57,7 @@ pub(crate) fn fragment(
     runtime_paths: &runtime::Paths,
 ) -> Response {
     let source_oob = source_oob_html(&source);
-    let about_oob = about::html(runtime_paths, true);
+    let about_oob = about::html(runtime_paths, &[], true, false);
     let html = format!("{body}{source_oob}{about_oob}");
     Response::builder()
         .status(StatusCode::OK)

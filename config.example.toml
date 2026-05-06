@@ -34,3 +34,27 @@ globs = ["*.md", "*.mdx", "*.txt", "*.rst"]
 
 [search]
 max_rows = 1000
+
+[stats]
+enabled = true
+tools = [
+  "project",
+  "head",
+  "pending",
+  "version",
+  "languages",
+  "dependencies",
+  "authors",
+  "last-change",
+  "url",
+  "commits",
+  "churn",
+  "loc",
+  "size",
+  "license",
+]
+max_languages = 6
+max_authors = 3
+max_churn = 3
+churn_limit = 30
+include_hidden = false

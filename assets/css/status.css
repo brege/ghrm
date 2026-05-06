@@ -135,6 +135,46 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   color: var(--fgColor-muted, #636c76);
 }
 
+.ghrm-about-stats {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.ghrm-stat-list {
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 5px 24px;
+}
+
+.ghrm-stat-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.ghrm-stat-row dt {
+  min-width: 0;
+  color: var(--fgColor-muted, #636c76);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ghrm-stat-row dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--fgColor-default, #1f2328);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .ghrm-about-app {
   min-width: 0;
   display: grid;

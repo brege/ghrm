@@ -81,7 +81,7 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "ghrm=info,warn".into()),
+                .unwrap_or_else(|_| "warn,ghrm=info,tokei::language::language_type=off".into()),
         )
         .init();
 
@@ -178,6 +178,7 @@ fn main() -> Result<()> {
         no_excludes,
         search_max_rows: max_rows,
         config_path,
+        stats: cfg.stats.resolve(),
         auth,
     }))
 }

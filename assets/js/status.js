@@ -2,6 +2,47 @@ let active = 0;
 let connected = false;
 let peekOpen = false;
 
+async function loadAboutPeek() {
+  const peek = document.getElementById('ghrm-about-peek');
+  if (
+    !peek ||
+    peek.dataset.statsLoaded === 'true' ||
+    peek.dataset.statsLoading === 'true'
+  ) {
+    return;
+  }
+
+  peek.dataset.statsLoading = 'true';
+  beginActivity();
+  try {
+    const path = window.location.pathname || '/';
+    const response = await fetch(
+      `/_ghrm/about?path=${encodeURIComponent(path)}`,
+      {
+        headers: { Accept: 'text/html' },
+      },
+    );
+    if (!response.ok) {
+      return;
+    }
+    const template = document.createElement('template');
+    template.innerHTML = (await response.text()).trim();
+    const next = template.content.firstElementChild;
+    if (next?.id !== 'ghrm-about-peek') {
+      return;
+    }
+    next.hidden = !peekOpen;
+    peek.replaceWith(next);
+  } finally {
+    const current = document.getElementById('ghrm-about-peek');
+    if (current?.dataset.statsLoaded !== 'true') {
+      delete current?.dataset.statsLoading;
+    }
+    endActivity();
+    sync();
+  }
+}
+
 function sync() {
   const source = document.getElementById('ghrm-source-slot');
   const button = source?.querySelector('.ghrm-source-badge');
@@ -36,6 +77,9 @@ export function setConnected(value) {
 }
 
 export function syncServerStatus() {
+  if (peekOpen) {
+    void loadAboutPeek();
+  }
   sync();
 }
 
@@ -44,6 +88,9 @@ export function setupStatusPeek() {
     if (!event.target.closest('.ghrm-source-badge')) return;
     event.preventDefault();
     peekOpen = !peekOpen;
+    if (peekOpen) {
+      void loadAboutPeek();
+    }
     sync();
   });
   sync();
