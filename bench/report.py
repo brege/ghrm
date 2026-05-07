@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -7,7 +8,6 @@ from pathlib import Path
 SORTS = ("name", "size", "lines")
 TIME = "path_search.PathSearch.time_query"
 ROWS = "path_search.PathSearch.track_rows"
-SUBJECT_WIDTH = 36
 
 
 def main():
@@ -31,10 +31,7 @@ def main():
             (
                 ago(repo, commit, tip),
                 commit[:8],
-                truncate(
-                    git(repo, "show", "--no-patch", "--format=%s", commit),
-                    SUBJECT_WIDTH,
-                ),
+                git(repo, "show", "--no-patch", "--format=%s", commit),
                 ms(times.get("name")),
                 ms(times.get("size")),
                 ms(times.get("lines")),
@@ -42,10 +39,19 @@ def main():
             )
         )
 
-    print_table(
-        ("commit", "tip_ago", "name_ms", "size_ms", "lines_ms", "rows", "subject"),
-        ((row[1], row[0], *row[3:], row[2]) for row in sorted(out, key=sort_key)),
-    )
+    rows = sorted(out, key=sort_key)
+    row_counts = {row[6] for row in rows if row[6] != ""}
+    show_rows = len(row_counts) != 1
+    if len(row_counts) == 1:
+        print(f"rows={row_counts.pop()}")
+
+    header = ("behind", "commit", "name_ms", "size_ms", "lines_ms")
+    table = [(row[0], row[1], *row[3:6], row[2]) for row in rows]
+    if show_rows:
+        header = (*header, "rows")
+        table = [(row[0], row[1], *row[3:]) for row in rows]
+
+    print_table((*header, "subject"), table)
 
 
 def parse_tip():
@@ -83,18 +89,31 @@ def ms(value):
 def print_table(header, rows):
     rows = [tuple(str(cell) for cell in row) for row in rows]
     widths = [len(cell) for cell in header]
+    body_widths = widths[:-1]
     for row in rows:
-        widths = [max(width, len(cell)) for width, cell in zip(widths, row)]
+        body_widths = [
+            max(width, len(cell)) for width, cell in zip(body_widths, row[:-1])
+        ]
 
-    print("\t".join(cell.ljust(width) for cell, width in zip(header, widths)))
+    terminal_width = shutil.get_terminal_size((100, 20)).columns
+    subject_width = max(
+        len(header[-1]),
+        terminal_width - sum(body_widths) - len(body_widths),
+    )
+    widths = [*body_widths, subject_width]
+
+    print("\t".join(header))
     for row in rows:
-        print("\t".join(cell.ljust(width) for cell, width in zip(row, widths)))
+        row = (*row[:-1], truncate(row[-1], subject_width))
+        print("\t".join(row))
 
 
 def truncate(value, width):
     if len(value) <= width:
         return value
-    return value[: width - 1] + "."
+    if width <= 2:
+        return value[:width]
+    return value[: width - 2] + ".."
 
 
 def sort_key(item):
