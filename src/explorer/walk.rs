@@ -174,7 +174,7 @@ pub fn line_count(path: &Path, size: Option<u64>) -> Option<u64> {
         return Some(0);
     }
 
-    let newlines = bytes.iter().filter(|&&b| b == b'\n').count() as u64;
+    let newlines = bytecount::count(&bytes, b'\n') as u64;
     Some(newlines + u64::from(bytes.last() != Some(&b'\n')))
 }
 
@@ -357,9 +357,9 @@ pub fn build_all(
     use_ignore: bool,
     exclude_names: &[String],
     extensions: &[String],
-    no_excludes: bool,
+    show_excludes: bool,
 ) -> NavSet {
-    let snapshot = Arc::new(scan(root, use_ignore, exclude_names, no_excludes));
+    let snapshot = Arc::new(scan(root, use_ignore, exclude_names, show_excludes));
     NavSet {
         trees: Arc::new(Mutex::new(BTreeMap::new())),
         snapshot,
@@ -369,7 +369,7 @@ pub fn build_all(
     }
 }
 
-fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bool) -> Snapshot {
+fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: bool) -> Snapshot {
     let root_buf = root.to_path_buf();
     let filter_excludes = exclude_names.to_vec();
     let check_excludes: Arc<Vec<String>> = Arc::new(exclude_names.to_vec());
@@ -394,7 +394,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
         .git_exclude(use_ignore)
         .git_global(use_ignore);
 
-    if !no_excludes {
+    if !show_excludes {
         builder.filter_entry(move |e| {
             paths::allowed_name(&e.file_name().to_string_lossy(), &filter_excludes)
         });
@@ -436,7 +436,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
             }
 
             let name = entry.file_name().to_string_lossy();
-            let is_excluded = no_excludes && !paths::allowed_name(&name, &excludes);
+            let is_excluded = show_excludes && !paths::allowed_name(&name, &excludes);
 
             {
                 let mut guard = dirs_seen.lock().unwrap();
@@ -919,6 +919,30 @@ mod tests {
         sort_entries(&mut entries, Sort::Name, SortDir::Desc);
         let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
         assert_eq!(names, vec!["beta", "alpha", "b.md", "a.md"]);
+    }
+
+    #[test]
+    fn line_count_preserves_trailing_newline_semantics() {
+        let td = TempDir::new("ghrm-line-count-test");
+        let empty = td.path().join("empty.txt");
+        let one = td.path().join("one.txt");
+        let two = td.path().join("two.txt");
+        fs::write(&empty, "").unwrap();
+        fs::write(&one, "one\n").unwrap();
+        fs::write(&two, "one\ntwo").unwrap();
+
+        assert_eq!(line_count(&empty, Some(0)), Some(0));
+        assert_eq!(line_count(&one, Some(4)), Some(1));
+        assert_eq!(line_count(&two, Some(7)), Some(2));
+    }
+
+    #[test]
+    fn line_count_skips_non_text_content() {
+        let td = TempDir::new("ghrm-line-count-binary-test");
+        let binary = td.path().join("binary.bin");
+        fs::write(&binary, b"one\n\0two\n").unwrap();
+
+        assert_eq!(line_count(&binary, Some(9)), None);
     }
 
     #[test]

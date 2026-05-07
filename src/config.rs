@@ -102,7 +102,7 @@ pub struct AuthConfig {
     pub password_hash: Option<String>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StatsConfig {
     pub enabled: Option<bool>,

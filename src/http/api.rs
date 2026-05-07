@@ -153,7 +153,7 @@ pub(crate) async fn path_search(
                 view.use_ignore,
                 &s.exclude_names,
                 &s.filter_exts,
-                s.no_excludes,
+                s.show_excludes,
             ));
         }
         search::path::nav(
