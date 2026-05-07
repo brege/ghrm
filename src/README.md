@@ -14,8 +14,20 @@ Shared app contracts and binary-level support stay flat.
 | paths.rs | path safety helpers |
 | runtime.rs | runtime paths shown in UI |
 | repo.rs | git source metadata |
-| render.rs | Markdown and source rendering |
 | tmpl.rs | Askama template structs |
+
+## Render
+
+Markdown rendering code sits behind the render namespace.
+
+| Path | Purpose |
+| --- | --- |
+| render.rs | render pipeline and public API |
+| render/alert.rs | GitHub alert blocks |
+| render/anchor.rs | headings and page title |
+| render/code.rs | code and source blocks |
+| render/math.rs | markdown math blocks |
+| render/path.rs | local URL rewriting |
 
 ## HTTP
 
