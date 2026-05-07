@@ -49,7 +49,14 @@ fn main() -> Result<()> {
         println!();
         println!("{:?}", section.tool);
         for row in section.rows {
-            println!("{}\t{}", row.key, row.value);
+            print!("{}", row.key);
+            if !row.value.is_empty() {
+                print!("\t{}", row.value);
+            }
+            for metric in row.metrics {
+                print!("\t{}={}", metric.key, metric.value);
+            }
+            println!();
         }
     }
 

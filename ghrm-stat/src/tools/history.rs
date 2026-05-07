@@ -1,3 +1,4 @@
+use crate::{Row, RowMetric};
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -41,6 +42,15 @@ pub fn load(root: &Path, churn_limit: usize) -> Result<History> {
         &["log", "--format=%x1e%H%x1f%an%x1f%ae%x1f%ct", "--name-only"],
     )?;
     Ok(parse(&output, churn_limit))
+}
+
+pub fn time_row(key: &str, epoch: Option<u64>) -> Row {
+    let mut row = Row::new(key, relative_time(epoch));
+    if let Some(epoch) = epoch {
+        row.metrics
+            .push(RowMetric::new("timestamp", epoch.to_string()));
+    }
+    row
 }
 
 pub fn relative_time(epoch: Option<u64>) -> String {

@@ -39,15 +39,30 @@ pub struct AboutStats {
 pub struct AboutStatRow {
     pub label: String,
     pub value: String,
+    pub title: String,
+    pub title_ts: Option<u64>,
+    pub parts: Vec<AboutStatPart>,
     pub icon: &'static str,
     pub href: String,
     pub items: Vec<AboutStatItem>,
+}
+
+pub struct AboutStatPart {
+    pub value: String,
+    pub separator: bool,
 }
 
 pub struct AboutStatItem {
     pub label: String,
     pub value: String,
     pub href: String,
+    pub metrics: Vec<AboutStatMetric>,
+}
+
+pub struct AboutStatMetric {
+    pub value: String,
+    pub label: String,
+    pub title: String,
 }
 
 pub struct AboutLanguage {

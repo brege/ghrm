@@ -1,7 +1,17 @@
+import { formatAbsolute } from './dom.js';
+
 let active = 0;
 let connected = false;
 let peekOpen = false;
 let detailsOpen = false;
+
+function populateAboutTitles(root = document) {
+  for (const el of root.querySelectorAll('[data-ghrm-title-ts]')) {
+    const ts = parseInt(el.dataset.ghrmTitleTs, 10);
+    if (!ts) continue;
+    el.title = formatAbsolute(ts);
+  }
+}
 
 function holdPeekHeight(peek, path) {
   if (!peekOpen || peek.hidden) {
@@ -67,6 +77,7 @@ async function loadAboutPeek() {
       next.style.minHeight = `${heldHeight}px`;
       next.dataset.heightHold = path;
     }
+    populateAboutTitles(next);
     peek.replaceWith(next);
   } finally {
     const current = document.getElementById('ghrm-about-peek');
@@ -143,5 +154,6 @@ export function setupStatusPeek() {
     }
     sync();
   });
+  populateAboutTitles();
   sync();
 }

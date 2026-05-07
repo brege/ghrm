@@ -72,7 +72,7 @@ body.ghrm-about-open .ghrm-source-link:focus-within .ghrm-source-badge::before {
 
 .ghrm-about-peek {
   position: relative;
-  width: min(980px, calc(100% - 32px));
+  width: min(calc(980px - 32px), calc(100% - 32px));
   min-height: 92px;
   margin: 0 auto;
   border-top: 2px solid rgba(9, 105, 218, 0.28);
@@ -237,23 +237,33 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   text-decoration: underline;
 }
 
+.ghrm-stat-parts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  align-items: baseline;
+}
+
+.ghrm-stat-separator {
+  color: var(--fgColor-muted, #636c76);
+}
+
 .ghrm-stat-sublist {
   min-width: 0;
   margin: 0;
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 2px 12px;
+  align-items: baseline;
 }
 
 .ghrm-stat-sublist div {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  align-items: baseline;
+  display: contents;
 }
 
 .ghrm-stat-sublist dt {
   min-width: 0;
+  grid-column: 1;
   color: var(--fgColor-default, #1f2328);
   font-weight: 500;
   overflow-wrap: anywhere;
@@ -271,11 +281,42 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 }
 
 .ghrm-stat-sublist dd {
-  flex: 0 0 auto;
+  min-width: 0;
   margin: 0;
+  grid-column: 2;
+  justify-self: end;
   color: var(--fgColor-muted, #636c76);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   white-space: nowrap;
+}
+
+.ghrm-stat-metrics {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(4ch, max-content);
+  align-items: baseline;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ghrm-stat-metric {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.ghrm-stat-metric:first-child {
+  min-width: 5ch;
+}
+
+.ghrm-stat-metric:nth-child(2) {
+  min-width: 4ch;
+}
+
+.ghrm-stat-metric span:first-child {
+  color: var(--fgColor-default, #1f2328);
 }
 
 .ghrm-about-app {

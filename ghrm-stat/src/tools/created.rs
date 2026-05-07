@@ -1,10 +1,8 @@
-use crate::tools::history::relative_time;
+use crate::tools::history::time_row;
 use crate::{Context, Row, history};
 use anyhow::Result;
 
 pub fn run(ctx: &Context) -> Result<Vec<Row>> {
-    Ok(vec![Row::new(
-        "created",
-        relative_time(history(ctx)?.first_commit),
-    )])
+    let history = history(ctx)?;
+    Ok(vec![time_row("created", history.first_commit)])
 }

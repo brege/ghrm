@@ -1,4 +1,4 @@
-use crate::{Context, Row, config, history};
+use crate::{Context, Row, RowMetric, config, history};
 use anyhow::Result;
 
 pub fn run(ctx: &Context) -> Result<Vec<Row>> {
@@ -7,9 +7,12 @@ pub fn run(ctx: &Context) -> Result<Vec<Row>> {
         .iter()
         .take(config(ctx).max_authors)
         .map(|author| {
-            Row::new(
+            Row::with_metrics(
                 &author.name,
-                format!("{}% {}", author.contribution, author.commits),
+                vec![
+                    RowMetric::new("contribution", author.contribution.to_string()),
+                    RowMetric::new("commits", author.commits.to_string()),
+                ],
             )
         })
         .collect();

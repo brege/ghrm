@@ -1,4 +1,10 @@
-import { icon, isHtmlFile, positionFloatingPanel } from './dom.js';
+import {
+  formatAbsolute,
+  formatRelative,
+  icon,
+  isHtmlFile,
+  positionFloatingPanel,
+} from './dom.js';
 
 let explorerMenusBound = false;
 
@@ -55,29 +61,6 @@ export function syncColumnControls() {
       headers.hidden = !headerControl?.classList.contains('is-active');
     }
   }
-}
-
-function formatRelative(ts) {
-  const diff = Date.now() / 1000 - ts;
-  const p = (n, u) => `${n} ${u}${n === 1 ? '' : 's'} ago`;
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return p(Math.floor(diff / 60), 'minute');
-  if (diff < 86400) return p(Math.floor(diff / 3600), 'hour');
-  if (diff < 7 * 86400) return p(Math.floor(diff / 86400), 'day');
-  if (diff < 30 * 86400) return p(Math.floor(diff / (7 * 86400)), 'week');
-  if (diff < 365 * 86400) return p(Math.floor(diff / (30 * 86400)), 'month');
-  return p(Math.floor(diff / (365 * 86400)), 'year');
-}
-
-function formatAbsolute(ts) {
-  return new Date(ts * 1000).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  });
 }
 
 export function populateDates() {

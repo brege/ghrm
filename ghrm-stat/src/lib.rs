@@ -25,6 +25,16 @@ pub struct Section {
 #[serde(rename_all = "camelCase")]
 pub struct Row {
     pub key: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub value: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub metrics: Vec<RowMetric>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RowMetric {
+    pub key: String,
     pub value: String,
 }
 
@@ -118,6 +128,28 @@ impl Row {
         Self {
             key: key.into(),
             value: value.into(),
+            metrics: Vec::new(),
+        }
+    }
+
+    pub fn with_metrics(key: impl Into<String>, metrics: Vec<RowMetric>) -> Self {
+        Self {
+            key: key.into(),
+            value: String::new(),
+            metrics,
+        }
+    }
+
+    fn has_data(&self) -> bool {
+        !self.value.is_empty() || self.metrics.iter().any(|metric| !metric.value.is_empty())
+    }
+}
+
+impl RowMetric {
+    pub fn new(key: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            value: value.into(),
         }
     }
 }
@@ -179,10 +211,7 @@ pub fn resolve_with_config(input: &Path, config: Config) -> Result<Report> {
             Tool::Size => tools::size::run(&ctx)?,
             Tool::License => tools::license::run(&ctx)?,
         };
-        let rows = rows
-            .into_iter()
-            .filter(|row| !row.value.is_empty())
-            .collect::<Vec<_>>();
+        let rows = rows.into_iter().filter(Row::has_data).collect::<Vec<_>>();
         if !rows.is_empty() {
             sections.push(Section::new(*tool, rows));
         }

@@ -7,16 +7,17 @@
           <dl class="ghrm-stat-list">
 {% for row in stats.metadata %}            <div class="ghrm-stat-row">
               <dt>{% if !row.icon.is_empty() %}<svg aria-hidden="true"><use href="#{{ row.icon }}"></use></svg>{% endif %}<span>{{ row.label }}</span></dt>
-              <dd title="{{ row.value }}">
+              <dd{% if !row.title.is_empty() %} title="{{ row.title }}"{% endif %}{% if let Some(ts) = row.title_ts %} data-ghrm-title-ts="{{ ts }}"{% endif %}>
 {% if !row.items.is_empty() %}                <dl class="ghrm-stat-sublist">
 {% for item in row.items %}                  <div>
                     <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
-                    <dd>{{ item.value }}</dd>
+                    <dd>{% if !item.metrics.is_empty() %}<span class="ghrm-stat-metrics">{% for metric in item.metrics %}<span class="ghrm-stat-metric"{% if !metric.title.is_empty() %} title="{{ metric.title }}"{% endif %}><span>{{ metric.value }}</span>{% if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif %}</span>{% endfor %}</span>{% else %}{{ item.value }}{% endif %}</dd>
                   </div>
 {% endfor %}                </dl>
+{% else %}{% if !row.parts.is_empty() %}                <span class="ghrm-stat-parts">{% for part in row.parts %}{% if part.separator %}<span class="ghrm-stat-separator" aria-hidden="true">/</span>{% endif %}<span>{{ part.value }}</span>{% endfor %}</span>
 {% else %}{% if !row.href.is_empty() %}                <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
 {% else %}                {{ row.value }}
-{% endif %}{% endif %}              </dd>
+{% endif %}{% endif %}{% endif %}              </dd>
             </div>
 {% endfor %}          </dl>
         </div>
@@ -29,12 +30,12 @@
           <dl class="ghrm-lang-list">
 {% for lang in stats.languages %}            <div class="ghrm-lang-row">
               <dt><span class="ghrm-lang-dot" style="--ghrm-lang-color: {{ lang.color }}"></span><span>{{ lang.name }}</span></dt>
-              <dd><span class="ghrm-lang-lines">{{ lang.lines }}</span><span class="ghrm-lang-percent">{{ lang.value }}</span></dd>
+              <dd><span class="ghrm-lang-lines" title="{{ lang.lines }} lines of code">{{ lang.lines }}</span><span class="ghrm-lang-percent">{{ lang.value }}</span></dd>
             </div>
 {% endfor %}
 {% if !stats.language_total.is_empty() %}            <div class="ghrm-lang-row ghrm-lang-total">
               <dt>Total</dt>
-              <dd><span class="ghrm-lang-lines">{{ stats.language_total }}</span><span class="ghrm-lang-percent">LOC</span></dd>
+              <dd><span class="ghrm-lang-lines" title="{{ stats.language_total }} lines of code">{{ stats.language_total }}</span><span class="ghrm-lang-percent">LOC</span></dd>
             </div>
 {% endif %}          </dl>
         </div>
@@ -44,16 +45,17 @@
         <dl class="ghrm-stat-list">
 {% for row in stats.stats %}          <div class="ghrm-stat-row">
             <dt>{% if !row.icon.is_empty() %}<svg aria-hidden="true"><use href="#{{ row.icon }}"></use></svg>{% endif %}<span>{{ row.label }}</span></dt>
-            <dd title="{{ row.value }}">
+            <dd{% if !row.title.is_empty() %} title="{{ row.title }}"{% endif %}{% if let Some(ts) = row.title_ts %} data-ghrm-title-ts="{{ ts }}"{% endif %}>
 {% if !row.items.is_empty() %}              <dl class="ghrm-stat-sublist">
 {% for item in row.items %}                <div>
                   <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
-                  <dd>{{ item.value }}</dd>
+                  <dd>{% if !item.metrics.is_empty() %}<span class="ghrm-stat-metrics">{% for metric in item.metrics %}<span class="ghrm-stat-metric"{% if !metric.title.is_empty() %} title="{{ metric.title }}"{% endif %}><span>{{ metric.value }}</span>{% if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif %}</span>{% endfor %}</span>{% else %}{{ item.value }}{% endif %}</dd>
                 </div>
 {% endfor %}              </dl>
+{% else %}{% if !row.parts.is_empty() %}              <span class="ghrm-stat-parts">{% for part in row.parts %}{% if part.separator %}<span class="ghrm-stat-separator" aria-hidden="true">/</span>{% endif %}<span>{{ part.value }}</span>{% endfor %}</span>
 {% else %}{% if !row.href.is_empty() %}              <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
 {% else %}              {{ row.value }}
-{% endif %}{% endif %}            </dd>
+{% endif %}{% endif %}{% endif %}            </dd>
           </div>
 {% endfor %}        </dl>
       </div>

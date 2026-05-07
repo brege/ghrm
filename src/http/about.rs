@@ -3,7 +3,10 @@ use crate::http::server::{AppState, Mode};
 use crate::paths;
 use crate::repo::SourceState;
 use crate::runtime;
-use crate::tmpl::{self, AboutLanguage, AboutPeek, AboutStatItem, AboutStatRow, AboutStats};
+use crate::tmpl::{
+    self, AboutLanguage, AboutPeek, AboutStatItem, AboutStatMetric, AboutStatPart, AboutStatRow,
+    AboutStats,
+};
 
 use axum::{
     body::Body,
@@ -166,7 +169,7 @@ fn language_rows(rows: &[ghrm_stat::Row]) -> (Vec<AboutLanguage>, String) {
                 value: value.clone(),
                 lines: lines.clone(),
                 style: format!("--ghrm-lang-color: {color}; width: {value}"),
-                title: format!("{} {lines} LOC {value}", row.key),
+                title: format!("{}: {lines} lines of code, {value}", row.key),
                 color,
             }
         })
@@ -181,13 +184,24 @@ fn stat_row(
     served_root: &Path,
 ) -> Option<AboutStatRow> {
     let label = stat_title(section.tool);
-    let value = stat_value(section.tool, &section.rows)?;
+    let items = stat_items(section.tool, &section.rows, repo_root, served_root);
+    let parts = stat_parts(section.tool, &section.rows);
+    let value = parts_text(&parts)
+        .or_else(|| stat_value(section.tool, &section.rows))
+        .unwrap_or_default();
+    if value.is_empty() && parts.is_empty() && items.is_empty() {
+        return None;
+    }
     let icon = stat_icon(section.tool, &value);
     let href = stat_href(section.tool, &value, source);
-    let items = stat_items(section.tool, &section.rows, repo_root, served_root);
+    let title = stat_title_attr(section.tool, &section.rows, &parts);
+    let title_ts = stat_title_ts(section.tool, &section.rows);
     Some(AboutStatRow {
         label: label.to_string(),
         value,
+        title,
+        title_ts,
+        parts,
         icon,
         href,
         items,
@@ -196,12 +210,9 @@ fn stat_row(
 
 fn stat_value(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Option<String> {
     match tool {
-        ghrm_stat::Tool::Project => project_value(rows),
-        ghrm_stat::Tool::Head => head_value(rows),
+        ghrm_stat::Tool::Project | ghrm_stat::Tool::Head => None,
         ghrm_stat::Tool::Pending => pending_value(rows),
-        ghrm_stat::Tool::Languages | ghrm_stat::Tool::Authors | ghrm_stat::Tool::Churn => {
-            pair_list(rows)
-        }
+        ghrm_stat::Tool::Languages | ghrm_stat::Tool::Authors | ghrm_stat::Tool::Churn => None,
         ghrm_stat::Tool::Size => size_value(rows),
         ghrm_stat::Tool::Loc => row_value(rows, "linesOfCode").map(str::to_string),
         ghrm_stat::Tool::LastChange => row_value(rows, "lastChange").map(str::to_string),
@@ -209,23 +220,87 @@ fn stat_value(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Option<String> 
     }
 }
 
-fn project_value(rows: &[ghrm_stat::Row]) -> Option<String> {
-    let name = row_value(rows, "name")?;
-    let branches = row_value(rows, "branches").unwrap_or("0");
-    let tags = row_value(rows, "tags").unwrap_or("0");
-    Some(format!(
-        "{name} / {branches} {} / {tags} {}",
-        plural(branches, "branch", "branches"),
-        plural(tags, "tag", "tags")
-    ))
+fn stat_title_attr(
+    tool: ghrm_stat::Tool,
+    rows: &[ghrm_stat::Row],
+    parts: &[AboutStatPart],
+) -> String {
+    match tool {
+        ghrm_stat::Tool::Project if !parts.is_empty() => "project / branches / tags".to_string(),
+        ghrm_stat::Tool::Head if parts.len() > 1 => "commit hash / refs".to_string(),
+        ghrm_stat::Tool::Head if !parts.is_empty() => "commit hash".to_string(),
+        ghrm_stat::Tool::Commits => row_value(rows, "commits")
+            .map(|commits| format!("{commits} commits"))
+            .unwrap_or_default(),
+        ghrm_stat::Tool::Loc => row_value(rows, "linesOfCode")
+            .map(|lines| format!("{lines} lines of code"))
+            .unwrap_or_default(),
+        _ => String::new(),
+    }
 }
 
-fn head_value(rows: &[ghrm_stat::Row]) -> Option<String> {
-    let commit = row_value(rows, "commit")?;
-    match row_value(rows, "refs") {
-        Some(refs) => Some(format!("{commit} / {}", refs.replace(", ", " / "))),
-        None => Some(commit.to_string()),
+fn stat_title_ts(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Option<u64> {
+    if !matches!(tool, ghrm_stat::Tool::Created | ghrm_stat::Tool::LastChange) {
+        return None;
     }
+    rows.first()
+        .and_then(|row| row_metric(row, "timestamp"))
+        .and_then(|value| value.parse().ok())
+}
+
+fn stat_parts(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Vec<AboutStatPart> {
+    match tool {
+        ghrm_stat::Tool::Project => project_parts(rows),
+        ghrm_stat::Tool::Head => head_parts(rows),
+        _ => Vec::new(),
+    }
+}
+
+fn project_parts(rows: &[ghrm_stat::Row]) -> Vec<AboutStatPart> {
+    let Some(name) = row_value(rows, "name") else {
+        return Vec::new();
+    };
+    let branches = row_value(rows, "branches").unwrap_or("0");
+    let tags = row_value(rows, "tags").unwrap_or("0");
+    vec![
+        stat_part(name, false),
+        stat_part(
+            &format!("{branches} {}", plural(branches, "branch", "branches")),
+            true,
+        ),
+        stat_part(&format!("{tags} {}", plural(tags, "tag", "tags")), true),
+    ]
+}
+
+fn head_parts(rows: &[ghrm_stat::Row]) -> Vec<AboutStatPart> {
+    let Some(commit) = row_value(rows, "commit") else {
+        return Vec::new();
+    };
+    let mut parts = vec![stat_part(commit, false)];
+    if let Some(refs) = row_value(rows, "refs") {
+        parts.push(stat_part(refs, true));
+    }
+    parts
+}
+
+fn stat_part(value: &str, separator: bool) -> AboutStatPart {
+    AboutStatPart {
+        value: value.to_string(),
+        separator,
+    }
+}
+
+fn parts_text(parts: &[AboutStatPart]) -> Option<String> {
+    if parts.is_empty() {
+        return None;
+    }
+    Some(
+        parts
+            .iter()
+            .map(|part| part.value.as_str())
+            .collect::<Vec<_>>()
+            .join(" / "),
+    )
 }
 
 fn pending_value(rows: &[ghrm_stat::Row]) -> Option<String> {
@@ -248,14 +323,6 @@ fn size_value(rows: &[ghrm_stat::Row]) -> Option<String> {
     }
 }
 
-fn pair_list(rows: &[ghrm_stat::Row]) -> Option<String> {
-    let pairs = rows
-        .iter()
-        .map(|row| format!("{} {}", row.key, row.value))
-        .collect::<Vec<_>>();
-    (!pairs.is_empty()).then(|| pairs.join(", "))
-}
-
 fn stat_items(
     tool: ghrm_stat::Tool,
     rows: &[ghrm_stat::Row],
@@ -270,8 +337,42 @@ fn stat_items(
             label: row.key.clone(),
             value: row.value.clone(),
             href: stat_item_href(tool, row, repo_root, served_root),
+            metrics: stat_item_metrics(tool, row),
         })
         .collect()
+}
+
+fn stat_item_metrics(tool: ghrm_stat::Tool, row: &ghrm_stat::Row) -> Vec<AboutStatMetric> {
+    match tool {
+        ghrm_stat::Tool::Authors => author_metrics(row),
+        ghrm_stat::Tool::Churn => vec![AboutStatMetric {
+            value: row.value.clone(),
+            label: String::new(),
+            title: format!("{} commits", row.value),
+        }],
+        _ => Vec::new(),
+    }
+}
+
+fn author_metrics(row: &ghrm_stat::Row) -> Vec<AboutStatMetric> {
+    let contribution = row_metric(row, "contribution");
+    let commits = row_metric(row, "commits");
+    let mut out = Vec::new();
+    if let Some(commits) = commits {
+        out.push(AboutStatMetric {
+            value: commits.to_string(),
+            label: String::new(),
+            title: format!("{commits} commits"),
+        });
+    }
+    if let Some(contribution) = contribution {
+        out.push(AboutStatMetric {
+            value: format!("{contribution}%"),
+            label: String::new(),
+            title: format!("{contribution}% of commits"),
+        });
+    }
+    out
 }
 
 fn stat_item_href(
@@ -297,7 +398,7 @@ fn stat_item_href(
 fn compact_value(rows: &[ghrm_stat::Row]) -> Option<String> {
     match rows {
         [row] => Some(row.value.clone()),
-        _ => pair_list(rows),
+        _ => None,
     }
 }
 
@@ -305,6 +406,13 @@ fn row_value<'a>(rows: &'a [ghrm_stat::Row], key: &str) -> Option<&'a str> {
     rows.iter()
         .find(|row| row.key == key)
         .map(|row| row.value.as_str())
+}
+
+fn row_metric<'a>(row: &'a ghrm_stat::Row, key: &str) -> Option<&'a str> {
+    row.metrics
+        .iter()
+        .find(|metric| metric.key == key)
+        .map(|metric| metric.value.as_str())
 }
 
 fn plural(value: &str, single: &'static str, multiple: &'static str) -> &'static str {
@@ -428,6 +536,9 @@ mod tests {
             metadata: vec![AboutStatRow {
                 label: "Project".to_string(),
                 value: "ghrm".to_string(),
+                title: "project".to_string(),
+                title_ts: None,
+                parts: Vec::new(),
                 icon: "",
                 href: String::new(),
                 items: Vec::new(),
@@ -449,7 +560,7 @@ mod tests {
         assert!(html.contains("Languages"));
         assert!(html.contains("ghrm-about-stamp-button"));
         assert!(html.contains("<span>Project</span>"));
-        assert!(html.contains("title=\"ghrm\""));
+        assert!(html.contains("title=\"project\""));
         assert!(html.contains("Rust"));
         assert!(html.contains("60.0%"));
         assert!(html.contains("data-stats-loaded=\"true\""));
@@ -481,10 +592,57 @@ mod tests {
 
         assert_eq!(stats.metadata[0].label, "Project");
         assert_eq!(stats.metadata[0].value, "ghrm / 1 branch / 7 tags");
+        assert_eq!(stats.metadata[0].title, "project / branches / tags");
+        assert_eq!(stats.metadata[0].parts[0].value, "ghrm");
+        assert!(!stats.metadata[0].parts[0].separator);
+        assert_eq!(stats.metadata[0].parts[1].value, "1 branch");
+        assert!(stats.metadata[0].parts[1].separator);
+        assert_eq!(stats.metadata[0].parts[2].value, "7 tags");
+        assert!(stats.metadata[0].parts[2].separator);
         assert_eq!(stats.languages[0].name, "Rust");
         assert_eq!(stats.languages[0].value, "60.0%");
         assert_eq!(stats.languages[0].lines, "6");
         assert_eq!(stats.language_total, "10");
+    }
+
+    #[test]
+    fn stats_model_keeps_head_refs_grouped() {
+        let report = ghrm_stat::Report {
+            root: PathBuf::from("/tmp/repo"),
+            sections: vec![ghrm_stat::Section::new(
+                ghrm_stat::Tool::Head,
+                vec![
+                    ghrm_stat::Row::new("commit", "10314cff"),
+                    ghrm_stat::Row::new("refs", "main, origin/main"),
+                ],
+            )],
+        };
+        let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
+
+        assert_eq!(stats.stats[0].label, "Head");
+        assert_eq!(stats.stats[0].value, "10314cff / main, origin/main");
+        assert_eq!(stats.stats[0].title, "commit hash / refs");
+        assert_eq!(stats.stats[0].parts[0].value, "10314cff");
+        assert!(!stats.stats[0].parts[0].separator);
+        assert_eq!(stats.stats[0].parts[1].value, "main, origin/main");
+        assert!(stats.stats[0].parts[1].separator);
+    }
+
+    #[test]
+    fn stats_model_keeps_date_tooltip_timestamp_numeric() {
+        let mut row = ghrm_stat::Row::new("created", "3 years ago");
+        row.metrics
+            .push(ghrm_stat::RowMetric::new("timestamp", "10"));
+        let report = ghrm_stat::Report {
+            root: PathBuf::from("/tmp/repo"),
+            sections: vec![ghrm_stat::Section::new(ghrm_stat::Tool::Created, vec![row])],
+        };
+        let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
+
+        assert_eq!(stats.stats[0].label, "Created");
+        assert_eq!(stats.stats[0].value, "3 years ago");
+        assert!(stats.stats[0].title.is_empty());
+        assert_eq!(stats.stats[0].title_ts, Some(10));
     }
 
     #[test]
@@ -493,16 +651,28 @@ mod tests {
             root: PathBuf::from("/tmp/repo"),
             sections: vec![ghrm_stat::Section::new(
                 ghrm_stat::Tool::Authors,
-                vec![ghrm_stat::Row::new("Wyatt Brege", "100% 147")],
+                vec![ghrm_stat::Row::with_metrics(
+                    "Wyatt Brege",
+                    vec![
+                        ghrm_stat::RowMetric::new("contribution", "100"),
+                        ghrm_stat::RowMetric::new("commits", "147"),
+                    ],
+                )],
             )],
         };
         let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
 
         assert!(stats.metadata.is_empty());
         assert_eq!(stats.stats[0].label, "Authors");
-        assert_eq!(stats.stats[0].value, "Wyatt Brege 100% 147");
+        assert!(stats.stats[0].value.is_empty());
         assert_eq!(stats.stats[0].items[0].label, "Wyatt Brege");
-        assert_eq!(stats.stats[0].items[0].value, "100% 147");
+        assert!(stats.stats[0].items[0].value.is_empty());
+        assert_eq!(stats.stats[0].items[0].metrics[0].value, "147");
+        assert!(stats.stats[0].items[0].metrics[0].label.is_empty());
+        assert_eq!(stats.stats[0].items[0].metrics[0].title, "147 commits");
+        assert_eq!(stats.stats[0].items[0].metrics[1].value, "100%");
+        assert!(stats.stats[0].items[0].metrics[1].label.is_empty());
+        assert_eq!(stats.stats[0].items[0].metrics[1].title, "100% of commits");
         assert!(stats.stats[0].items[0].href.is_empty());
     }
 
@@ -523,6 +693,9 @@ mod tests {
 
         assert_eq!(stats.stats[0].items[0].label, "src/main.rs");
         assert_eq!(stats.stats[0].items[0].href, "/src/main.rs");
+        assert_eq!(stats.stats[0].items[0].metrics[0].value, "7");
+        assert!(stats.stats[0].items[0].metrics[0].label.is_empty());
+        assert_eq!(stats.stats[0].items[0].metrics[0].title, "7 commits");
     }
 
     #[test]
