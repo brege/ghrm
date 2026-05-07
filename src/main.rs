@@ -2,6 +2,7 @@ mod config;
 mod dirs;
 mod explorer;
 mod http;
+mod options;
 mod paths;
 mod render;
 mod repo;
@@ -12,11 +13,9 @@ mod testutil;
 mod tmpl;
 
 use crate::explorer::{column, filter};
-use crate::http::{auth::AuthConfig, server, theme, vendor};
+use crate::http::{server, theme, vendor};
 use anyhow::Result;
 use clap::Parser;
-use std::collections::BTreeSet;
-use std::net::IpAddr;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -86,7 +85,6 @@ fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
-    let config_path = config::path(cli.config.as_deref())?;
     let cfg = config::Config::load(cli.config.as_deref())?;
     if cli.clean {
         vendor::clean()?;
@@ -98,111 +96,47 @@ fn main() -> Result<()> {
     vendor::ensure()?;
     theme::ensure()?;
 
-    let target = cli.target.unwrap_or(std::env::current_dir()?);
-    let abs = target.canonicalize()?;
+    let resolved = options::resolve(
+        options::Input {
+            target: cli.target,
+            config_path: cli.config.as_deref(),
+            port: cli.port,
+            bind: cli.bind,
+            no_browser: cli.no_browser,
+            no_ignore: cli.no_ignore,
+            hidden: cli.hidden,
+            extensions: cli.extensions,
+            no_excludes: cli.no_excludes,
+            max_rows: cli.max_rows,
+            ghrm_open: std::env::var("GHRM_OPEN").ok(),
+        },
+        &cfg,
+    )?;
 
-    let exact_port = cli.port.is_some();
-    let port = cli.port.or(cfg.port).unwrap_or(1331);
-    let bind = cli
-        .bind
-        .or(cfg.bind)
-        .unwrap_or_else(|| "127.0.0.1".to_string());
-    let auth = match (cfg.auth.password, cfg.auth.password_hash) {
-        (Some(_), Some(_)) => {
-            anyhow::bail!("auth.password and auth.password_hash are mutually exclusive")
-        }
-        (Some(password), None) => Some(AuthConfig {
-            username: cfg.auth.username.unwrap_or_else(|| "admin".to_string()),
-            password,
-        }),
-        (None, Some(_)) => anyhow::bail!("auth.password_hash is not supported"),
-        (None, None) => {
-            if cfg.auth.username.is_some() {
-                anyhow::bail!("auth.username requires auth.password");
-            }
-            None
-        }
-    };
-    if bind_requires_auth(&bind) && auth.is_none() {
-        anyhow::bail!("non-loopback bind requires auth.password");
-    }
-    let no_ignore = cli.no_ignore || cfg.walk.no_ignore.unwrap_or(false);
-    let open = !cli.no_browser
-        && match std::env::var("GHRM_OPEN").as_deref() {
-            Ok("0") => false,
-            Ok(_) => true,
-            Err(_) => cfg.open.unwrap_or(true),
-        };
-    let has_explicit_ext_filter = !cli.extensions.is_empty()
-        || cfg
-            .walk
-            .extensions
-            .as_ref()
-            .is_some_and(|extensions| !extensions.is_empty());
-    let extensions = if cli.extensions.is_empty() {
-        normalize_extensions(cfg.walk.extensions.unwrap_or_default())?
-    } else {
-        normalize_extensions(cli.extensions)?
-    };
-    let extensions = if extensions.is_empty() {
-        vec!["md".to_string()]
-    } else {
-        extensions
-    };
     let filters = filter::Set::resolve(&cfg.walk.filter)?;
-    let exclude_names = cfg
-        .walk
-        .exclude_names
-        .unwrap_or_else(config::default_exclude_names);
-    let show_excludes = cli.no_excludes || cfg.walk.no_excludes.unwrap_or(false);
-    let max_rows = cli.max_rows.or(cfg.search.max_rows).unwrap_or(1000);
-    if max_rows == 0 {
-        anyhow::bail!("max search rows must be greater than zero");
-    }
+    let default_filter_ext = resolved.filter_ext || filters.default_enabled();
     let default_columns = column::Set::from_defaults(|def| cfg.explorer.columns.default_for(def));
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
     runtime.block_on(server::run(server::Options {
-        bind,
-        port,
-        exact_port,
-        open,
-        target: abs,
-        use_ignore: !no_ignore,
-        default_hidden: cli.hidden || cfg.walk.hidden.unwrap_or(false),
-        default_filter_ext: has_explicit_ext_filter || filters.default_enabled(),
+        bind: resolved.bind,
+        port: resolved.port,
+        exact_port: resolved.exact_port,
+        open: resolved.open,
+        target: resolved.target,
+        use_ignore: resolved.use_ignore,
+        default_hidden: resolved.show_hidden,
+        default_filter_ext,
         default_columns,
-        extensions,
+        extensions: resolved.extensions,
         filters,
-        exclude_names,
-        show_excludes,
-        search_max_rows: max_rows,
-        config_path,
-        stats: cfg.stats.resolve(),
-        auth,
+        exclude_names: resolved.exclude_names,
+        show_excludes: resolved.show_excludes,
+        search_max_rows: resolved.max_rows,
+        config_path: resolved.config_path,
+        stats: resolved.stats,
+        auth: resolved.auth,
     }))
-}
-
-fn normalize_extensions(raw: Vec<String>) -> Result<Vec<String>> {
-    let mut extensions = BTreeSet::new();
-    for ext in raw {
-        let ext = ext.trim().trim_start_matches('.').to_lowercase();
-        if ext.is_empty() {
-            anyhow::bail!("empty extension filter");
-        }
-        extensions.insert(ext);
-    }
-    Ok(extensions.into_iter().collect())
-}
-
-fn bind_requires_auth(bind: &str) -> bool {
-    if bind.eq_ignore_ascii_case("localhost") {
-        return false;
-    }
-    match bind.parse::<IpAddr>() {
-        Ok(addr) => !addr.is_loopback(),
-        Err(_) => true,
-    }
 }
