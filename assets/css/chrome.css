@@ -93,11 +93,13 @@ body.ghrm-doc-flat #ghrm-source-slot {
   margin-right: auto;
   min-width: 0;
   flex: 1 1 auto;
+  height: 32px;
   overflow: hidden;
   color: var(--fgColor-default, #1f2328);
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
 }
 
 .ghrm-source-link a {
@@ -110,12 +112,20 @@ body.ghrm-doc-flat #ghrm-source-slot {
 }
 
 .ghrm-source-badge {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-self: center;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
+  position: relative;
+  width: 28px;
+  height: 28px;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fgColor-accent, #0969da);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  line-height: 0;
 }
 
 .ghrm-source-link.is-disabled {
@@ -124,21 +134,23 @@ body.ghrm-doc-flat #ghrm-source-slot {
 }
 
 .ghrm-source-text {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
-  flex: 1 1 auto;
+  height: 32px;
+  display: block;
   overflow: hidden;
   white-space: nowrap;
   font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  line-height: 32px;
 }
 
 .ghrm-source-value {
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 600;
+  line-height: 32px;
 }
 
 #theme-toggle .icon-sun,
@@ -192,21 +204,20 @@ body.ghrm-doc-flat #doc-chrome-toggle .icon-flat {
 
   .ghrm-source-link {
     flex: 1 1 0;
-    gap: 8px;
+    grid-template-columns: 28px max-content;
+    column-gap: 8px;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
   }
 
   .ghrm-source-text {
-    flex: 0 0 auto;
     min-width: max-content;
     overflow: visible;
     font-size: 13px;
   }
 
   .ghrm-source-value {
-    flex: 0 0 auto;
     overflow: visible;
     text-overflow: clip;
   }

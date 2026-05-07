@@ -1,31 +1,30 @@
-use crate::{Context, Row, config};
+use crate::{Context, Row, config, language_summary};
 use anyhow::Result;
 
 pub struct Summary {
     pub total: usize,
-    languages: Vec<(String, usize)>,
+    pub languages: Vec<Language>,
+}
+
+pub struct Language {
+    pub name: String,
+    pub lines: usize,
 }
 
 pub fn run(ctx: &Context) -> Result<Vec<Row>> {
-    let summary = summary(ctx)?;
+    let summary = language_summary(ctx)?;
     let mut rows = Vec::new();
-    for (name, lines) in summary
-        .languages
-        .into_iter()
-        .take(config(ctx).max_languages)
-    {
-        let percent = if summary.total == 0 {
-            0.0
-        } else {
-            lines as f64 / summary.total as f64 * 100.0
-        };
-        rows.push(Row::new(name, format!("{percent:.1}%")));
+    for language in summary.languages.iter().take(config(ctx).max_languages) {
+        rows.push(Row::new(language.name.clone(), language.lines.to_string()));
+    }
+    if summary.total > 0 {
+        rows.push(Row::new("total", summary.total.to_string()));
     }
 
     Ok(rows)
 }
 
-pub fn summary(ctx: &Context) -> Result<Summary> {
+pub fn load(ctx: &Context) -> Result<Summary> {
     let mut languages = tokei::Languages::new();
     let config = tokei::Config {
         hidden: Some(config(ctx).include_hidden),
@@ -39,11 +38,12 @@ pub fn summary(ctx: &Context) -> Result<Summary> {
             let lines = loc(kind, language);
             (lines > 0).then_some((kind.to_string(), lines))
         })
+        .map(|(name, lines)| Language { name, lines })
         .collect::<Vec<_>>();
-    counts.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    counts.sort_by(|a, b| b.lines.cmp(&a.lines).then_with(|| a.name.cmp(&b.name)));
 
     Ok(Summary {
-        total: counts.iter().map(|(_, lines)| lines).sum::<usize>(),
+        total: counts.iter().map(|language| language.lines).sum::<usize>(),
         languages: counts,
     })
 }

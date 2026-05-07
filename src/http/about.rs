@@ -110,9 +110,18 @@ fn html_response(html: &str) -> Response {
 fn stats_model(report: ghrm_stat::Report, source: &SourceState, served_root: &Path) -> AboutStats {
     let mut about = AboutStats::default();
     let repo_root = report.root.clone();
+    let has_languages = report
+        .sections
+        .iter()
+        .any(|section| section.tool == ghrm_stat::Tool::Languages && !section.rows.is_empty());
     for section in report.sections {
         match section.tool {
-            ghrm_stat::Tool::Languages => about.languages = language_rows(&section.rows),
+            ghrm_stat::Tool::Languages => {
+                let (languages, total) = language_rows(&section.rows);
+                about.languages = languages;
+                about.language_total = total;
+            }
+            ghrm_stat::Tool::Loc if has_languages => {}
             ghrm_stat::Tool::Project
             | ghrm_stat::Tool::Version
             | ghrm_stat::Tool::License
@@ -131,20 +140,38 @@ fn stats_model(report: ghrm_stat::Report, source: &SourceState, served_root: &Pa
     about
 }
 
-fn language_rows(rows: &[ghrm_stat::Row]) -> Vec<AboutLanguage> {
-    rows.iter()
+fn language_rows(rows: &[ghrm_stat::Row]) -> (Vec<AboutLanguage>, String) {
+    let counts = rows
+        .iter()
+        .filter(|row| row.key != "total")
+        .filter_map(|row| row.value.parse::<usize>().ok().map(|lines| (row, lines)))
+        .collect::<Vec<_>>();
+    let total = row_value(rows, "total")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or_else(|| counts.iter().map(|(_, lines)| lines).sum::<usize>());
+    let languages = counts
+        .iter()
         .enumerate()
-        .map(|(i, row)| {
+        .map(|(i, (row, lines))| {
             let color = LANGUAGE_COLORS[i % LANGUAGE_COLORS.len()].to_string();
+            let percent = if total == 0 {
+                0.0
+            } else {
+                *lines as f64 / total as f64 * 100.0
+            };
+            let value = format!("{percent:.1}%");
+            let lines = lines.to_string();
             AboutLanguage {
                 name: row.key.clone(),
-                value: row.value.clone(),
-                style: format!("--ghrm-lang-color: {color}; width: {}", row.value),
-                title: format!("{} {}", row.key, row.value),
+                value: value.clone(),
+                lines: lines.clone(),
+                style: format!("--ghrm-lang-color: {color}; width: {value}"),
+                title: format!("{} {lines} LOC {value}", row.key),
                 color,
             }
         })
-        .collect()
+        .collect();
+    (languages, total.to_string())
 }
 
 fn stat_row(
@@ -409,10 +436,12 @@ mod tests {
             languages: vec![AboutLanguage {
                 name: "Rust".to_string(),
                 value: "60.0%".to_string(),
+                lines: "6".to_string(),
                 color: "#d19a66".to_string(),
                 style: "--ghrm-lang-color: #d19a66; width: 60.0%".to_string(),
-                title: "Rust 60.0%".to_string(),
+                title: "Rust 6 LOC 60.0%".to_string(),
             }],
+            language_total: "10".to_string(),
         };
         let html = html(&runtime_paths, &stats, true);
 
@@ -441,7 +470,10 @@ mod tests {
                 ),
                 ghrm_stat::Section::new(
                     ghrm_stat::Tool::Languages,
-                    vec![ghrm_stat::Row::new("Rust", "60.0%")],
+                    vec![
+                        ghrm_stat::Row::new("Rust", "6"),
+                        ghrm_stat::Row::new("CSS", "4"),
+                    ],
                 ),
             ],
         };
@@ -451,6 +483,8 @@ mod tests {
         assert_eq!(stats.metadata[0].value, "ghrm / 1 branch / 7 tags");
         assert_eq!(stats.languages[0].name, "Rust");
         assert_eq!(stats.languages[0].value, "60.0%");
+        assert_eq!(stats.languages[0].lines, "6");
+        assert_eq!(stats.language_total, "10");
     }
 
     #[test]

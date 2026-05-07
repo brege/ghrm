@@ -29,9 +29,14 @@
           <dl class="ghrm-lang-list">
 {% for lang in stats.languages %}            <div class="ghrm-lang-row">
               <dt><span class="ghrm-lang-dot" style="--ghrm-lang-color: {{ lang.color }}"></span><span>{{ lang.name }}</span></dt>
-              <dd>{{ lang.value }}</dd>
+              <dd><span class="ghrm-lang-lines">{{ lang.lines }}</span><span class="ghrm-lang-percent">{{ lang.value }}</span></dd>
             </div>
-{% endfor %}          </dl>
+{% endfor %}
+{% if !stats.language_total.is_empty() %}            <div class="ghrm-lang-row ghrm-lang-total">
+              <dt>Total</dt>
+              <dd><span class="ghrm-lang-lines">{{ stats.language_total }}</span><span class="ghrm-lang-percent">LOC</span></dd>
+            </div>
+{% endif %}          </dl>
         </div>
 {% endif %}      </div>
 {% if !stats.stats.is_empty() %}      <div class="ghrm-about-stats ghrm-repo-stats" aria-label="Repository stats">

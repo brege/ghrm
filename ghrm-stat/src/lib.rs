@@ -66,6 +66,7 @@ pub struct Context {
     config: Config,
     repo: gix::Repository,
     history: OnceLock<Result<tools::history::History, String>>,
+    language_summary: OnceLock<Result<tools::languages::Summary, String>>,
     manifest: OnceLock<Result<tools::manifest::Manifest, String>>,
 }
 
@@ -142,6 +143,7 @@ pub fn resolve_with_config(input: &Path, config: Config) -> Result<Report> {
         config,
         repo,
         history: OnceLock::new(),
+        language_summary: OnceLock::new(),
         manifest: OnceLock::new(),
     };
     if !ctx.config.enabled {
@@ -204,6 +206,13 @@ pub fn history(ctx: &Context) -> Result<&tools::history::History> {
     let result = ctx.history.get_or_init(|| {
         tools::history::load(&ctx.root, ctx.config.churn_limit).map_err(|err| err.to_string())
     });
+    result.as_ref().map_err(|message| anyhow!(message.clone()))
+}
+
+pub fn language_summary(ctx: &Context) -> Result<&tools::languages::Summary> {
+    let result = ctx
+        .language_summary
+        .get_or_init(|| tools::languages::load(ctx).map_err(|err| err.to_string()));
     result.as_ref().map_err(|message| anyhow!(message.clone()))
 }
 

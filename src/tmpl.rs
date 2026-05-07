@@ -33,6 +33,7 @@ pub struct AboutStats {
     pub metadata: Vec<AboutStatRow>,
     pub stats: Vec<AboutStatRow>,
     pub languages: Vec<AboutLanguage>,
+    pub language_total: String,
 }
 
 pub struct AboutStatRow {
@@ -52,6 +53,7 @@ pub struct AboutStatItem {
 pub struct AboutLanguage {
     pub name: String,
     pub value: String,
+    pub lines: String,
     pub color: String,
     pub style: String,
     pub title: String,
