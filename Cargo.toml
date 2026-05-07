@@ -38,6 +38,7 @@ comrak = { version = "0.52", default-features = false, features = ["shortcodes"]
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 html-escape = "0.2"
+lol_html = "2"
 content_inspector = "0.2"
 infer = { version = "0.19", default-features = false }
 bytecount = "0.6"

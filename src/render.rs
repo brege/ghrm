@@ -2,6 +2,7 @@ use comrak::adapters::CodefenceRendererAdapter;
 use comrak::nodes::Sourcepos;
 use comrak::options::Plugins;
 use comrak::{Options, markdown_to_html_with_plugins};
+use lol_html::{RewriteStrSettings, element, rewrite_str};
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
@@ -418,36 +419,28 @@ fn code_lang(open_tag: &str) -> Option<&str> {
 }
 
 fn rewrite_local_urls(html: &str, path: RenderPath<'_>) -> String {
-    let mut out = html.to_string();
-    for attr in ["href", "src"] {
-        out = rewrite_attr_urls(&out, attr, path);
-    }
-    out
-}
-
-fn rewrite_attr_urls(html: &str, attr: &str, path: RenderPath<'_>) -> String {
-    let marker = format!(r#"{attr}=""#);
-    let mut out = String::with_capacity(html.len());
-    let mut rest = html;
-
-    loop {
-        let Some(idx) = rest.find(&marker) else {
-            out.push_str(rest);
-            break;
-        };
-        let value_start = idx + marker.len();
-        out.push_str(&rest[..value_start]);
-        let after = &rest[value_start..];
-        let Some(end) = after.find('"') else {
-            out.push_str(after);
-            break;
-        };
-        let value = &after[..end];
-        out.push_str(&local_url(path, value));
-        rest = &after[end..];
-    }
-
-    out
+    rewrite_str(
+        html,
+        RewriteStrSettings {
+            element_content_handlers: vec![
+                element!("[href]", move |el| {
+                    if let Some(value) = el.get_attribute("href") {
+                        el.set_attribute("href", &local_url(path, &value))?;
+                    }
+                    Ok(())
+                }),
+                element!("[src]", move |el| {
+                    if let Some(value) = el.get_attribute("src") {
+                        el.set_attribute("src", &local_url(path, &value))?;
+                    }
+                    Ok(())
+                }),
+            ],
+            strict: false,
+            ..RewriteStrSettings::new()
+        },
+    )
+    .expect("rendered markdown URL rewriting should produce valid HTML")
 }
 
 fn local_url(path: RenderPath<'_>, dest: &str) -> String {
