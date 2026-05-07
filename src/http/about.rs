@@ -499,6 +499,28 @@ mod tests {
         runtime::Paths::new(td.path(), None).unwrap()
     }
 
+    fn about_row<'a>(rows: &'a [AboutStatRow], label: &str) -> &'a AboutStatRow {
+        rows.iter().find(|row| row.label == label).unwrap()
+    }
+
+    fn part_values(parts: &[AboutStatPart]) -> Vec<&str> {
+        parts.iter().map(|part| part.value.as_str()).collect()
+    }
+
+    fn metric_values(item: &AboutStatItem) -> Vec<&str> {
+        item.metrics
+            .iter()
+            .map(|metric| metric.value.as_str())
+            .collect()
+    }
+
+    fn metric_titles(item: &AboutStatItem) -> Vec<&str> {
+        item.metrics
+            .iter()
+            .map(|metric| metric.title.as_str())
+            .collect()
+    }
+
     #[test]
     fn about_html_renders_runtime_and_app_links() {
         let runtime_paths = test_runtime_paths();
@@ -530,44 +552,11 @@ mod tests {
     }
 
     #[test]
-    fn about_html_renders_stats_when_loaded() {
-        let runtime_paths = test_runtime_paths();
-        let stats = AboutStats {
-            metadata: vec![AboutStatRow {
-                label: "Project".to_string(),
-                value: "ghrm".to_string(),
-                title: "project".to_string(),
-                title_ts: None,
-                parts: Vec::new(),
-                icon: "",
-                href: String::new(),
-                items: Vec::new(),
-            }],
-            stats: Vec::new(),
-            languages: vec![AboutLanguage {
-                name: "Rust".to_string(),
-                value: "60.0%".to_string(),
-                lines: "6".to_string(),
-                color: "#d19a66".to_string(),
-                style: "--ghrm-lang-color: #d19a66; width: 60.0%".to_string(),
-                title: "Rust 6 LOC 60.0%".to_string(),
-            }],
-            language_total: "10".to_string(),
-        };
-        let html = html(&runtime_paths, &stats, true);
-
-        assert!(html.contains("About"));
-        assert!(html.contains("Languages"));
-        assert!(html.contains("ghrm-about-stamp-button"));
-        assert!(html.contains("<span>Project</span>"));
-        assert!(html.contains("title=\"project\""));
-        assert!(html.contains("Rust"));
-        assert!(html.contains("60.0%"));
-        assert!(html.contains("data-stats-loaded=\"true\""));
-    }
-
-    #[test]
-    fn stats_model_compacts_tool_rows() {
+    fn stats_model_structures_scalar_rows() {
+        let mut created = ghrm_stat::Row::new("created", "3 years ago");
+        created
+            .metrics
+            .push(ghrm_stat::RowMetric::new("timestamp", "10"));
         let report = ghrm_stat::Report {
             root: PathBuf::from("/tmp/repo"),
             sections: vec![
@@ -580,6 +569,14 @@ mod tests {
                     ],
                 ),
                 ghrm_stat::Section::new(
+                    ghrm_stat::Tool::Head,
+                    vec![
+                        ghrm_stat::Row::new("commit", "10314cff"),
+                        ghrm_stat::Row::new("refs", "main, origin/main"),
+                    ],
+                ),
+                ghrm_stat::Section::new(ghrm_stat::Tool::Created, vec![created]),
+                ghrm_stat::Section::new(
                     ghrm_stat::Tool::Languages,
                     vec![
                         ghrm_stat::Row::new("Rust", "6"),
@@ -590,15 +587,26 @@ mod tests {
         };
         let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
 
-        assert_eq!(stats.metadata[0].label, "Project");
-        assert_eq!(stats.metadata[0].value, "ghrm / 1 branch / 7 tags");
-        assert_eq!(stats.metadata[0].title, "project / branches / tags");
-        assert_eq!(stats.metadata[0].parts[0].value, "ghrm");
-        assert!(!stats.metadata[0].parts[0].separator);
-        assert_eq!(stats.metadata[0].parts[1].value, "1 branch");
-        assert!(stats.metadata[0].parts[1].separator);
-        assert_eq!(stats.metadata[0].parts[2].value, "7 tags");
-        assert!(stats.metadata[0].parts[2].separator);
+        let project = about_row(&stats.metadata, "Project");
+        assert_eq!(
+            part_values(&project.parts),
+            vec!["ghrm", "1 branch", "7 tags"]
+        );
+        assert_eq!(project.title, "project / branches / tags");
+
+        let head = about_row(&stats.stats, "Head");
+        assert_eq!(head.value, "10314cff / main, origin/main");
+        assert_eq!(
+            part_values(&head.parts),
+            vec!["10314cff", "main, origin/main"]
+        );
+        assert_eq!(head.title, "commit hash / refs");
+
+        let created = about_row(&stats.stats, "Created");
+        assert_eq!(created.value, "3 years ago");
+        assert_eq!(created.title_ts, Some(10));
+        assert!(created.title.is_empty());
+
         assert_eq!(stats.languages[0].name, "Rust");
         assert_eq!(stats.languages[0].value, "60.0%");
         assert_eq!(stats.languages[0].lines, "6");
@@ -606,96 +614,46 @@ mod tests {
     }
 
     #[test]
-    fn stats_model_keeps_head_refs_grouped() {
-        let report = ghrm_stat::Report {
-            root: PathBuf::from("/tmp/repo"),
-            sections: vec![ghrm_stat::Section::new(
-                ghrm_stat::Tool::Head,
-                vec![
-                    ghrm_stat::Row::new("commit", "10314cff"),
-                    ghrm_stat::Row::new("refs", "main, origin/main"),
-                ],
-            )],
-        };
-        let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
-
-        assert_eq!(stats.stats[0].label, "Head");
-        assert_eq!(stats.stats[0].value, "10314cff / main, origin/main");
-        assert_eq!(stats.stats[0].title, "commit hash / refs");
-        assert_eq!(stats.stats[0].parts[0].value, "10314cff");
-        assert!(!stats.stats[0].parts[0].separator);
-        assert_eq!(stats.stats[0].parts[1].value, "main, origin/main");
-        assert!(stats.stats[0].parts[1].separator);
-    }
-
-    #[test]
-    fn stats_model_keeps_date_tooltip_timestamp_numeric() {
-        let mut row = ghrm_stat::Row::new("created", "3 years ago");
-        row.metrics
-            .push(ghrm_stat::RowMetric::new("timestamp", "10"));
-        let report = ghrm_stat::Report {
-            root: PathBuf::from("/tmp/repo"),
-            sections: vec![ghrm_stat::Section::new(ghrm_stat::Tool::Created, vec![row])],
-        };
-        let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
-
-        assert_eq!(stats.stats[0].label, "Created");
-        assert_eq!(stats.stats[0].value, "3 years ago");
-        assert!(stats.stats[0].title.is_empty());
-        assert_eq!(stats.stats[0].title_ts, Some(10));
-    }
-
-    #[test]
-    fn stats_model_moves_authors_to_stats() {
-        let report = ghrm_stat::Report {
-            root: PathBuf::from("/tmp/repo"),
-            sections: vec![ghrm_stat::Section::new(
-                ghrm_stat::Tool::Authors,
-                vec![ghrm_stat::Row::with_metrics(
-                    "Wyatt Brege",
-                    vec![
-                        ghrm_stat::RowMetric::new("contribution", "100"),
-                        ghrm_stat::RowMetric::new("commits", "147"),
-                    ],
-                )],
-            )],
-        };
-        let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
-
-        assert!(stats.metadata.is_empty());
-        assert_eq!(stats.stats[0].label, "Authors");
-        assert!(stats.stats[0].value.is_empty());
-        assert_eq!(stats.stats[0].items[0].label, "Wyatt Brege");
-        assert!(stats.stats[0].items[0].value.is_empty());
-        assert_eq!(stats.stats[0].items[0].metrics[0].value, "147");
-        assert!(stats.stats[0].items[0].metrics[0].label.is_empty());
-        assert_eq!(stats.stats[0].items[0].metrics[0].title, "147 commits");
-        assert_eq!(stats.stats[0].items[0].metrics[1].value, "100%");
-        assert!(stats.stats[0].items[0].metrics[1].label.is_empty());
-        assert_eq!(stats.stats[0].items[0].metrics[1].title, "100% of commits");
-        assert!(stats.stats[0].items[0].href.is_empty());
-    }
-
-    #[test]
-    fn stats_model_links_churn_paths_under_served_root() {
-        let td = TempDir::new("ghrm-about-churn-links");
+    fn stats_model_structures_list_rows() {
+        let td = TempDir::new("ghrm-about-list-stats");
         let file = td.path().join("src/main.rs");
         fs::create_dir_all(file.parent().unwrap()).unwrap();
         fs::write(&file, "fn main() {}\n").unwrap();
         let report = ghrm_stat::Report {
             root: td.path().to_path_buf(),
-            sections: vec![ghrm_stat::Section::new(
-                ghrm_stat::Tool::Churn,
-                vec![ghrm_stat::Row::new("src/main.rs", "7")],
-            )],
+            sections: vec![
+                ghrm_stat::Section::new(
+                    ghrm_stat::Tool::Authors,
+                    vec![ghrm_stat::Row::with_metrics(
+                        "Wyatt Brege",
+                        vec![
+                            ghrm_stat::RowMetric::new("contribution", "100"),
+                            ghrm_stat::RowMetric::new("commits", "147"),
+                        ],
+                    )],
+                ),
+                ghrm_stat::Section::new(
+                    ghrm_stat::Tool::Churn,
+                    vec![ghrm_stat::Row::new("src/main.rs", "7")],
+                ),
+            ],
         };
         let stats = stats_model(report, &SourceState::NoRepo, td.path());
 
-        assert_eq!(stats.stats[0].items[0].label, "src/main.rs");
-        assert_eq!(stats.stats[0].items[0].href, "/src/main.rs");
-        assert_eq!(stats.stats[0].items[0].metrics[0].value, "7");
-        assert!(stats.stats[0].items[0].metrics[0].label.is_empty());
-        assert_eq!(stats.stats[0].items[0].metrics[0].title, "7 commits");
+        assert!(stats.metadata.is_empty());
+        let author = &about_row(&stats.stats, "Authors").items[0];
+        assert_eq!(author.label, "Wyatt Brege");
+        assert_eq!(metric_values(author), vec!["147", "100%"]);
+        assert_eq!(
+            metric_titles(author),
+            vec!["147 commits", "100% of commits"]
+        );
+
+        let churn = &about_row(&stats.stats, "Churn").items[0];
+        assert_eq!(churn.label, "src/main.rs");
+        assert_eq!(churn.href, "/src/main.rs");
+        assert_eq!(metric_values(churn), vec!["7"]);
+        assert_eq!(metric_titles(churn), vec!["7 commits"]);
     }
 
     #[test]

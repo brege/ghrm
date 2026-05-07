@@ -316,6 +316,10 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 }
 
 .ghrm-stat-metric span:first-child {
+  color: var(--fgColor-muted, #636c76);
+}
+
+.ghrm-stat-metric:first-child span:first-child {
   color: var(--fgColor-default, #1f2328);
 }
 
