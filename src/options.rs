@@ -164,6 +164,43 @@ fn bind_requires_auth(bind: &str) -> bool {
     }
 }
 
+pub fn dump(resolved: &Resolved) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+
+    writeln!(out, "target = {}", resolved.target.display()).unwrap();
+    match &resolved.config_path {
+        Some(path) => writeln!(out, "config_path = {}", path.display()).unwrap(),
+        None => writeln!(out, "config_path =").unwrap(),
+    }
+    writeln!(out, "bind = {}", resolved.bind).unwrap();
+    writeln!(out, "port = {}", resolved.port).unwrap();
+    writeln!(out, "exact_port = {}", resolved.exact_port).unwrap();
+    writeln!(out, "open = {}", resolved.open).unwrap();
+
+    match &resolved.auth {
+        Some(auth) => {
+            writeln!(out, "auth.enabled = true").unwrap();
+            writeln!(out, "auth.username = {}", auth.username).unwrap();
+            writeln!(out, "auth.password_set = true").unwrap();
+        }
+        None => {
+            writeln!(out, "auth.enabled = false").unwrap();
+        }
+    }
+
+    writeln!(out, "use_ignore = {}", resolved.use_ignore).unwrap();
+    writeln!(out, "show_hidden = {}", resolved.show_hidden).unwrap();
+    writeln!(out, "show_excludes = {}", resolved.show_excludes).unwrap();
+    writeln!(out, "filter_ext = {}", resolved.filter_ext).unwrap();
+    writeln!(out, "extensions = {}", resolved.extensions.join(", ")).unwrap();
+    writeln!(out, "exclude_names = {}", resolved.exclude_names.join(", ")).unwrap();
+    writeln!(out, "max_rows = {}", resolved.max_rows).unwrap();
+    writeln!(out, "stats.enabled = {}", resolved.stats.enabled).unwrap();
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -323,5 +360,57 @@ mod tests {
         };
         let resolved = resolve(input, &Config::default()).unwrap();
         assert_eq!(resolved.bind, "localhost");
+    }
+
+    #[test]
+    fn dump_redacts_password() {
+        let cfg: Config = toml::from_str(
+            r#"
+            [auth]
+            username = "testuser"
+            password = "supersecret"
+            "#,
+        )
+        .unwrap();
+        let input = Input {
+            bind: Some("localhost".to_string()),
+            ..default_input()
+        };
+        let resolved = resolve(input, &cfg).unwrap();
+        let output = dump(&resolved);
+
+        assert!(output.contains("auth.enabled = true"));
+        assert!(output.contains("auth.username = testuser"));
+        assert!(output.contains("auth.password_set = true"));
+        assert!(!output.contains("supersecret"));
+    }
+
+    #[test]
+    fn dump_shows_disabled_auth() {
+        let resolved = resolve(default_input(), &Config::default()).unwrap();
+        let output = dump(&resolved);
+
+        assert!(output.contains("auth.enabled = false"));
+        assert!(!output.contains("auth.username"));
+        assert!(!output.contains("auth.password_set"));
+    }
+
+    #[test]
+    fn dump_includes_resolved_values() {
+        let input = Input {
+            port: Some(9000),
+            no_ignore: true,
+            hidden: true,
+            ..default_input()
+        };
+        let resolved = resolve(input, &Config::default()).unwrap();
+        let output = dump(&resolved);
+
+        assert!(output.contains("port = 9000"));
+        assert!(output.contains("exact_port = true"));
+        assert!(output.contains("use_ignore = false"));
+        assert!(output.contains("show_hidden = true"));
+        assert!(output.contains("extensions = md"));
+        assert!(output.contains("stats.enabled = true"));
     }
 }

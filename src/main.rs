@@ -74,6 +74,9 @@ struct Cli {
 
     #[arg(long, help = "Clear cached frontend assets before startup")]
     clean: bool,
+
+    #[arg(long, help = "Print resolved configuration and exit")]
+    dump_config: bool,
 }
 
 fn main() -> Result<()> {
@@ -86,6 +89,7 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
     let cfg = config::Config::load(cli.config.as_deref())?;
+    let dump_config = cli.dump_config;
     if cli.clean {
         vendor::clean()?;
         theme::clean()?;
@@ -93,8 +97,6 @@ fn main() -> Result<()> {
             return Ok(());
         }
     }
-    vendor::ensure()?;
-    theme::ensure()?;
 
     let resolved = options::resolve(
         options::Input {
@@ -112,6 +114,14 @@ fn main() -> Result<()> {
         },
         &cfg,
     )?;
+
+    if dump_config {
+        print!("{}", options::dump(&resolved));
+        return Ok(());
+    }
+
+    vendor::ensure()?;
+    theme::ensure()?;
 
     let filters = filter::Set::resolve(&cfg.walk.filter)?;
     let default_filter_ext = resolved.filter_ext || filters.default_enabled();
