@@ -1,5 +1,7 @@
 use comrak::adapters::CodefenceRendererAdapter;
 use comrak::nodes::Sourcepos;
+use lol_html::html_content::ContentType;
+use lol_html::{RewriteStrSettings, element, rewrite_str};
 use std::fmt;
 
 pub(super) struct GhrmMathAdapter;
@@ -50,47 +52,25 @@ fn has_inline_dollar_math(md: &str) -> bool {
 }
 
 pub(super) fn rewrite_math_spans(html: &str) -> String {
-    let mut out = String::with_capacity(html.len());
-    let mut rest = html;
-    loop {
-        let inline = rest.find(r#"<span data-math-style="inline">"#);
-        let display = rest.find(r#"<span data-math-style="display">"#);
-        let code_inline = rest.find(r#"<code data-math-style="inline">"#);
-        let code_display = rest.find(r#"<code data-math-style="display">"#);
-
-        let next = [inline, display, code_inline, code_display]
-            .into_iter()
-            .flatten()
-            .min();
-        let Some(idx) = next else {
-            out.push_str(rest);
-            break;
-        };
-        out.push_str(&rest[..idx]);
-        let at = &rest[idx..];
-
-        let (open_tag, close_tag, delim) = if at.starts_with(r#"<span data-math-style="inline">"#) {
-            (r#"<span data-math-style="inline">"#, "</span>", "$")
-        } else if at.starts_with(r#"<span data-math-style="display">"#) {
-            (r#"<span data-math-style="display">"#, "</span>", "$$")
-        } else if at.starts_with(r#"<code data-math-style="inline">"#) {
-            (r#"<code data-math-style="inline">"#, "</code>", "$")
-        } else {
-            (r#"<code data-math-style="display">"#, "</code>", "$$")
-        };
-
-        let after_open = &at[open_tag.len()..];
-        let Some(close_idx) = after_open.find(close_tag) else {
-            out.push_str(at);
-            break;
-        };
-        let body = &after_open[..close_idx];
-        out.push_str(delim);
-        out.push_str(body);
-        out.push_str(delim);
-        rest = &after_open[close_idx + close_tag.len()..];
-    }
-    out
+    rewrite_str(
+        html,
+        RewriteStrSettings {
+            element_content_handlers: vec![element!("[data-math-style]", |el| {
+                let delim = match el.get_attribute("data-math-style").as_deref() {
+                    Some("inline") => "$",
+                    Some("display") => "$$",
+                    _ => return Ok(()),
+                };
+                el.before(delim, ContentType::Text);
+                el.after(delim, ContentType::Text);
+                el.remove_and_keep_content();
+                Ok(())
+            })],
+            strict: false,
+            ..RewriteStrSettings::new()
+        },
+    )
+    .expect("rendered markdown math span rewriting should produce valid HTML")
 }
 
 pub(super) fn rewrite_math_display(html: &str) -> String {

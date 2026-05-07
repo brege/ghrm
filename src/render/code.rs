@@ -114,6 +114,8 @@ fn code_block_html(lang: Option<&str>, body: &str) -> String {
 }
 
 pub(super) fn rewrite_code_blocks(html: &str) -> String {
+    // lol_html cannot select a parent from a child match because :has() is not
+    // supported, and code fences need to replace the whole pre/code pair.
     let mut out = String::with_capacity(html.len() + 128);
     let mut rest = html;
 

@@ -148,10 +148,10 @@ fn title_from_h1() {
 fn headings_get_hash_anchor_before_close() {
     let md = "## Taxonomy\n";
     let r = render_at(md, None);
-    assert!(r.html.contains(r#"<h2 id="taxonomy">"#));
-    assert!(r.html.contains(r#"class="ghrm-anchor""#));
-    assert!(r.html.contains(r##"href="#taxonomy">#"##));
-    assert!(!r.html.contains(r#"class="anchor""#));
+    assert!(r.html.contains(r#"<h2 id="taxonomy">"#), "{}", r.html);
+    assert!(r.html.contains(r#"class="ghrm-anchor""#), "{}", r.html);
+    assert!(r.html.contains(r##"href="#taxonomy">#"##), "{}", r.html);
+    assert!(!r.html.contains(r#"class="anchor""#), "{}", r.html);
 }
 
 #[test]

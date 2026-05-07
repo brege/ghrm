@@ -1,3 +1,7 @@
+use lol_html::{RewriteStrSettings, element, end_tag, rewrite_str, text};
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+
 pub(super) fn rewrite_heading_anchors(html: &str) -> String {
     let mut out = String::with_capacity(html.len() + 512);
     let mut rest = html;
@@ -66,23 +70,44 @@ fn split_heading_anchor(inner: &str) -> (Option<String>, &str) {
 }
 
 pub(super) fn extract_title(html: &str) -> Option<String> {
-    let open = html.find("<h1")?;
-    let gt = html[open..].find('>')? + open + 1;
-    let close = html[gt..].find("</h1>")? + gt;
-    let inner = &html[gt..close];
-    Some(strip_tags(inner).trim().to_string())
-}
+    let title = Rc::new(RefCell::new(String::new()));
+    let seen = Rc::new(Cell::new(false));
+    let active = Rc::new(Cell::new(false));
+    let open_active = Rc::clone(&active);
+    let close_active = Rc::clone(&active);
+    let seen_h1 = Rc::clone(&seen);
+    let title_text = Rc::clone(&title);
 
-fn strip_tags(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut in_tag = false;
-    for c in s.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    html_escape::decode_html_entities(&out).into_owned()
+    rewrite_str(
+        html,
+        RewriteStrSettings {
+            element_content_handlers: vec![
+                element!("h1", move |el| {
+                    if !seen_h1.get() {
+                        seen_h1.set(true);
+                        open_active.set(true);
+                        let close_active = Rc::clone(&close_active);
+                        el.on_end_tag(end_tag!(move |_| {
+                            close_active.set(false);
+                            Ok(())
+                        }))?;
+                    }
+                    Ok(())
+                }),
+                text!("h1", move |chunk| {
+                    if active.get() {
+                        title_text.borrow_mut().push_str(chunk.as_str());
+                    }
+                    Ok(())
+                }),
+            ],
+            strict: false,
+            ..RewriteStrSettings::new()
+        },
+    )
+    .expect("rendered markdown title extraction should parse valid HTML");
+
+    let title = title.borrow();
+    let title = title.trim();
+    (!title.is_empty()).then(|| html_escape::decode_html_entities(title).into_owned())
 }

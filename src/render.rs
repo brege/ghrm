@@ -1,3 +1,6 @@
+// Rendered Markdown is shaped here before frontend adapters enhance it.
+// lol_html handles same-element rewrites, but parent rewrites that depend on
+// child code elements stay explicit because :has() is not supported upstream.
 mod alert;
 mod anchor;
 mod code;
