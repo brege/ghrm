@@ -40,6 +40,7 @@ anyhow = "1"
 html-escape = "0.2"
 content_inspector = "0.2"
 infer = { version = "0.19", default-features = false }
+bytecount = "0.6"
 directories = "6"
 ureq = { version = "2", default-features = false, features = ["tls"] }
 webbrowser = { version = "1", features = ["hardened"] }

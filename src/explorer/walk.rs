@@ -174,7 +174,7 @@ pub fn line_count(path: &Path, size: Option<u64>) -> Option<u64> {
         return Some(0);
     }
 
-    let newlines = bytes.iter().filter(|&&b| b == b'\n').count() as u64;
+    let newlines = bytecount::count(&bytes, b'\n') as u64;
     Some(newlines + u64::from(bytes.last() != Some(&b'\n')))
 }
 
@@ -919,6 +919,30 @@ mod tests {
         sort_entries(&mut entries, Sort::Name, SortDir::Desc);
         let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
         assert_eq!(names, vec!["beta", "alpha", "b.md", "a.md"]);
+    }
+
+    #[test]
+    fn line_count_preserves_trailing_newline_semantics() {
+        let td = TempDir::new("ghrm-line-count-test");
+        let empty = td.path().join("empty.txt");
+        let one = td.path().join("one.txt");
+        let two = td.path().join("two.txt");
+        fs::write(&empty, "").unwrap();
+        fs::write(&one, "one\n").unwrap();
+        fs::write(&two, "one\ntwo").unwrap();
+
+        assert_eq!(line_count(&empty, Some(0)), Some(0));
+        assert_eq!(line_count(&one, Some(4)), Some(1));
+        assert_eq!(line_count(&two, Some(7)), Some(2));
+    }
+
+    #[test]
+    fn line_count_skips_non_text_content() {
+        let td = TempDir::new("ghrm-line-count-binary-test");
+        let binary = td.path().join("binary.bin");
+        fs::write(&binary, b"one\n\0two\n").unwrap();
+
+        assert_eq!(line_count(&binary, Some(9)), None);
     }
 
     #[test]
