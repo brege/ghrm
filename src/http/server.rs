@@ -35,7 +35,7 @@ pub struct AppState {
     pub repos: RepoSet,
     pub reload: broadcast::Sender<&'static str>,
     pub use_ignore: bool,
-    pub no_excludes: bool,
+    pub show_excludes: bool,
     pub view_cfg: ViewConfig,
     pub filter_exts: Vec<String>,
     pub filters: filter::Set,
@@ -105,7 +105,7 @@ pub struct Options {
     pub extensions: Vec<String>,
     pub filters: filter::Set,
     pub exclude_names: Vec<String>,
-    pub no_excludes: bool,
+    pub show_excludes: bool,
     pub search_max_rows: usize,
     pub config_path: Option<PathBuf>,
     pub stats: ghrm_stat::Config,
@@ -126,7 +126,7 @@ pub async fn run(options: Options) -> Result<()> {
         extensions,
         filters,
         exclude_names,
-        no_excludes,
+        show_excludes,
         search_max_rows,
         config_path,
         stats,
@@ -146,14 +146,14 @@ pub async fn run(options: Options) -> Result<()> {
     let view_cfg = ViewConfig {
         default: ViewOpts {
             show_hidden: default_hidden,
-            show_excludes: no_excludes,
+            show_excludes,
             filter_ext: default_filter_ext,
         },
         default_use_ignore: use_ignore,
         default_groups: filters.default_groups().to_vec(),
         default_sort: walk::Sort::Name,
         default_columns,
-        can_toggle_excludes: no_excludes,
+        can_toggle_excludes: show_excludes,
     };
     let repo_root_buf = if mode == Mode::Dir {
         target.clone()
@@ -180,7 +180,7 @@ pub async fn run(options: Options) -> Result<()> {
                     use_ignore,
                     &walk_excludes,
                     &walk_extensions,
-                    no_excludes,
+                    show_excludes,
                 );
                 if let Ok(mut guard) = nav_bg.write() {
                     *guard = fresh;
@@ -199,7 +199,7 @@ pub async fn run(options: Options) -> Result<()> {
                 use_ignore,
                 exclude_names.clone(),
                 extensions.clone(),
-                no_excludes,
+                show_excludes,
             ) {
                 warn!("file watcher disabled: {e}");
             }
@@ -223,7 +223,7 @@ pub async fn run(options: Options) -> Result<()> {
         repos,
         reload: reload_tx,
         use_ignore,
-        no_excludes,
+        show_excludes,
         view_cfg,
         filter_exts: extensions,
         filters,
@@ -343,7 +343,7 @@ impl AppState {
                 view.use_ignore,
                 &self.exclude_names,
                 &self.filter_exts,
-                self.no_excludes,
+                self.show_excludes,
             ));
         }
         guard.as_ref().unwrap().get(

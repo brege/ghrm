@@ -154,7 +154,7 @@ fn main() -> Result<()> {
         .walk
         .exclude_names
         .unwrap_or_else(config::default_exclude_names);
-    let no_excludes = cli.no_excludes || cfg.walk.no_excludes.unwrap_or(false);
+    let show_excludes = cli.no_excludes || cfg.walk.no_excludes.unwrap_or(false);
     let max_rows = cli.max_rows.or(cfg.search.max_rows).unwrap_or(1000);
     if max_rows == 0 {
         anyhow::bail!("max search rows must be greater than zero");
@@ -177,7 +177,7 @@ fn main() -> Result<()> {
         extensions,
         filters,
         exclude_names,
-        no_excludes,
+        show_excludes,
         search_max_rows: max_rows,
         config_path,
         stats: cfg.stats.resolve(),

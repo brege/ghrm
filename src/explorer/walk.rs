@@ -357,9 +357,9 @@ pub fn build_all(
     use_ignore: bool,
     exclude_names: &[String],
     extensions: &[String],
-    no_excludes: bool,
+    show_excludes: bool,
 ) -> NavSet {
-    let snapshot = Arc::new(scan(root, use_ignore, exclude_names, no_excludes));
+    let snapshot = Arc::new(scan(root, use_ignore, exclude_names, show_excludes));
     NavSet {
         trees: Arc::new(Mutex::new(BTreeMap::new())),
         snapshot,
@@ -369,7 +369,7 @@ pub fn build_all(
     }
 }
 
-fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bool) -> Snapshot {
+fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: bool) -> Snapshot {
     let root_buf = root.to_path_buf();
     let filter_excludes = exclude_names.to_vec();
     let check_excludes: Arc<Vec<String>> = Arc::new(exclude_names.to_vec());
@@ -394,7 +394,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
         .git_exclude(use_ignore)
         .git_global(use_ignore);
 
-    if !no_excludes {
+    if !show_excludes {
         builder.filter_entry(move |e| {
             paths::allowed_name(&e.file_name().to_string_lossy(), &filter_excludes)
         });
@@ -436,7 +436,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], no_excludes: bo
             }
 
             let name = entry.file_name().to_string_lossy();
-            let is_excluded = no_excludes && !paths::allowed_name(&name, &excludes);
+            let is_excluded = show_excludes && !paths::allowed_name(&name, &excludes);
 
             {
                 let mut guard = dirs_seen.lock().unwrap();

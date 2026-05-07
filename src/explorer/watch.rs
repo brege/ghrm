@@ -21,7 +21,7 @@ pub fn spawn_dir(
     use_ignore: bool,
     exclude_names: Vec<String>,
     extensions: Vec<String>,
-    no_excludes: bool,
+    show_excludes: bool,
 ) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(150), None, tx)?;
@@ -55,8 +55,13 @@ pub fn spawn_dir(
                 if let Ok(mut guard) = nav.alternate.write() {
                     *guard = None;
                 }
-                let fresh =
-                    walk::build_all(&root, use_ignore, &exclude_names, &extensions, no_excludes);
+                let fresh = walk::build_all(
+                    &root,
+                    use_ignore,
+                    &exclude_names,
+                    &extensions,
+                    show_excludes,
+                );
                 if let Ok(mut guard) = nav.current.write() {
                     *guard = fresh;
                 }
