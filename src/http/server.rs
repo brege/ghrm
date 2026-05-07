@@ -425,11 +425,9 @@ fn url_host(ip: IpAddr) -> String {
 }
 
 fn open_browser(url: &str) {
-    let _ = std::process::Command::new("xdg-open")
-        .arg(url)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
+    if let Err(err) = webbrowser::open(url) {
+        warn!("failed to open browser: {err}");
+    }
 }
 
 async fn root(
