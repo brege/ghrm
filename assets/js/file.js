@@ -162,6 +162,7 @@ function setupFileView(container) {
   download.className = 'ghrm-file-action';
   download.href = downloadUrl;
   download.dataset.ghrmNative = '1';
+  download.setAttribute('hx-boost', 'false');
   download.setAttribute('download', '');
   download.setAttribute('aria-label', 'Download raw file');
   download.title = 'Download raw file';
