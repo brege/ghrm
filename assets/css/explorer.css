@@ -101,6 +101,7 @@
   border-radius: 6px;
   background: transparent;
   color: var(--fgColor-default, #1f2328);
+  font: inherit;
   font-size: 13px;
   line-height: 1.2;
   text-align: left;
@@ -110,6 +111,10 @@
   align-items: center;
   column-gap: 10px;
   cursor: pointer;
+}
+
+button.ghrm-view-option {
+  appearance: none;
 }
 
 .markdown-body .ghrm-view-option {
@@ -204,6 +209,65 @@ hr.ghrm-menu-separator {
   padding: 16px;
   color: var(--fgColor-muted, #636c76);
   font-size: 14px;
+}
+
+.ghrm-archive-progress {
+  padding: 8px 12px;
+  border-top: 1px solid var(--borderColor-muted, #d0d7deb3);
+  border-bottom: 1px solid var(--borderColor-muted, #d0d7deb3);
+  background: var(--bgColor-default, #ffffff);
+}
+
+.ghrm-archive-progress[hidden] {
+  display: none;
+}
+
+.ghrm-archive-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 6px;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.ghrm-archive-progress-label,
+.ghrm-archive-progress-count {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ghrm-archive-progress-label {
+  color: var(--fgColor-default, #1f2328);
+}
+
+.ghrm-archive-progress-count {
+  flex: 0 1 auto;
+  text-align: right;
+}
+
+.ghrm-archive-progress-track {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--borderColor-muted, #d0d7deb3);
+}
+
+.ghrm-archive-progress-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--fgColor-accent, #0969da);
+  transition: width 0.2s ease;
+}
+
+.ghrm-archive-progress[data-state="failed"] .ghrm-archive-progress-fill {
+  background: var(--fgColor-danger, #d1242f);
 }
 
 .markdown-body .ghrm-nav-table tr,

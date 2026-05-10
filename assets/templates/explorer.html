@@ -1,6 +1,16 @@
 <article class="{{ article_class }}" hx-history-elt data-explorer="true" data-current-path="{{ current_path }}" data-ghrm-features="{{ features }}">
   <section class="ghrm-explorer-shell">
-{% include "fragments/explorer/header.html" %}{% if entries.is_empty() && !has_parent %}  <p class="ghrm-nav-empty">No files found.</p>
+{% include "fragments/explorer/header.html" %}
+  <div id="ghrm-archive-progress" class="ghrm-archive-progress" aria-live="polite" hidden>
+    <div class="ghrm-archive-progress-row">
+      <span class="ghrm-archive-progress-label">Building archive</span>
+      <span class="ghrm-archive-progress-count"></span>
+    </div>
+    <div class="ghrm-archive-progress-track">
+      <div class="ghrm-archive-progress-fill"></div>
+    </div>
+  </div>
+{% if entries.is_empty() && !has_parent %}  <p class="ghrm-nav-empty">No files found.</p>
 {% else %}  <table class="ghrm-nav-table">
     <colgroup>
       <col class="ghrm-nav-icon-col">
