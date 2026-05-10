@@ -10,7 +10,6 @@ from pathlib import Path
 
 REF_SCAN_REPOS = ("fd", "ripgrep", "tokei", "onefetch")
 NAV_SCAN_TARGET_ENV = "GHRM_NAV_SCAN_TARGET"
-NAV_SCAN_TARGET_CASE = "target"
 
 
 def path_search_medium():
@@ -40,8 +39,9 @@ def path_search_medium():
 
 def nav_scan_cases():
     cases = list(REF_SCAN_REPOS)
-    if os.environ.get(NAV_SCAN_TARGET_ENV):
-        cases.append(NAV_SCAN_TARGET_CASE)
+    target = nav_scan_target()
+    if target is not None:
+        cases.append(str(target))
     return tuple(cases)
 
 
@@ -52,8 +52,9 @@ def nav_scan_config():
     if missing:
         raise RuntimeError(f"missing ref repositories: {', '.join(missing)}")
 
-    if os.environ.get(NAV_SCAN_TARGET_ENV):
-        nav_scan_path(NAV_SCAN_TARGET_CASE)
+    target = nav_scan_target()
+    if target is not None:
+        check_nav_scan_path(target)
 
     config = Path("ref-scan-excludes.toml").resolve()
     config.write_text('[walk]\nexclude_names = [".git"]\n', encoding="utf-8")
@@ -61,19 +62,28 @@ def nav_scan_config():
 
 
 def nav_scan_path(name):
-    if name == NAV_SCAN_TARGET_CASE:
-        raw = os.environ.get(NAV_SCAN_TARGET_ENV)
-        if not raw:
-            raise ValueError(name)
-        path = Path(raw).expanduser().resolve()
+    target = nav_scan_target()
+    if target is not None and name == str(target):
+        path = target
     elif name in REF_SCAN_REPOS:
         path = Path(__file__).resolve().parents[2] / "refs" / name
     else:
         raise ValueError(name)
 
+    check_nav_scan_path(path)
+    return path
+
+
+def nav_scan_target():
+    raw = os.environ.get(NAV_SCAN_TARGET_ENV)
+    if not raw:
+        return None
+    return Path(raw).expanduser().resolve()
+
+
+def check_nav_scan_path(path):
     if not path.is_dir():
         raise RuntimeError(f"missing nav scan target: {path}")
-    return path
 
 
 def path_search_url(base, sort):
