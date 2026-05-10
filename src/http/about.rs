@@ -31,13 +31,15 @@ pub(crate) struct AboutQuery {
 pub(crate) async fn show(State(s): State<AppState>, Query(q): Query<AboutQuery>) -> Response {
     let stats_path = about_path(&s, q.path.as_deref());
     let source = s.repos.source_for(&stats_path);
+    let mode = PeekMode::from_source(&source);
     let stats_input = stats_input_path(&stats_path);
     let served_root = served_root(&s);
     let stats_cfg = s.stats.clone();
-    let stats = if stats_cfg.enabled {
+    let stats_source = source.clone();
+    let stats = if stats_cfg.enabled && mode.loads_stats() {
         tokio::task::spawn_blocking(move || {
             ghrm_stat::resolve_with_config(&stats_input, stats_cfg)
-                .map(|report| stats_model(report, &source, &served_root))
+                .map(|report| stats_model(report, &stats_source, &served_root))
                 .unwrap_or_default()
         })
         .await
@@ -46,19 +48,35 @@ pub(crate) async fn show(State(s): State<AppState>, Query(q): Query<AboutQuery>)
         AboutStats::default()
     };
 
-    html_response(&html(&s.runtime_paths, &stats, true))
+    html_response(&html_with_mode(&s.runtime_paths, &stats, true, mode))
 }
 
 pub(crate) fn html(
     runtime_paths: &runtime::Paths,
     stats: &AboutStats,
     stats_loaded: bool,
+    source: &SourceState,
+) -> String {
+    html_with_mode(
+        runtime_paths,
+        stats,
+        stats_loaded,
+        PeekMode::from_source(source),
+    )
+}
+
+fn html_with_mode(
+    runtime_paths: &runtime::Paths,
+    stats: &AboutStats,
+    stats_loaded: bool,
+    mode: PeekMode,
 ) -> String {
     let project_version = env!("CARGO_PKG_VERSION");
     let project_release_href = format!("{PROJECT_URL}/releases/tag/v{project_version}");
     let about = AboutPeek {
         runtime_paths: runtime_paths.rows(),
         stats_loaded,
+        details_only: mode.details_only(),
         stats,
         project_href: PROJECT_URL,
         project_release_href: &project_release_href,
@@ -70,6 +88,29 @@ pub(crate) fn html(
             warn!("about template error: {}", e);
             String::new()
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PeekMode {
+    RepoSummary,
+    DetailsOnly,
+}
+
+impl PeekMode {
+    fn from_source(source: &SourceState) -> Self {
+        match source {
+            SourceState::NoRepo => Self::DetailsOnly,
+            _ => Self::RepoSummary,
+        }
+    }
+
+    fn loads_stats(self) -> bool {
+        matches!(self, Self::RepoSummary)
+    }
+
+    fn details_only(self) -> bool {
+        matches!(self, Self::DetailsOnly)
     }
 }
 
@@ -525,7 +566,7 @@ mod tests {
     fn about_html_renders_runtime_and_app_links() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, false);
+        let html = html(&runtime_paths, &stats, false, &SourceState::NoRepo);
 
         assert!(html.contains("Runtime Paths"));
         assert!(html.contains("href=\"https://github.com/brege/ghrm\""));
@@ -534,10 +575,34 @@ mod tests {
     }
 
     #[test]
+    fn about_html_renders_no_repo_details_only() {
+        let runtime_paths = test_runtime_paths();
+        let stats = AboutStats::default();
+        let html = html(&runtime_paths, &stats, true, &SourceState::NoRepo);
+
+        assert!(html.contains("class=\"ghrm-about-peek is-details-only\""));
+        assert!(html.contains("data-details-only=\"true\""));
+        assert!(!html.contains("ghrm-about-summary"));
+        assert!(!html.contains("ghrm-about-stamp-button"));
+    }
+
+    #[test]
+    fn about_html_keeps_repo_summary_toggle() {
+        let runtime_paths = test_runtime_paths();
+        let stats = AboutStats::default();
+        let html = html(&runtime_paths, &stats, true, &SourceState::NoRemote);
+
+        assert!(html.contains("class=\"ghrm-about-peek\""));
+        assert!(html.contains("data-details-only=\"false\""));
+        assert!(html.contains("ghrm-about-summary"));
+        assert!(html.contains("ghrm-about-stamp-button"));
+    }
+
+    #[test]
     fn about_html_omits_current_source() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, false);
+        let html = html(&runtime_paths, &stats, false, &SourceState::NoRepo);
 
         assert!(!html.contains("Current Source"));
     }

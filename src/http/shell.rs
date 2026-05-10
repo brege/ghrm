@@ -25,7 +25,7 @@ pub(crate) fn full_page(
         &r.title
     };
     let stats = AboutStats::default();
-    let about = about::html(runtime_paths, &stats, false);
+    let about = about::html(runtime_paths, &stats, false, &source);
     let source = source_html(&source);
     let assets = vendor::plan(r);
     let shell = PageShell {

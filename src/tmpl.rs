@@ -22,6 +22,7 @@ pub struct PageShell<'a> {
 pub struct AboutPeek<'a> {
     pub runtime_paths: &'a [runtime::PathRow],
     pub stats_loaded: bool,
+    pub details_only: bool,
     pub stats: &'a AboutStats,
     pub project_href: &'a str,
     pub project_release_href: &'a str,

@@ -1,5 +1,6 @@
-<section id="ghrm-about-peek" class="ghrm-about-peek" data-stats-loaded="{% if stats_loaded %}true{% else %}false{% endif %}" hidden>
+<section id="ghrm-about-peek" class="ghrm-about-peek{% if details_only %} is-details-only{% endif %}" data-stats-loaded="{% if stats_loaded %}true{% else %}false{% endif %}" data-details-only="{% if details_only %}true{% else %}false{% endif %}" hidden>
   <div class="ghrm-about-peek-inner">
+{% if !details_only %}
     <div class="ghrm-about-summary">
       <div class="ghrm-about-main">
 {% if !stats.metadata.is_empty() %}        <div class="ghrm-about-stats" aria-label="Repository metadata">
@@ -60,6 +61,7 @@
 {% endfor %}        </dl>
       </div>
 {% endif %}    </div>
+{% endif %}
     <div class="ghrm-about-details" aria-label="ghrm details">
       <div class="ghrm-runtime-paths" aria-label="Runtime paths">
         <div class="ghrm-about-heading">Runtime Paths</div>
@@ -88,8 +90,12 @@
         </div>
       </div>
     </div>
+{% if details_only %}
+    <img class="ghrm-about-stamp ghrm-about-stamp-mark" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">
+{% else %}
     <button class="ghrm-about-stamp-button" type="button" aria-label="Toggle ghrm details" aria-expanded="false">
       <img class="ghrm-about-stamp" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">
     </button>
+{% endif %}
   </div>
 </section>

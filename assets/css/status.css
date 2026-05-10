@@ -148,6 +148,16 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   display: grid;
 }
 
+.ghrm-about-peek.is-details-only .ghrm-about-summary,
+.ghrm-about-peek.is-details-only .ghrm-about-stamp-button {
+  display: none;
+}
+
+.ghrm-about-peek.is-details-only .ghrm-about-details {
+  padding-top: 0;
+  display: grid;
+}
+
 .ghrm-about-links {
   display: grid;
   gap: 5px;
@@ -366,6 +376,11 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
     transform 120ms ease;
 }
 
+.ghrm-about-stamp-mark {
+  inset: auto 42px -1px auto;
+  pointer-events: none;
+}
+
 .ghrm-about-heading {
   color: var(--fgColor-default, #1f2328);
   font-size: 11px;
@@ -510,6 +525,10 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
     right: 20px;
     width: 72px;
     height: 72px;
+  }
+
+  .ghrm-about-stamp-mark {
+    inset: auto 20px -1px auto;
   }
 
   .ghrm-about-stamp {
