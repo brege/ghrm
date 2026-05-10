@@ -174,6 +174,8 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
     } else {
         format!("/{rel}/")
     };
+    let archive_zip_href = archive_href("zip", rel, &view, &s.view_cfg);
+    let archive_tar_zst_href = archive_href("tar.zst", rel, &view, &s.view_cfg);
     let controls = build_controls(&current_href, &view, &s.view_cfg, &s.filters);
     let (has_mermaid, has_math, has_map) = readme_rendered
         .as_ref()
@@ -193,6 +195,8 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
         features: &features,
         crumbs: &crumbs,
         current_path: rel,
+        archive_zip_href: &archive_zip_href,
+        archive_tar_zst_href: &archive_tar_zst_href,
         has_parent,
         parent_href: &parent_href,
         filter_menu_active: controls.filter_menu_active,
@@ -226,6 +230,15 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
         return shell::fragment(&body, &combined.title, source);
     }
     shell::full_page(&combined, &body, source, s.auth.is_some(), &s.runtime_paths)
+}
+
+fn archive_href(format: &str, rel: &str, view: &ViewState, cfg: &ViewConfig) -> String {
+    let href = if rel.is_empty() {
+        format!("/_ghrm/archive/{format}")
+    } else {
+        format!("/_ghrm/archive/{format}/{rel}")
+    };
+    view::with_view(&href, view, cfg)
 }
 
 fn cmp_commit_entries(

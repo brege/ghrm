@@ -137,6 +137,12 @@
   opacity: 0;
 }
 
+.ghrm-view-option-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
 .ghrm-view-option.is-active .ghrm-view-option-check {
   opacity: 1;
 }

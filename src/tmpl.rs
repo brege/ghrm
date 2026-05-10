@@ -94,6 +94,8 @@ pub struct ExplorerCtx<'a> {
     pub features: &'a str,
     pub crumbs: &'a str,
     pub current_path: &'a str,
+    pub archive_zip_href: &'a str,
+    pub archive_tar_zst_href: &'a str,
     pub has_parent: bool,
     pub parent_href: &'a str,
     pub filter_menu_active: bool,

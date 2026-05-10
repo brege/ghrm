@@ -20,6 +20,11 @@ const EXPLORER_MENUS = [
     panelId: 'ghrm-sort-menu',
   },
   {
+    name: 'archive',
+    toggleId: 'ghrm-archive-menu-toggle',
+    panelId: 'ghrm-archive-menu',
+  },
+  {
     name: 'column',
     toggleId: 'ghrm-column-menu-toggle',
     panelId: 'ghrm-column-menu',
@@ -107,8 +112,9 @@ function openExplorerMenu(name) {
 export function setupViewMenu() {
   const filter = currentExplorerMenu('filter');
   const sort = currentExplorerMenu('sort');
+  const archive = currentExplorerMenu('archive');
   const column = currentExplorerMenu('column');
-  if (!filter || !sort || !column) return;
+  if (!filter || !sort || !archive || !column) return;
 
   syncColumnControls();
   closeExplorerMenus();
