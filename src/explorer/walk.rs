@@ -995,4 +995,90 @@ mod tests {
         let shown_names: Vec<_> = shown.into_iter().map(|entry| entry.name).collect();
         assert!(shown_names.contains(&"ignored.txt".to_string()));
     }
+
+    #[test]
+    fn list_dir_treats_git_as_hidden_path() {
+        let td = TempDir::new("ghrm-walk-git-hidden-test");
+        fs::create_dir_all(td.path().join(".git")).unwrap();
+        fs::write(td.path().join(".git/config"), "config\n").unwrap();
+        fs::write(td.path().join("visible.txt"), "visible\n").unwrap();
+
+        let order = SortSpec {
+            sort: Sort::Name,
+            dir: SortDir::Asc,
+        };
+        let hidden = list_dir(
+            td.path(),
+            Path::new(""),
+            ListSpec {
+                use_ignore: false,
+                exclude_names: &[],
+                extensions: &[],
+                matcher: None,
+                opts: ViewOpts {
+                    show_hidden: false,
+                    show_excludes: false,
+                    filter_ext: false,
+                },
+                order,
+            },
+        )
+        .unwrap()
+        .entries;
+        let hidden_names: Vec<_> = hidden.into_iter().map(|entry| entry.name).collect();
+        assert!(!hidden_names.contains(&".git".to_string()));
+
+        let shown = list_dir(
+            td.path(),
+            Path::new(""),
+            ListSpec {
+                use_ignore: false,
+                exclude_names: &[],
+                extensions: &[],
+                matcher: None,
+                opts: ViewOpts {
+                    show_hidden: true,
+                    show_excludes: false,
+                    filter_ext: false,
+                },
+                order,
+            },
+        )
+        .unwrap()
+        .entries;
+        let shown_names: Vec<_> = shown.into_iter().map(|entry| entry.name).collect();
+        assert!(shown_names.contains(&".git".to_string()));
+    }
+
+    #[test]
+    fn list_dir_still_honors_configured_git_exclude() {
+        let td = TempDir::new("ghrm-walk-git-exclude-test");
+        fs::create_dir_all(td.path().join(".git")).unwrap();
+        fs::write(td.path().join(".git/config"), "config\n").unwrap();
+
+        let entries = list_dir(
+            td.path(),
+            Path::new(""),
+            ListSpec {
+                use_ignore: false,
+                exclude_names: &[".git".to_string()],
+                extensions: &[],
+                matcher: None,
+                opts: ViewOpts {
+                    show_hidden: true,
+                    show_excludes: false,
+                    filter_ext: false,
+                },
+                order: SortSpec {
+                    sort: Sort::Name,
+                    dir: SortDir::Asc,
+                },
+            },
+        )
+        .unwrap()
+        .entries;
+        let names: Vec<_> = entries.into_iter().map(|entry| entry.name).collect();
+
+        assert!(!names.contains(&".git".to_string()));
+    }
 }
