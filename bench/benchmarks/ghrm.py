@@ -8,6 +8,9 @@ import urllib.request
 from pathlib import Path
 
 
+REF_SCAN_REPOS = ("fd", "ripgrep", "tokei", "onefetch")
+
+
 def path_search_medium():
     root = Path("fixture").resolve()
     if root.exists():
@@ -33,6 +36,24 @@ def path_search_medium():
     return str(root)
 
 
+def ref_scan_config():
+    root = Path(__file__).resolve().parents[2]
+    refs = root / "refs"
+    missing = [name for name in REF_SCAN_REPOS if not (refs / name / ".git").exists()]
+    if missing:
+        raise RuntimeError(f"missing ref repositories: {', '.join(missing)}")
+
+    config = Path("ref-scan-excludes.toml").resolve()
+    config.write_text('[walk]\nexclude_names = [".git"]\n', encoding="utf-8")
+    return str(config)
+
+
+def ref_repo(name):
+    if name not in REF_SCAN_REPOS:
+        raise ValueError(name)
+    return Path(__file__).resolve().parents[2] / "refs" / name
+
+
 def path_search_url(base, sort):
     params = {
         "q": "module",
@@ -46,7 +67,7 @@ def path_search_url(base, sort):
     return f"{base}/_ghrm/path-search?{urllib.parse.urlencode(params)}"
 
 
-def start_server(root, port):
+def start_server(root, port, extra_args=()):
     env = os.environ.copy()
     env["GHRM_OPEN"] = "0"
     return subprocess.Popen(
@@ -59,6 +80,7 @@ def start_server(root, port):
             str(port),
             "--max-rows",
             "1000",
+            *extra_args,
             str(root),
         ],
         stdout=subprocess.DEVNULL,
