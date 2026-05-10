@@ -15,8 +15,8 @@
   "default_benchmark_timeout": 60,
   "build_cache_size": 3,
   "build_command": [
-    "/usr/bin/env cargo build --release --locked",
-    "/usr/bin/env cp target/release/ghrm {build_cache_dir}/ghrm"
+    "CARGO_TARGET_DIR={conf_dir}/../target/asv /usr/bin/env cargo build --release --locked",
+    "/usr/bin/env cp {conf_dir}/../target/asv/release/ghrm {build_cache_dir}/ghrm"
   ],
   "install_command": [
     "/usr/bin/env cp {build_cache_dir}/ghrm {env_dir}/bin/ghrm"
