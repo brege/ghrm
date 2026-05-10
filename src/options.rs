@@ -17,6 +17,7 @@ pub struct Resolved {
     pub use_ignore: bool,
     pub show_hidden: bool,
     pub show_excludes: bool,
+    pub dangerously_traverse_excludes: bool,
     pub filter_ext: bool,
     pub extensions: Vec<String>,
     pub exclude_names: Vec<String>,
@@ -34,6 +35,7 @@ pub struct Input<'a> {
     pub hidden: bool,
     pub extensions: Vec<String>,
     pub no_excludes: bool,
+    pub dangerously_traverse_excludes: bool,
     pub max_rows: Option<usize>,
     pub ghrm_open: Option<String>,
 }
@@ -78,12 +80,18 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
         extensions
     };
 
-    let exclude_names = cfg
-        .walk
-        .exclude_names
-        .clone()
-        .unwrap_or_else(crate::config::default_exclude_names);
-    let show_excludes = cli.no_excludes || cfg.walk.no_excludes.unwrap_or(false);
+    let dangerously_traverse_excludes = cli.dangerously_traverse_excludes
+        || cfg.walk.dangerously_traverse_excludes.unwrap_or(false);
+    let exclude_names = if dangerously_traverse_excludes {
+        Vec::new()
+    } else {
+        cfg.walk
+            .exclude_names
+            .clone()
+            .unwrap_or_else(crate::config::default_exclude_names)
+    };
+    let show_excludes = !dangerously_traverse_excludes
+        && (cli.no_excludes || cfg.walk.no_excludes.unwrap_or(false));
 
     let max_rows = cli.max_rows.or(cfg.search.max_rows).unwrap_or(1000);
     if max_rows == 0 {
@@ -104,6 +112,7 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
         use_ignore,
         show_hidden,
         show_excludes,
+        dangerously_traverse_excludes,
         filter_ext,
         extensions,
         exclude_names,
@@ -192,6 +201,12 @@ pub fn dump(resolved: &Resolved) -> String {
     writeln!(out, "use_ignore = {}", resolved.use_ignore).unwrap();
     writeln!(out, "show_hidden = {}", resolved.show_hidden).unwrap();
     writeln!(out, "show_excludes = {}", resolved.show_excludes).unwrap();
+    writeln!(
+        out,
+        "dangerously_traverse_excludes = {}",
+        resolved.dangerously_traverse_excludes
+    )
+    .unwrap();
     writeln!(out, "filter_ext = {}", resolved.filter_ext).unwrap();
     writeln!(out, "extensions = {}", resolved.extensions.join(", ")).unwrap();
     writeln!(out, "exclude_names = {}", resolved.exclude_names.join(", ")).unwrap();
@@ -217,6 +232,7 @@ mod tests {
             hidden: false,
             extensions: vec![],
             no_excludes: false,
+            dangerously_traverse_excludes: false,
             max_rows: None,
             ghrm_open: None,
         }
@@ -343,6 +359,38 @@ mod tests {
     }
 
     #[test]
+    fn dangerous_traverse_excludes_clears_effective_excludes() {
+        let input = Input {
+            dangerously_traverse_excludes: true,
+            no_excludes: true,
+            ..default_input()
+        };
+        let resolved = resolve(input, &Config::default()).unwrap();
+
+        assert!(resolved.dangerously_traverse_excludes);
+        assert!(resolved.exclude_names.is_empty());
+        assert!(!resolved.show_excludes);
+    }
+
+    #[test]
+    fn config_dangerous_traverse_excludes_wins_over_exclude_names() {
+        let cfg: Config = toml::from_str(
+            r#"
+            [walk]
+            no_excludes = true
+            dangerously_traverse_excludes = true
+            exclude_names = ["target"]
+            "#,
+        )
+        .unwrap();
+        let resolved = resolve(default_input(), &cfg).unwrap();
+
+        assert!(resolved.dangerously_traverse_excludes);
+        assert!(resolved.exclude_names.is_empty());
+        assert!(!resolved.show_excludes);
+    }
+
+    #[test]
     fn non_loopback_bind_requires_auth() {
         let input = Input {
             bind: Some("0.0.0.0".to_string()),
@@ -410,6 +458,7 @@ mod tests {
         assert!(output.contains("exact_port = true"));
         assert!(output.contains("use_ignore = false"));
         assert!(output.contains("show_hidden = true"));
+        assert!(output.contains("dangerously_traverse_excludes = false"));
         assert!(output.contains("extensions = md"));
         assert!(output.contains("stats.enabled = true"));
     }
