@@ -114,7 +114,12 @@ function sync() {
     peek.classList.toggle('is-details-open', detailsOpen);
   }
   if (detailsButton) {
+    const detailsLabel = detailsOpen
+      ? 'Hide runtime details'
+      : 'Show runtime details';
     detailsButton.setAttribute('aria-expanded', detailsOpen ? 'true' : 'false');
+    detailsButton.setAttribute('aria-label', detailsLabel);
+    detailsButton.title = detailsLabel;
   }
   document.body?.classList.toggle('ghrm-about-open', peekOpen);
 }

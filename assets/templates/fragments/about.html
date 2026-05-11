@@ -73,28 +73,26 @@
 {% endfor %}        </dl>
       </div>
 {% endfor %}
-      <div class="ghrm-about-app" aria-label="ghrm app">
-        <div class="ghrm-about-heading">ghrm</div>
-        <div class="ghrm-about-links">
-          <a class="ghrm-about-project" href="{{ project_href }}" target="_blank" rel="noopener noreferrer">
-            <svg aria-hidden="true">
-              <use href="#ghrm-icon-github"></use>
-            </svg>
-            <span>brege/ghrm</span>
-          </a>
-          <a class="ghrm-about-project" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer">
-            <svg aria-hidden="true">
-              <use href="#ghrm-icon-fork"></use>
-            </svg>
-            <span>v{{ project_version }}</span>
-          </a>
-        </div>
-      </div>
+    </div>
+    <div class="ghrm-about-footer" aria-label="ghrm app">
+      <span class="ghrm-about-footer-label">ghrm</span>
+      <a class="ghrm-about-project" href="{{ project_href }}" target="_blank" rel="noopener noreferrer">
+        <svg aria-hidden="true">
+          <use href="#ghrm-icon-github"></use>
+        </svg>
+        <span>brege/ghrm</span>
+      </a>
+      <a class="ghrm-about-project" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer">
+        <svg aria-hidden="true">
+          <use href="#ghrm-icon-fork"></use>
+        </svg>
+        <span>v{{ project_version }}</span>
+      </a>
     </div>
 {% if details_only %}
     <img class="ghrm-about-stamp ghrm-about-stamp-mark" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">
 {% else %}
-    <button class="ghrm-about-stamp-button" type="button" aria-label="Toggle ghrm details" aria-expanded="false">
+    <button class="ghrm-about-stamp-button" type="button" aria-label="Show runtime details" title="Show runtime details" aria-expanded="false">
       <img class="ghrm-about-stamp" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">
     </button>
 {% endif %}

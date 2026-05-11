@@ -158,11 +158,6 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   display: grid;
 }
 
-.ghrm-about-links {
-  display: grid;
-  gap: 5px;
-}
-
 .ghrm-about-project {
   display: inline-flex;
   align-items: center;
@@ -334,14 +329,38 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   color: var(--fgColor-default, #1f2328);
 }
 
-.ghrm-about-app {
+.ghrm-about-footer {
   min-width: 0;
-  grid-column: 2;
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  justify-items: start;
+  min-height: 54px;
+  margin-top: 2px;
+  padding: 12px 128px 0 0;
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--borderColor-muted, #d0d7de);
+  display: flex;
+  align-items: center;
+  gap: 14px;
   color: var(--fgColor-muted, #636c76);
+}
+
+.ghrm-about-footer-label {
+  color: var(--fgColor-default, #1f2328);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.ghrm-about-peek:not(.is-details-open):not(.is-details-only)
+  .ghrm-about-stamp-button {
+  width: 54px;
+  height: 54px;
+}
+
+.ghrm-about-peek:not(.is-details-open):not(.is-details-only)
+  .ghrm-about-stamp-button
+  .ghrm-about-stamp {
+  width: 54px;
+  height: 54px;
 }
 
 .ghrm-about-stamp-button {
@@ -558,8 +577,15 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   .ghrm-detail-section-config,
   .ghrm-detail-section-filesystem,
   .ghrm-detail-section-filter-totals,
-  .ghrm-about-app {
+  .ghrm-about-footer {
     grid-column: auto;
+  }
+
+  .ghrm-about-footer {
+    min-height: 64px;
+    padding-right: 96px;
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   .ghrm-languages {
