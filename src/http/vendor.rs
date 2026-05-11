@@ -81,7 +81,7 @@ fn download(url: &str, path: &Path) -> Result<()> {
     let response = ureq::get(url)
         .call()
         .with_context(|| format!("download failed: {url}"))?;
-    let mut reader = response.into_reader();
+    let mut reader = response.into_parts().1.into_reader();
     let mut file = fs::File::create(path)?;
     io::copy(&mut reader, &mut file)?;
     Ok(())

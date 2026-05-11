@@ -1,6 +1,6 @@
 [package]
 name = "ghrm"
-version = "0.4.4"
+version = "0.4.5"
 edition = "2024"
 rust-version = "1.88"
 description = "Fast local GitHub-flavored Markdown and repository browser"
@@ -43,7 +43,7 @@ content_inspector = "0.2"
 infer = { version = "0.19", default-features = false }
 bytecount = "0.6"
 directories = "6"
-ureq = { version = "2", default-features = false, features = ["tls"] }
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 webbrowser = { version = "1", features = ["hardened"] }
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "fs", "time", "io-util", "net"] }
@@ -53,7 +53,7 @@ futures-util = "0.3"
 tokio-util = { version = "0.7", features = ["io-util"] }
 
 notify = "8"
-notify-debouncer-full = "0.6"
+notify-debouncer-full = "0.7"
 ignore = "0.4"
 grep-matcher = "0.1"
 grep-regex = "0.1"
@@ -68,12 +68,12 @@ toml = "1.0"
 include_dir = "0.7"
 askama = "0.16"
 tar = { version = "0.4", default-features = false }
-zip = { version = "6", default-features = false, features = ["deflate"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
 zstd = "0.13"
-hmac = "0.12"
+hmac = "0.13"
 percent-encoding = "2"
-sha2 = "0.10"
-ghrm-stat = { version = "0.1.0", path = "ghrm-stat" }
+sha2 = "0.11"
+ghrm-stat = { version = "0.4.5", path = "ghrm-stat" }
 
 [profile.release]
 lto = "thin"

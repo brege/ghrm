@@ -8,7 +8,7 @@ use axum::{
     middleware::Next,
     response::{Html, IntoResponse, Response},
 };
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::Deserialize;
 use std::net::SocketAddr;
