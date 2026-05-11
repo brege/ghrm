@@ -8,6 +8,10 @@ import urllib.request
 from pathlib import Path
 
 
+REF_SCAN_REPOS = ("fd", "ripgrep", "tokei", "onefetch")
+NAV_SCAN_TARGET_ENV = "GHRM_NAV_SCAN_TARGET"
+
+
 def path_search_medium():
     root = Path("fixture").resolve()
     if root.exists():
@@ -33,6 +37,55 @@ def path_search_medium():
     return str(root)
 
 
+def nav_scan_cases():
+    cases = list(REF_SCAN_REPOS)
+    target = nav_scan_target()
+    if target is not None:
+        cases.append(str(target))
+    return tuple(cases)
+
+
+def nav_scan_config():
+    root = Path(__file__).resolve().parents[2]
+    refs = root / "refs"
+    missing = [name for name in REF_SCAN_REPOS if not (refs / name / ".git").exists()]
+    if missing:
+        raise RuntimeError(f"missing ref repositories: {', '.join(missing)}")
+
+    target = nav_scan_target()
+    if target is not None:
+        check_nav_scan_path(target)
+
+    config = Path("ref-scan-excludes.toml").resolve()
+    config.write_text('[walk]\nexclude_names = [".git"]\n', encoding="utf-8")
+    return str(config)
+
+
+def nav_scan_path(name):
+    target = nav_scan_target()
+    if target is not None and name == str(target):
+        path = target
+    elif name in REF_SCAN_REPOS:
+        path = Path(__file__).resolve().parents[2] / "refs" / name
+    else:
+        raise ValueError(name)
+
+    check_nav_scan_path(path)
+    return path
+
+
+def nav_scan_target():
+    raw = os.environ.get(NAV_SCAN_TARGET_ENV)
+    if not raw:
+        return None
+    return Path(raw).expanduser().resolve()
+
+
+def check_nav_scan_path(path):
+    if not path.is_dir():
+        raise RuntimeError(f"missing nav scan target: {path}")
+
+
 def path_search_url(base, sort):
     params = {
         "q": "module",
@@ -46,7 +99,7 @@ def path_search_url(base, sort):
     return f"{base}/_ghrm/path-search?{urllib.parse.urlencode(params)}"
 
 
-def start_server(root, port):
+def start_server(root, port, extra_args=()):
     env = os.environ.copy()
     env["GHRM_OPEN"] = "0"
     return subprocess.Popen(
@@ -59,6 +112,7 @@ def start_server(root, port):
             str(port),
             "--max-rows",
             "1000",
+            *extra_args,
             str(root),
         ],
         stdout=subprocess.DEVNULL,

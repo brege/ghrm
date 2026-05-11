@@ -2,7 +2,7 @@ use crate::explorer;
 use crate::explorer::view::{ViewConfig, ViewQuery, ViewState};
 use crate::explorer::walk::{NavSet, ViewOpts};
 use crate::explorer::{column, crumbs, filter, view, walk, watch};
-use crate::http::{about, api, auth, delivery, shell, vendor};
+use crate::http::{about, api, archive, auth, delivery, shell, vendor};
 use crate::render::{self, Rendered};
 use crate::repo::RepoSet;
 use crate::runtime;
@@ -16,7 +16,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     middleware,
     response::Response,
-    routing::get,
+    routing::{get, post},
 };
 use futures_util::{SinkExt, StreamExt};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
@@ -40,6 +40,7 @@ pub struct AppState {
     pub filter_exts: Vec<String>,
     pub filters: filter::Set,
     pub exclude_names: Vec<String>,
+    pub archive_jobs: archive::ArchiveJobs,
     pub search_max_rows: usize,
     pub home: Option<PathBuf>,
     pub runtime_paths: runtime::Paths,
@@ -228,6 +229,7 @@ pub async fn run(options: Options) -> Result<()> {
         filter_exts: extensions,
         filters,
         exclude_names,
+        archive_jobs: archive::ArchiveJobs::new()?,
         search_max_rows,
         home: std::env::var_os("HOME").map(PathBuf::from),
         runtime_paths: runtime::Paths::new(&target, config_path.as_deref())?,
@@ -243,6 +245,10 @@ pub async fn run(options: Options) -> Result<()> {
         .route("/_ghrm/search", get(api::search))
         .route("/_ghrm/render", get(api::render))
         .route("/_ghrm/about", get(about::show))
+        .route("/_ghrm/archive/{format}", post(archive::start))
+        .route("/_ghrm/archive/{format}/{*path}", post(archive::start))
+        .route("/_ghrm/archive-jobs/{id}", get(archive::status))
+        .route("/_ghrm/archive-jobs/{id}/download", get(archive::download))
         .route("/_ghrm/raw/{*path}", get(delivery::raw_file))
         .route("/_ghrm/html/{*path}", get(delivery::html_file))
         .route("/_ghrm/download/{*path}", get(delivery::download_file))

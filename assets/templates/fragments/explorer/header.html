@@ -41,6 +41,27 @@
         </a>
       </div>
       <div class="ghrm-menu-shell">
+        <button id="ghrm-archive-menu-toggle" class="ghrm-view-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Download directory" title="Download directory">
+          <svg aria-hidden="true" focusable="false">
+            <use href="#ghrm-icon-download"></use>
+          </svg>
+        </button>
+        <div id="ghrm-archive-menu" class="ghrm-view-menu" role="menu" aria-label="Download directory" hidden>
+          <button class="ghrm-view-option ghrm-archive-option" type="button" data-ghrm-archive-url="{{ archive_tar_zst_href }}" role="menuitem" title="Download directory as tar.zst">
+            <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-zst"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Download .tar.zst</span>
+          </button>
+          <button class="ghrm-view-option ghrm-archive-option" type="button" data-ghrm-archive-url="{{ archive_zip_href }}" role="menuitem" title="Download directory as zip">
+            <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
+              <use href="#ghrm-icon-zip"></use>
+            </svg>
+            <span class="ghrm-view-option-label">Download .zip</span>
+          </button>
+        </div>
+      </div>
+      <div class="ghrm-menu-shell">
         <button id="ghrm-column-menu-toggle" class="ghrm-view-menu-toggle{% if column_menu_active %} is-active{% endif %}" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Display columns" title="Display columns">
           <svg aria-hidden="true" focusable="false">
             <use href="#ghrm-icon-columns"></use>

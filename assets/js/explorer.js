@@ -7,6 +7,7 @@ import {
 } from './dom.js';
 
 let explorerMenusBound = false;
+let archiveProgressTimer = null;
 
 const EXPLORER_MENUS = [
   {
@@ -18,6 +19,11 @@ const EXPLORER_MENUS = [
     name: 'sort',
     toggleId: 'ghrm-sort-menu-toggle',
     panelId: 'ghrm-sort-menu',
+  },
+  {
+    name: 'archive',
+    toggleId: 'ghrm-archive-menu-toggle',
+    panelId: 'ghrm-archive-menu',
   },
   {
     name: 'column',
@@ -107,8 +113,9 @@ function openExplorerMenu(name) {
 export function setupViewMenu() {
   const filter = currentExplorerMenu('filter');
   const sort = currentExplorerMenu('sort');
+  const archive = currentExplorerMenu('archive');
   const column = currentExplorerMenu('column');
-  if (!filter || !sort || !column) return;
+  if (!filter || !sort || !archive || !column) return;
 
   syncColumnControls();
   closeExplorerMenus();
@@ -122,8 +129,11 @@ export function setupViewMenu() {
       }
     };
     for (const option of menu.panel.querySelectorAll('.ghrm-view-option')) {
-      option.onclick = () => {
+      option.onclick = (event) => {
         closeExplorerMenus();
+        if (option.dataset.ghrmArchiveUrl) {
+          startArchiveJob(event, option.dataset.ghrmArchiveUrl);
+        }
       };
     }
   }
@@ -161,6 +171,165 @@ export function setupViewMenu() {
       openMenu.toggle.focus();
     }
   });
+}
+
+async function startArchiveJob(event, url) {
+  event.preventDefault();
+  clearArchiveProgressTimer();
+  updateArchiveProgress({
+    state: 'running',
+    filename: 'archive',
+    doneFiles: 0,
+    totalFiles: 0,
+    doneBytes: 0,
+    totalBytes: 0,
+    percent: 0,
+  });
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`archive request failed: ${response.status}`);
+    }
+    const job = await response.json();
+    triggerArchiveDownload(job.download_url);
+    pollArchiveJob(job.status_url, job.download_url);
+  } catch {
+    updateArchiveProgress({
+      state: 'failed',
+      filename: 'archive',
+      error: 'Archive failed',
+      percent: 100,
+    });
+  }
+}
+
+async function pollArchiveJob(statusUrl, downloadUrl) {
+  try {
+    const response = await fetch(statusUrl, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`archive status failed: ${response.status}`);
+    }
+    const status = await response.json();
+    updateArchiveProgress(status);
+    if (status.state === 'complete') {
+      archiveProgressTimer = window.setTimeout(hideArchiveProgress, 1800);
+      return;
+    }
+    if (status.state === 'failed') {
+      return;
+    }
+    archiveProgressTimer = window.setTimeout(() => {
+      pollArchiveJob(statusUrl, downloadUrl);
+    }, 500);
+  } catch {
+    updateArchiveProgress({
+      state: 'failed',
+      filename: 'archive',
+      error: 'Archive failed',
+      percent: 100,
+    });
+  }
+}
+
+function updateArchiveProgress(status) {
+  const progress = document.getElementById('ghrm-archive-progress');
+  if (!progress) return;
+  const label = progress.querySelector('.ghrm-archive-progress-label');
+  const count = progress.querySelector('.ghrm-archive-progress-count');
+  const fill = progress.querySelector('.ghrm-archive-progress-fill');
+  const percent = Math.max(0, Math.min(100, status.percent || 0));
+
+  progress.hidden = false;
+  progress.dataset.state = status.state || 'running';
+  if (fill) {
+    fill.style.width = `${percent}%`;
+  }
+  if (label) {
+    label.textContent = archiveProgressLabel(status);
+  }
+  if (count) {
+    count.textContent = archiveProgressCount(status, percent);
+  }
+}
+
+function archiveProgressLabel(status) {
+  if (status.state === 'pending') {
+    return `Starting ${status.filename || 'archive'}`;
+  }
+  if (status.state === 'complete') {
+    return 'Archive complete';
+  }
+  if (status.state === 'failed') {
+    return status.error || 'Archive failed';
+  }
+  return `Downloading ${status.filename || 'archive'}`;
+}
+
+function archiveProgressCount(status, percent) {
+  const files = archiveFileCount(status);
+  const bytes = archiveByteCount(status);
+  const parts = [`${percent}%`];
+  if (files) parts.push(files);
+  if (bytes) parts.push(bytes);
+  return parts.join(' · ');
+}
+
+function archiveFileCount(status) {
+  const done = Number(status.done_files ?? status.doneFiles ?? 0);
+  const total = Number(status.total_files ?? status.totalFiles ?? 0);
+  if (!total) return '';
+  return `${done} / ${total} files`;
+}
+
+function archiveByteCount(status) {
+  const done = Number(status.done_bytes ?? status.doneBytes ?? 0);
+  const total = Number(status.total_bytes ?? status.totalBytes ?? 0);
+  if (!total) return '';
+  return `${formatBytes(done)} / ${formatBytes(total)}`;
+}
+
+function formatBytes(value) {
+  if (value < 1024) return `${value} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let size = value / 1024;
+  for (const unit of units) {
+    if (size < 1024) {
+      return `${size.toFixed(size < 10 ? 1 : 0)} ${unit}`;
+    }
+    size /= 1024;
+  }
+  return `${size.toFixed(0)} PB`;
+}
+
+function triggerArchiveDownload(url) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = '';
+  link.dataset.ghrmNative = '1';
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+function hideArchiveProgress() {
+  const progress = document.getElementById('ghrm-archive-progress');
+  if (progress) {
+    progress.hidden = true;
+  }
+  clearArchiveProgressTimer();
+}
+
+function clearArchiveProgressTimer() {
+  if (archiveProgressTimer !== null) {
+    window.clearTimeout(archiveProgressTimer);
+    archiveProgressTimer = null;
+  }
 }
 
 export function setupNavExternalLinks() {

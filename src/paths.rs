@@ -17,7 +17,7 @@ pub fn safe_rel(raw: &str) -> Option<PathBuf> {
 }
 
 pub fn allowed_name(name: &str, exclude_names: &[String]) -> bool {
-    name != ".git" && !exclude_names.iter().any(|entry| entry == name)
+    !exclude_names.iter().any(|entry| entry == name)
 }
 
 pub fn has_excluded_part(path: &Path, exclude_names: &[String]) -> bool {
@@ -57,13 +57,22 @@ mod tests {
             Path::new("src/node_modules/pkg/index.js"),
             &excludes
         ));
-        assert!(has_excluded_part(Path::new(".git/config"), &excludes));
         assert!(!has_excluded_part(Path::new("src/main.rs"), &excludes));
     }
 
     #[test]
     fn hidden_part_matches_nested_paths() {
+        assert!(has_hidden_part(Path::new(".git/config")));
         assert!(has_hidden_part(Path::new("docs/.draft/readme.md")));
         assert!(!has_hidden_part(Path::new("docs/readme.md")));
+    }
+
+    #[test]
+    fn git_is_excluded_only_when_configured() {
+        assert!(!has_excluded_part(Path::new(".git/config"), &[]));
+        assert!(has_excluded_part(
+            Path::new(".git/config"),
+            &[".git".to_string()]
+        ));
     }
 }

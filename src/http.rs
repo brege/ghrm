@@ -1,5 +1,6 @@
 pub(crate) mod about;
 pub(crate) mod api;
+pub(crate) mod archive;
 pub(crate) mod auth;
 pub(crate) mod delivery;
 pub(crate) mod server;

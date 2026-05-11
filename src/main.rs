@@ -60,9 +60,12 @@ struct Cli {
     #[arg(
         short = 'E',
         long,
-        help = "Do not hide excluded directories (.git, node_modules, etc.) in explorer"
+        help = "Do not hide excluded directories (node_modules, target, etc.) in explorer"
     )]
     no_excludes: bool,
+
+    #[arg(long, help = "Dangerously traverse configured exclude directories")]
+    dangerously_traverse_excludes: bool,
 
     #[arg(
         short = 'm',
@@ -109,6 +112,7 @@ fn main() -> Result<()> {
             hidden: cli.hidden,
             extensions: cli.extensions,
             no_excludes: cli.no_excludes,
+            dangerously_traverse_excludes: cli.dangerously_traverse_excludes,
             max_rows: cli.max_rows,
             ghrm_open: std::env::var("GHRM_OPEN").ok(),
         },
