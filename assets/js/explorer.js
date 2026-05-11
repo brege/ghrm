@@ -194,6 +194,7 @@ async function startArchiveJob(event, url) {
       throw new Error(`archive request failed: ${response.status}`);
     }
     const job = await response.json();
+    triggerArchiveDownload(job.download_url);
     pollArchiveJob(job.status_url, job.download_url);
   } catch {
     updateArchiveProgress({
@@ -215,8 +216,7 @@ async function pollArchiveJob(statusUrl, downloadUrl) {
     }
     const status = await response.json();
     updateArchiveProgress(status);
-    if (status.state === 'ready') {
-      triggerArchiveDownload(status.download_url || downloadUrl);
+    if (status.state === 'complete') {
       archiveProgressTimer = window.setTimeout(hideArchiveProgress, 1800);
       return;
     }
@@ -258,13 +258,16 @@ function updateArchiveProgress(status) {
 }
 
 function archiveProgressLabel(status) {
-  if (status.state === 'ready') {
-    return 'Archive ready';
+  if (status.state === 'pending') {
+    return `Starting ${status.filename || 'archive'}`;
+  }
+  if (status.state === 'complete') {
+    return 'Archive complete';
   }
   if (status.state === 'failed') {
     return status.error || 'Archive failed';
   }
-  return `Building ${status.filename || 'archive'}`;
+  return `Downloading ${status.filename || 'archive'}`;
 }
 
 function archiveProgressCount(status, percent) {

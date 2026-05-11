@@ -1,15 +1,14 @@
 use crate::explorer::view::{self, ViewQuery};
 use crate::explorer::walk;
-use crate::http::delivery;
 use crate::http::server::{AppState, Mode};
-use crate::{dirs, paths};
+use crate::paths;
 
 use anyhow::{Context, Result};
 use axum::{
     Json,
-    body::Body,
+    body::{Body, Bytes},
     extract::{Path as AxPath, Query, RawQuery, State},
-    http::{HeaderValue, StatusCode, header},
+    http::{HeaderValue, Method, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
@@ -22,9 +21,11 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tokio::io::DuplexStream;
+use tokio_util::io::{ReaderStream, SyncIoBridge};
 use zip::write::SimpleFileOptions;
 
-const JOB_TTL: Duration = Duration::from_secs(30 * 60);
+const INACTIVE_TTL: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Deserialize)]
 pub(crate) struct ArchivePath {
@@ -46,22 +47,22 @@ struct ArchiveEntry {
 
 #[derive(Clone)]
 pub(crate) struct ArchiveJobs {
-    dir: Arc<PathBuf>,
     jobs: Arc<Mutex<BTreeMap<String, ArchiveJob>>>,
     next: Arc<AtomicU64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum JobState {
+    Pending,
     Running,
-    Ready,
+    Complete,
     Failed,
 }
 
-#[derive(Clone, Debug)]
 struct ArchiveJob {
-    dir: PathBuf,
-    path: PathBuf,
+    source_dir: PathBuf,
+    root_name: String,
+    entries: Arc<Vec<ArchiveEntry>>,
     filename: String,
     content_type: &'static str,
     format: ArchiveFormat,
@@ -96,10 +97,18 @@ pub(crate) struct JobStatus {
     error: Option<String>,
 }
 
-struct JobFile {
-    path: PathBuf,
+struct JobInfo {
     filename: String,
     content_type: &'static str,
+}
+
+struct ArchiveStream {
+    source_dir: PathBuf,
+    root_name: String,
+    entries: Arc<Vec<ArchiveEntry>>,
+    filename: String,
+    content_type: &'static str,
+    format: ArchiveFormat,
 }
 
 struct ProgressReader {
@@ -156,22 +165,25 @@ pub(crate) async fn status(State(s): State<AppState>, AxPath(id): AxPath<String>
     }
 }
 
-pub(crate) async fn download(State(s): State<AppState>, AxPath(id): AxPath<String>) -> Response {
-    let Some(file) = s.archive_jobs.file(&id) else {
+pub(crate) async fn download(
+    State(s): State<AppState>,
+    AxPath(id): AxPath<String>,
+    method: Method,
+) -> Response {
+    if method == Method::HEAD {
+        let Some(info) = s.archive_jobs.file_info(&id) else {
+            return not_found();
+        };
+        let Ok(response) = info.into_head_response().await else {
+            return server_error();
+        };
+        return response;
+    }
+
+    let Some(stream) = s.archive_jobs.start_stream(&id) else {
         return not_found();
     };
-    let mut res = delivery::stream_file(&file.path).await;
-    if res.status().is_success() {
-        res.headers_mut().insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static(file.content_type),
-        );
-        res.headers_mut().insert(
-            header::CONTENT_DISPOSITION,
-            HeaderValue::from_str(&content_disposition(&file.filename)).unwrap(),
-        );
-    }
-    res
+    stream.into_response(s.archive_jobs.clone(), id)
 }
 
 impl ArchiveFormat {
@@ -208,8 +220,9 @@ impl ArchiveFormat {
 impl JobState {
     fn as_str(self) -> &'static str {
         match self {
+            Self::Pending => "pending",
             Self::Running => "running",
-            Self::Ready => "ready",
+            Self::Complete => "complete",
             Self::Failed => "failed",
         }
     }
@@ -217,14 +230,7 @@ impl JobState {
 
 impl ArchiveJobs {
     pub(crate) fn new() -> Result<Self> {
-        Self::new_in(dirs::cache()?.join("archives"))
-    }
-
-    fn new_in(base: PathBuf) -> Result<Self> {
-        let server_dir = base.join(server_id());
-        fs::create_dir_all(&server_dir)?;
         Ok(Self {
-            dir: Arc::new(server_dir),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
             next: Arc::new(AtomicU64::new(1)),
         })
@@ -240,51 +246,24 @@ impl ArchiveJobs {
     ) -> Result<StartResponse> {
         self.cleanup_expired();
         let id = self.next_id();
-        let job_dir = self.dir.join(&id);
-        fs::create_dir_all(&job_dir)?;
-        let output = job_dir.join(&filename);
-        let partial = job_dir.join("archive.part");
+        let total_files = entries.len();
         let total_bytes = archive_total_bytes(&entries);
         let job = ArchiveJob {
-            dir: job_dir,
-            path: output.clone(),
+            source_dir,
+            root_name,
+            entries: Arc::new(entries),
             filename: filename.clone(),
             content_type: format.content_type(),
             format,
-            state: JobState::Running,
+            state: JobState::Pending,
             done_files: 0,
-            total_files: entries.len(),
+            total_files,
             done_bytes: 0,
             total_bytes,
             updated: Instant::now(),
             error: None,
         };
         self.jobs.lock().unwrap().insert(id.clone(), job);
-
-        let jobs = self.clone();
-        let job_id = id.clone();
-        tokio::task::spawn_blocking(move || {
-            let result = write_archive_file(
-                format,
-                &source_dir,
-                &root_name,
-                &entries,
-                &partial,
-                &jobs,
-                &job_id,
-            )
-            .and_then(|()| {
-                fs::rename(&partial, &output)
-                    .with_context(|| format!("move archive into place {}", output.display()))
-            });
-            match result {
-                Ok(()) => jobs.mark_ready(&job_id),
-                Err(err) => {
-                    let _ = fs::remove_file(&partial);
-                    jobs.mark_failed(&job_id, err.to_string());
-                }
-            }
-        });
 
         Ok(StartResponse {
             id: id.clone(),
@@ -295,21 +274,45 @@ impl ArchiveJobs {
 
     fn status(&self, id: &str) -> Option<JobStatus> {
         self.cleanup_expired();
-        self.jobs
-            .lock()
-            .unwrap()
-            .get(id)
-            .map(|job| job_status(id, job))
+        let mut guard = self.jobs.lock().unwrap();
+        let job = guard.get_mut(id)?;
+        job.updated = Instant::now();
+        Some(job_status(id, job))
     }
 
-    fn file(&self, id: &str) -> Option<JobFile> {
+    fn file_info(&self, id: &str) -> Option<JobInfo> {
         self.cleanup_expired();
-        self.jobs.lock().unwrap().get(id).and_then(|job| {
-            (job.state == JobState::Ready).then(|| JobFile {
-                path: job.path.clone(),
-                filename: job.filename.clone(),
-                content_type: job.content_type,
-            })
+        let mut guard = self.jobs.lock().unwrap();
+        let job = guard.get_mut(id)?;
+        if job.state == JobState::Failed {
+            return None;
+        }
+        job.updated = Instant::now();
+        Some(JobInfo {
+            filename: job.filename.clone(),
+            content_type: job.content_type,
+        })
+    }
+
+    fn start_stream(&self, id: &str) -> Option<ArchiveStream> {
+        self.cleanup_expired();
+        let mut guard = self.jobs.lock().unwrap();
+        let job = guard.get_mut(id)?;
+        if job.state == JobState::Running || job.state == JobState::Failed {
+            return None;
+        }
+        job.state = JobState::Running;
+        job.done_files = 0;
+        job.done_bytes = 0;
+        job.error = None;
+        job.updated = Instant::now();
+        Some(ArchiveStream {
+            source_dir: job.source_dir.clone(),
+            root_name: job.root_name.clone(),
+            entries: Arc::clone(&job.entries),
+            filename: job.filename.clone(),
+            content_type: job.content_type,
+            format: job.format,
         })
     }
 
@@ -337,12 +340,12 @@ impl ArchiveJobs {
         job.updated = Instant::now();
     }
 
-    fn mark_ready(&self, id: &str) {
+    fn mark_complete(&self, id: &str) {
         let mut guard = self.jobs.lock().unwrap();
         let Some(job) = guard.get_mut(id) else {
             return;
         };
-        job.state = JobState::Ready;
+        job.state = JobState::Complete;
         job.done_files = job.total_files;
         job.done_bytes = job.total_bytes;
         job.updated = Instant::now();
@@ -370,19 +373,50 @@ impl ArchiveJobs {
     fn cleanup_expired(&self) {
         let mut expired = Vec::new();
         {
-            let mut guard = self.jobs.lock().unwrap();
-            guard.retain(|_, job| {
-                let stale = matches!(job.state, JobState::Ready | JobState::Failed)
-                    && job.updated.elapsed() > JOB_TTL;
-                if stale {
-                    expired.push(job.dir.clone());
-                }
-                !stale
-            });
+            let guard = self.jobs.lock().unwrap();
+            expired.extend(guard.iter().filter_map(|(id, job)| {
+                let stale = matches!(
+                    job.state,
+                    JobState::Pending | JobState::Complete | JobState::Failed
+                ) && job.updated.elapsed() > INACTIVE_TTL;
+                stale.then(|| id.clone())
+            }));
         }
-        for dir in expired {
-            let _ = fs::remove_dir_all(dir);
+        if expired.is_empty() {
+            return;
         }
+        let mut guard = self.jobs.lock().unwrap();
+        for id in expired {
+            guard.remove(&id);
+        }
+    }
+}
+
+impl JobInfo {
+    async fn into_head_response(self) -> Result<Response> {
+        let body = Body::from_stream(futures_util::stream::empty::<Result<Bytes, io::Error>>());
+        Ok(archive_response(&self.filename, self.content_type, body))
+    }
+}
+
+impl ArchiveStream {
+    fn into_response(self, jobs: ArchiveJobs, id: String) -> Response {
+        let filename = self.filename.clone();
+        let content_type = self.content_type;
+        let (reader, writer) = tokio::io::duplex(128 * 1024);
+        tokio::spawn(async move {
+            let result = write_archive_stream(writer, self, &jobs, &id).await;
+            match result {
+                Ok(()) => jobs.mark_complete(&id),
+                Err(err) => jobs.mark_failed(&id, err.to_string()),
+            }
+        });
+
+        archive_response(
+            &filename,
+            content_type,
+            Body::from_stream(ReaderStream::new(reader)),
+        )
     }
 }
 
@@ -443,39 +477,44 @@ fn archive_entries(
         .collect()
 }
 
-fn write_archive_file(
-    format: ArchiveFormat,
-    source_dir: &Path,
-    root_name: &str,
-    entries: &[ArchiveEntry],
-    output: &Path,
+async fn write_archive_stream(
+    output: DuplexStream,
+    stream: ArchiveStream,
     jobs: &ArchiveJobs,
     id: &str,
 ) -> Result<()> {
-    match format {
-        ArchiveFormat::Zip => write_zip(output, root_name, entries, jobs, id),
-        ArchiveFormat::TarZst => write_tar_zst(output, source_dir, root_name, entries, jobs, id),
-    }
+    let jobs = jobs.clone();
+    let id = id.to_string();
+    tokio::task::spawn_blocking(move || {
+        let output = SyncIoBridge::new(output);
+        match stream.format {
+            ArchiveFormat::Zip => write_zip_stream(output, &stream.entries, &jobs, &id),
+            ArchiveFormat::TarZst => write_tar_zst_stream(
+                output,
+                &stream.source_dir,
+                &stream.root_name,
+                &stream.entries,
+                &jobs,
+                &id,
+            ),
+        }
+    })
+    .await?
 }
 
-fn write_zip(
-    output: &Path,
-    root_name: &str,
+fn write_zip_stream<W>(
+    output: W,
     entries: &[ArchiveEntry],
     jobs: &ArchiveJobs,
     id: &str,
-) -> Result<()> {
-    let file = fs::File::create(output)
-        .with_context(|| format!("create archive output {}", output.display()))?;
-    let mut zip = zip::ZipWriter::new(file);
+) -> Result<()>
+where
+    W: io::Write,
+{
+    let mut zip = zip::ZipWriter::new_stream(output);
     let options = SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
         .unix_permissions(0o644);
-    let dir_options = SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored)
-        .unix_permissions(0o755);
-
-    zip.add_directory(format!("{root_name}/"), dir_options)?;
     for entry in entries {
         let archive_path = zip_path(&entry.archive_path)?;
         zip.start_file(archive_path, options)
@@ -496,17 +535,18 @@ fn write_zip(
     Ok(())
 }
 
-fn write_tar_zst(
-    output: &Path,
+fn write_tar_zst_stream<W>(
+    output: W,
     source_dir: &Path,
     root_name: &str,
     entries: &[ArchiveEntry],
     jobs: &ArchiveJobs,
     id: &str,
-) -> Result<()> {
-    let file = fs::File::create(output)
-        .with_context(|| format!("create archive output {}", output.display()))?;
-    let encoder = zstd::stream::Encoder::new(file, 0)?;
+) -> Result<()>
+where
+    W: io::Write,
+{
+    let encoder = zstd::stream::Encoder::new(output, 0)?;
     let mut tar = tar::Builder::new(encoder);
     tar.append_dir(root_name, source_dir)?;
     for entry in entries {
@@ -566,13 +606,13 @@ fn job_status(id: &str, job: &ArchiveJob) -> JobStatus {
         done_bytes: job.done_bytes,
         total_bytes: job.total_bytes,
         percent: progress_percent(job),
-        download_url: (job.state == JobState::Ready).then(|| download_url(id)),
+        download_url: (job.state != JobState::Failed).then(|| download_url(id)),
         error: job.error.clone(),
     }
 }
 
 fn progress_percent(job: &ArchiveJob) -> u8 {
-    if job.state == JobState::Ready {
+    if job.state == JobState::Complete {
         return 100;
     }
     let byte_percent = job
@@ -596,14 +636,6 @@ fn status_url(id: &str) -> String {
 
 fn download_url(id: &str) -> String {
     format!("/_ghrm/archive-jobs/{id}/download")
-}
-
-fn server_id() -> String {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or_default();
-    format!("{}-{now:x}", std::process::id())
 }
 
 fn zip_path(path: &Path) -> Result<String> {
@@ -630,6 +662,17 @@ fn content_disposition(filename: &str) -> String {
     format!("attachment; filename=\"{filename}\"")
 }
 
+fn archive_response(filename: &str, content_type: &'static str, body: Body) -> Response {
+    Response::builder()
+        .header(header::CONTENT_TYPE, HeaderValue::from_static(content_type))
+        .header(
+            header::CONTENT_DISPOSITION,
+            HeaderValue::from_str(&content_disposition(filename)).unwrap(),
+        )
+        .body(body)
+        .unwrap()
+}
+
 fn not_found() -> Response {
     Response::builder()
         .status(StatusCode::NOT_FOUND)
@@ -651,6 +694,7 @@ mod tests {
     use super::*;
     use crate::testutil::TempDir;
     use std::fs;
+    use tokio::io::AsyncReadExt;
     use zip::ZipArchive;
 
     #[test]
@@ -685,24 +729,24 @@ mod tests {
         let source = td.path().join("docs/guide.md");
         fs::create_dir_all(source.parent().unwrap()).unwrap();
         fs::write(&source, "guide").unwrap();
-        let jobs = ArchiveJobs::new_in(td.path().join("jobs")).unwrap();
-        let output = td.path().join("docs.zip");
+        let jobs = ArchiveJobs::new().unwrap();
         let entries = vec![ArchiveEntry {
             source,
             archive_path: PathBuf::from("docs/guide.md"),
         }];
+        let mut output = Vec::new();
 
-        write_zip(&output, "docs", &entries, &jobs, "test").unwrap();
-        let mut archive = ZipArchive::new(fs::File::open(output).unwrap()).unwrap();
+        write_zip_stream(&mut output, &entries, &jobs, "test").unwrap();
 
-        assert!(archive.by_name("docs/").is_ok());
+        let mut archive = ZipArchive::new(std::io::Cursor::new(output)).unwrap();
+
         assert!(archive.by_name("docs/guide.md").is_ok());
     }
 
     #[tokio::test]
     async fn archive_job_status_reports_progress() {
         let td = TempDir::new("ghrm-archive-jobs");
-        let jobs = ArchiveJobs::new_in(td.path().join("jobs")).unwrap();
+        let jobs = ArchiveJobs::new().unwrap();
         let source = td.path().join("guide.md");
         fs::write(&source, "guide").unwrap();
         let entries = vec![ArchiveEntry {
@@ -723,7 +767,78 @@ mod tests {
 
         assert_eq!(status.filename, "docs.zip");
         assert_eq!(status.total_files, 1);
-        assert!(matches!(status.state, "running" | "ready"));
+        assert_eq!(status.state, "pending");
+    }
+
+    #[tokio::test]
+    async fn archive_stream_completes_job() {
+        let td = TempDir::new("ghrm-archive-stream");
+        let jobs = ArchiveJobs::new().unwrap();
+        let source = td.path().join("guide.md");
+        fs::write(&source, "guide").unwrap();
+        let entries = vec![ArchiveEntry {
+            source,
+            archive_path: PathBuf::from("docs/guide.md"),
+        }];
+        let start = jobs
+            .start(
+                ArchiveFormat::Zip,
+                td.path().to_path_buf(),
+                "docs".to_string(),
+                "docs.zip".to_string(),
+                entries,
+            )
+            .unwrap();
+
+        let stream = jobs.start_stream(&start.id).unwrap();
+        let (mut reader, writer) = tokio::io::duplex(64 * 1024);
+        let task = tokio::spawn({
+            let jobs = jobs.clone();
+            let id = start.id.clone();
+            async move {
+                write_archive_stream(writer, stream, &jobs, &id).await?;
+                jobs.mark_complete(&id);
+                Result::<()>::Ok(())
+            }
+        });
+        let mut output = Vec::new();
+        reader.read_to_end(&mut output).await.unwrap();
+        task.await.unwrap().unwrap();
+
+        let status = jobs.status(&start.id).unwrap();
+        assert_eq!(status.state, "complete");
+        assert_eq!(status.percent, 100);
+    }
+
+    #[tokio::test]
+    async fn inactive_pending_jobs_expire() {
+        let td = TempDir::new("ghrm-archive-expire");
+        let jobs = ArchiveJobs::new().unwrap();
+        let source = td.path().join("guide.md");
+        fs::write(&source, "guide").unwrap();
+        let entries = vec![ArchiveEntry {
+            source,
+            archive_path: PathBuf::from("docs/guide.md"),
+        }];
+        let start = jobs
+            .start(
+                ArchiveFormat::Zip,
+                td.path().to_path_buf(),
+                "docs".to_string(),
+                "docs.zip".to_string(),
+                entries,
+            )
+            .unwrap();
+
+        {
+            let mut guard = jobs.jobs.lock().unwrap();
+            let job = guard.get_mut(&start.id).unwrap();
+            job.updated = Instant::now() - INACTIVE_TTL - Duration::from_secs(1);
+        }
+
+        jobs.cleanup_expired();
+
+        assert!(jobs.status(&start.id).is_none());
     }
 
     #[test]
