@@ -140,7 +140,7 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   min-width: 0;
   padding-top: 18px;
   display: none;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  grid-template-columns: minmax(260px, 380px) minmax(320px, 1fr);
   gap: 18px 32px;
 }
 
@@ -158,18 +158,13 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   display: grid;
 }
 
-.ghrm-about-links {
-  display: grid;
-  gap: 5px;
-}
-
 .ghrm-about-project {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   color: var(--fgColor-default, #1f2328);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
   text-decoration: none;
 }
 
@@ -187,7 +182,8 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 .ghrm-runtime-paths {
   min-width: 0;
   display: grid;
-  gap: 8px;
+  align-content: start;
+  gap: 10px;
   color: var(--fgColor-muted, #636c76);
 }
 
@@ -203,7 +199,7 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   margin: 0;
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 6px 18px;
+  gap: 5px 18px;
 }
 
 .ghrm-stat-row {
@@ -333,13 +329,38 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   color: var(--fgColor-default, #1f2328);
 }
 
-.ghrm-about-app {
+.ghrm-about-footer {
   min-width: 0;
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  justify-items: start;
+  min-height: 54px;
+  margin-top: 2px;
+  padding: 12px 128px 0 0;
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--borderColor-muted, #d0d7de);
+  display: flex;
+  align-items: center;
+  gap: 14px;
   color: var(--fgColor-muted, #636c76);
+}
+
+.ghrm-about-footer-label {
+  color: var(--fgColor-default, #1f2328);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.ghrm-about-peek:not(.is-details-open):not(.is-details-only)
+  .ghrm-about-stamp-button {
+  width: 54px;
+  height: 54px;
+}
+
+.ghrm-about-peek:not(.is-details-open):not(.is-details-only)
+  .ghrm-about-stamp-button
+  .ghrm-about-stamp {
+  width: 54px;
+  height: 54px;
 }
 
 .ghrm-about-stamp-button {
@@ -392,21 +413,30 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 .ghrm-runtime-paths dl {
   margin: 0;
   display: grid;
-  gap: 4px;
+  gap: 5px;
+}
+
+.ghrm-detail-section-config,
+.ghrm-detail-section-filesystem {
+  grid-column: 2;
+}
+
+.ghrm-detail-section-filter-totals {
+  grid-column: 1;
 }
 
 .ghrm-runtime-path {
   min-width: 0;
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
   align-items: baseline;
   font-size: 12px;
 }
 
 .ghrm-runtime-path dt {
   color: var(--fgColor-muted, #636c76);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .ghrm-runtime-path dd {
@@ -416,6 +446,33 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.ghrm-detail-section-filter-totals .ghrm-runtime-path {
+  grid-template-columns: 58px minmax(0, 1fr);
+}
+
+.ghrm-detail-cells {
+  display: grid;
+  grid-template-columns:
+    minmax(5ch, max-content) max-content minmax(4ch, max-content)
+    max-content minmax(7ch, max-content) max-content;
+  gap: 0 5px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ghrm-detail-cells span:nth-child(1),
+.ghrm-detail-cells span:nth-child(3),
+.ghrm-detail-cells span:nth-child(5) {
+  justify-self: end;
+}
+
+.ghrm-detail-cells span:nth-child(2),
+.ghrm-detail-cells span:nth-child(4),
+.ghrm-detail-cells span:nth-child(6) {
+  color: var(--fgColor-muted, #636c76);
 }
 
 .ghrm-languages {
@@ -462,7 +519,7 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   align-items: center;
   gap: 7px;
   color: var(--fgColor-default, #1f2328);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .ghrm-lang-row dd {
@@ -515,6 +572,20 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   .ghrm-about-summary,
   .ghrm-about-details {
     grid-template-columns: 1fr;
+  }
+
+  .ghrm-detail-section-config,
+  .ghrm-detail-section-filesystem,
+  .ghrm-detail-section-filter-totals,
+  .ghrm-about-footer {
+    grid-column: auto;
+  }
+
+  .ghrm-about-footer {
+    min-height: 64px;
+    padding-right: 96px;
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   .ghrm-languages {

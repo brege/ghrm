@@ -40,6 +40,7 @@ pub struct AppState {
     pub filter_exts: Vec<String>,
     pub filters: filter::Set,
     pub exclude_names: Vec<String>,
+    pub dangerously_traverse_excludes: bool,
     pub archive_jobs: archive::ArchiveJobs,
     pub search_max_rows: usize,
     pub home: Option<PathBuf>,
@@ -106,6 +107,7 @@ pub struct Options {
     pub extensions: Vec<String>,
     pub filters: filter::Set,
     pub exclude_names: Vec<String>,
+    pub dangerously_traverse_excludes: bool,
     pub show_excludes: bool,
     pub search_max_rows: usize,
     pub config_path: Option<PathBuf>,
@@ -127,6 +129,7 @@ pub async fn run(options: Options) -> Result<()> {
         extensions,
         filters,
         exclude_names,
+        dangerously_traverse_excludes,
         show_excludes,
         search_max_rows,
         config_path,
@@ -144,6 +147,11 @@ pub async fn run(options: Options) -> Result<()> {
         .map(|auth| auth::AuthState::new(auth, port))
         .transpose()?
         .map(Arc::new);
+    let auth_enabled = auth.is_some();
+    let listener = bind_listener(&bind, port, exact_port).await?;
+    let actual = listener.local_addr()?;
+    let url = server_url(&actual);
+    let network = network_url(&actual);
     let view_cfg = ViewConfig {
         default: ViewOpts {
             show_hidden: default_hidden,
@@ -229,10 +237,15 @@ pub async fn run(options: Options) -> Result<()> {
         filter_exts: extensions,
         filters,
         exclude_names,
+        dangerously_traverse_excludes,
         archive_jobs: archive::ArchiveJobs::new()?,
         search_max_rows,
         home: std::env::var_os("HOME").map(PathBuf::from),
-        runtime_paths: runtime::Paths::new(&target, config_path.as_deref())?,
+        runtime_paths: runtime::Paths::new(&target, config_path.as_deref())?.with_server(
+            actual,
+            url.clone(),
+            network.clone(),
+        ),
         stats,
         auth,
     };
@@ -254,7 +267,6 @@ pub async fn run(options: Options) -> Result<()> {
         .route("/_ghrm/download/{*path}", get(delivery::download_file))
         .route("/{*path}", get(any_path));
 
-    let auth_enabled = state.auth.is_some();
     let app = if auth_enabled {
         Router::new()
             .route(
@@ -274,12 +286,9 @@ pub async fn run(options: Options) -> Result<()> {
             .with_state(state)
     };
 
-    let listener = bind_listener(&bind, port, exact_port).await?;
-    let actual = listener.local_addr()?;
-    let url = server_url(&actual);
     info!(%actual, "ghrm listening");
     info!("local: {}", url);
-    if let Some(url) = network_url(&actual) {
+    if let Some(url) = network {
         if auth_enabled {
             info!("network: {} (auth required)", url);
         } else {

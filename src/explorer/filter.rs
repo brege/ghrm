@@ -77,6 +77,10 @@ impl Set {
         &self.groups
     }
 
+    pub fn group_globs(&self, name: &str) -> Option<&[String]> {
+        self.globs.get(name).map(Vec::as_slice)
+    }
+
     pub fn normalize_groups(&self, raw: &[String]) -> Vec<String> {
         let mut groups = Vec::new();
         for group in raw {
