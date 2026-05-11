@@ -41,24 +41,25 @@ function releasePeekHeight(peek, path) {
 async function loadAboutPeek() {
   const peek = document.getElementById('ghrm-about-peek');
   const path = window.location.pathname || '/';
+  const statsPath = `${path}${window.location.search || ''}`;
   if (
     !peek ||
-    (peek.dataset.statsLoaded === 'true' && peek.dataset.statsPath === path) ||
-    peek.dataset.statsLoading === path
+    (peek.dataset.statsLoaded === 'true' &&
+      peek.dataset.statsPath === statsPath) ||
+    peek.dataset.statsLoading === statsPath
   ) {
     return;
   }
 
-  peek.dataset.statsLoading = path;
-  const heldHeight = holdPeekHeight(peek, path);
+  peek.dataset.statsLoading = statsPath;
+  const heldHeight = holdPeekHeight(peek, statsPath);
+  const params = new URLSearchParams(window.location.search);
+  params.set('path', path);
   beginActivity();
   try {
-    const response = await fetch(
-      `/_ghrm/about?path=${encodeURIComponent(path)}`,
-      {
-        headers: { Accept: 'text/html' },
-      },
-    );
+    const response = await fetch(`/_ghrm/about?${params.toString()}`, {
+      headers: { Accept: 'text/html' },
+    });
     if (!response.ok) {
       return;
     }
@@ -68,24 +69,27 @@ async function loadAboutPeek() {
     if (next?.id !== 'ghrm-about-peek') {
       return;
     }
-    if ((window.location.pathname || '/') !== path) {
+    if (
+      `${window.location.pathname || '/'}${window.location.search || ''}` !==
+      statsPath
+    ) {
       return;
     }
     next.hidden = !peekOpen;
-    next.dataset.statsPath = path;
+    next.dataset.statsPath = statsPath;
     if (heldHeight > 0) {
       next.style.minHeight = `${heldHeight}px`;
-      next.dataset.heightHold = path;
+      next.dataset.heightHold = statsPath;
     }
     populateAboutTitles(next);
     peek.replaceWith(next);
   } finally {
     const current = document.getElementById('ghrm-about-peek');
-    if (current?.dataset.statsLoading === path) {
+    if (current?.dataset.statsLoading === statsPath) {
       delete current.dataset.statsLoading;
     }
     if (current && heldHeight > 0) {
-      releasePeekHeight(current, path);
+      releasePeekHeight(current, statsPath);
     }
     endActivity();
     sync();

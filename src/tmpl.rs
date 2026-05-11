@@ -1,5 +1,4 @@
 use crate::explorer::column;
-use crate::runtime;
 
 use anyhow::Result;
 use askama::Template;
@@ -20,7 +19,7 @@ pub struct PageShell<'a> {
 #[derive(Template)]
 #[template(path = "fragments/about.html")]
 pub struct AboutPeek<'a> {
-    pub runtime_paths: &'a [runtime::PathRow],
+    pub detail_sections: &'a [AboutDetailSection],
     pub stats_loaded: bool,
     pub details_only: bool,
     pub stats: &'a AboutStats,
@@ -73,6 +72,19 @@ pub struct AboutLanguage {
     pub color: String,
     pub style: String,
     pub title: String,
+}
+
+pub struct AboutDetailSection {
+    pub heading: String,
+    pub class_name: &'static str,
+    pub rows: Vec<AboutDetailRow>,
+}
+
+pub struct AboutDetailRow {
+    pub label: String,
+    pub value: String,
+    pub title: String,
+    pub cells: Vec<String>,
 }
 
 #[derive(Template)]

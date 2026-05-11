@@ -1,16 +1,17 @@
-use crate::explorer::walk;
+use crate::explorer::view::ViewQuery;
+use crate::explorer::{view, walk};
 use crate::http::server::{AppState, Mode};
 use crate::paths;
 use crate::repo::SourceState;
 use crate::runtime;
 use crate::tmpl::{
-    self, AboutLanguage, AboutPeek, AboutStatItem, AboutStatMetric, AboutStatPart, AboutStatRow,
-    AboutStats,
+    self, AboutDetailRow, AboutDetailSection, AboutLanguage, AboutPeek, AboutStatItem,
+    AboutStatMetric, AboutStatPart, AboutStatRow, AboutStats,
 };
 
 use axum::{
     body::Body,
-    extract::{Query, State},
+    extract::{Query, RawQuery, State},
     http::{StatusCode, header},
     response::Response,
 };
@@ -26,19 +27,27 @@ const LANGUAGE_COLORS: &[&str] = &[
 #[derive(Default, Deserialize)]
 pub(crate) struct AboutQuery {
     path: Option<String>,
+    #[serde(flatten)]
+    view: ViewQuery,
 }
 
-pub(crate) async fn show(State(s): State<AppState>, Query(q): Query<AboutQuery>) -> Response {
+pub(crate) async fn show(
+    State(s): State<AppState>,
+    RawQuery(raw_query): RawQuery,
+    Query(q): Query<AboutQuery>,
+) -> Response {
     let stats_path = about_path(&s, q.path.as_deref());
+    let view = view::from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let source = s.repos.source_for(&stats_path);
     let mode = PeekMode::from_source(&source);
     let stats_input = stats_input_path(&stats_path);
     let served_root = served_root(&s);
     let stats_cfg = s.stats.clone();
     let stats_source = source.clone();
+    let stats_input_for_repo = stats_input.clone();
     let stats = if stats_cfg.enabled && mode.loads_stats() {
         tokio::task::spawn_blocking(move || {
-            ghrm_stat::resolve_with_config(&stats_input, stats_cfg)
+            ghrm_stat::resolve_with_config(&stats_input_for_repo, stats_cfg)
                 .map(|report| stats_model(report, &stats_source, &served_root))
                 .unwrap_or_default()
         })
@@ -47,8 +56,56 @@ pub(crate) async fn show(State(s): State<AppState>, Query(q): Query<AboutQuery>)
     } else {
         AboutStats::default()
     };
+    let details = detail_sections(&s, &stats_input, &view).await;
 
-    html_response(&html_with_mode(&s.runtime_paths, &stats, true, mode))
+    html_response(&html_with_mode(&details, &stats, true, mode))
+}
+
+async fn detail_sections(
+    s: &AppState,
+    path: &Path,
+    view: &view::ViewState,
+) -> Vec<AboutDetailSection> {
+    let fs_config = fs_config(s, view);
+    let path = path.to_path_buf();
+    let fs_report =
+        tokio::task::spawn_blocking(move || ghrm_stat::filesystem::scan(&path, &fs_config))
+            .await
+            .ok()
+            .and_then(Result::ok);
+
+    let mut sections = vec![runtime_section(&s.runtime_paths), config_section(s)];
+    if let Some(report) = fs_report {
+        if !report.filters.is_empty() {
+            sections.push(filter_totals_section(&report));
+        }
+        sections.push(filesystem_section(s, &report));
+    }
+    sections
+}
+
+fn fs_config(s: &AppState, view: &view::ViewState) -> ghrm_stat::filesystem::FsConfig {
+    ghrm_stat::filesystem::FsConfig {
+        hidden: view.opts.show_hidden,
+        use_ignore: view.use_ignore,
+        show_excludes: view.opts.show_excludes,
+        exclude_names: s.exclude_names.clone(),
+        same_file_system: true,
+        filter_groups: s
+            .filters
+            .groups()
+            .iter()
+            .filter_map(|group| {
+                s.filters.group_globs(&group.name).map(|globs| {
+                    ghrm_stat::filesystem::FsFilterGroup {
+                        name: group.name.clone(),
+                        label: group.label.clone(),
+                        globs: globs.to_vec(),
+                    }
+                })
+            })
+            .collect(),
+    }
 }
 
 pub(crate) fn html(
@@ -57,16 +114,12 @@ pub(crate) fn html(
     stats_loaded: bool,
     source: &SourceState,
 ) -> String {
-    html_with_mode(
-        runtime_paths,
-        stats,
-        stats_loaded,
-        PeekMode::from_source(source),
-    )
+    let details = vec![runtime_section(runtime_paths)];
+    html_with_mode(&details, stats, stats_loaded, PeekMode::from_source(source))
 }
 
 fn html_with_mode(
-    runtime_paths: &runtime::Paths,
+    detail_sections: &[AboutDetailSection],
     stats: &AboutStats,
     stats_loaded: bool,
     mode: PeekMode,
@@ -74,7 +127,7 @@ fn html_with_mode(
     let project_version = env!("CARGO_PKG_VERSION");
     let project_release_href = format!("{PROJECT_URL}/releases/tag/v{project_version}");
     let about = AboutPeek {
-        runtime_paths: runtime_paths.rows(),
+        detail_sections,
         stats_loaded,
         details_only: mode.details_only(),
         stats,
@@ -89,6 +142,173 @@ fn html_with_mode(
             String::new()
         }
     }
+}
+
+fn runtime_section(runtime_paths: &runtime::Paths) -> AboutDetailSection {
+    AboutDetailSection {
+        heading: "Runtime".to_string(),
+        class_name: "ghrm-detail-section-runtime",
+        rows: runtime_paths
+            .rows()
+            .iter()
+            .map(|row| detail_row(row.label, row.value.clone()))
+            .collect(),
+    }
+}
+
+fn config_section(s: &AppState) -> AboutDetailSection {
+    let default_groups = if s.view_cfg.default_groups.is_empty() {
+        "none".to_string()
+    } else {
+        s.view_cfg.default_groups.join(", ")
+    };
+    let filter_state = if s.filters.default_enabled() {
+        format!("on  default={default_groups}")
+    } else {
+        format!("off  default={default_groups}")
+    };
+    let group_labels = s
+        .filters
+        .groups()
+        .iter()
+        .map(|group| group.label.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    AboutDetailSection {
+        heading: "Config".to_string(),
+        class_name: "ghrm-detail-section-config",
+        rows: vec![
+            detail_row("hidden", on_off(s.view_cfg.default.show_hidden)),
+            detail_row("ignore", on_off(s.view_cfg.default_use_ignore)),
+            detail_row(
+                "excludes",
+                excludes_value(s, s.view_cfg.default.show_excludes),
+            ),
+            detail_row("danger", on_off(s.dangerously_traverse_excludes)),
+            detail_row("same-fs", "on"),
+            detail_row("filters", filter_state),
+            detail_row(
+                "groups",
+                if group_labels.is_empty() {
+                    "none".to_string()
+                } else {
+                    group_labels
+                },
+            ),
+        ],
+    }
+}
+
+fn filesystem_section(
+    s: &AppState,
+    report: &ghrm_stat::filesystem::FsReport,
+) -> AboutDetailSection {
+    AboutDetailSection {
+        heading: "Filesystem".to_string(),
+        class_name: "ghrm-detail-section-filesystem",
+        rows: vec![
+            detail_row("path", display_fs_path(s, &report.root)),
+            detail_row("fs", report.file_system.clone().unwrap_or_default()),
+            detail_row("visible", visible_value(&report.totals)),
+            detail_row(
+                "size",
+                ghrm_stat::filesystem::format_bytes(report.totals.bytes),
+            ),
+            detail_row("depth", format!("{} levels", report.max_depth)),
+        ],
+    }
+}
+
+fn filter_totals_section(report: &ghrm_stat::filesystem::FsReport) -> AboutDetailSection {
+    let mut rows = vec![filter_total_row("all", &report.totals)];
+    rows.extend(
+        report
+            .filters
+            .iter()
+            .map(|filter| filter_total_row(&filter.label, &filter.totals)),
+    );
+    AboutDetailSection {
+        heading: "Filter Totals".to_string(),
+        class_name: "ghrm-detail-section-filter-totals",
+        rows,
+    }
+}
+
+fn detail_row(label: impl Into<String>, value: impl Into<String>) -> AboutDetailRow {
+    let value = value.into();
+    AboutDetailRow {
+        label: label.into(),
+        title: value.clone(),
+        value,
+        cells: Vec::new(),
+    }
+}
+
+fn filter_total_row(
+    label: impl Into<String>,
+    totals: &ghrm_stat::filesystem::FsTotals,
+) -> AboutDetailRow {
+    let size = ghrm_stat::filesystem::format_bytes(totals.bytes);
+    let (size_value, size_unit) = split_size(&size);
+    AboutDetailRow {
+        label: label.into(),
+        value: filter_total_value(totals),
+        title: filter_total_value(totals),
+        cells: vec![
+            totals.files.to_string(),
+            "files".to_string(),
+            totals.dirs.to_string(),
+            "dirs".to_string(),
+            size_value,
+            size_unit,
+        ],
+    }
+}
+
+fn split_size(size: &str) -> (String, String) {
+    size.rsplit_once(' ')
+        .map(|(value, unit)| (value.to_string(), unit.to_string()))
+        .unwrap_or_else(|| (size.to_string(), String::new()))
+}
+
+fn on_off(value: bool) -> &'static str {
+    if value { "on" } else { "off" }
+}
+
+fn excludes_value(s: &AppState, show_excludes: bool) -> String {
+    if s.dangerously_traverse_excludes || s.exclude_names.is_empty() {
+        return "off".to_string();
+    }
+    if show_excludes {
+        return "visible".to_string();
+    }
+    "on".to_string()
+}
+
+fn display_fs_path(s: &AppState, path: &Path) -> String {
+    let root = served_root(s);
+    path.strip_prefix(root)
+        .ok()
+        .filter(|rel| !rel.as_os_str().is_empty())
+        .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|| ".".to_string())
+}
+
+fn visible_value(totals: &ghrm_stat::filesystem::FsTotals) -> String {
+    format!(
+        "{} files  {} dirs  {} symlinks",
+        totals.files, totals.dirs, totals.symlinks
+    )
+}
+
+fn filter_total_value(totals: &ghrm_stat::filesystem::FsTotals) -> String {
+    format!(
+        "{} files  {} dirs  {}",
+        totals.files,
+        totals.dirs,
+        ghrm_stat::filesystem::format_bytes(totals.bytes)
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -568,7 +788,7 @@ mod tests {
         let stats = AboutStats::default();
         let html = html(&runtime_paths, &stats, false, &SourceState::NoRepo);
 
-        assert!(html.contains("Runtime Paths"));
+        assert!(html.contains("Runtime"));
         assert!(html.contains("href=\"https://github.com/brege/ghrm\""));
         assert!(html.contains(">brege/ghrm</span>"));
         assert!(html.contains("data-stats-loaded=\"false\""));

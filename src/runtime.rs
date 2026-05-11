@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::net::SocketAddr;
 use std::path::Path;
 
 #[derive(Clone)]
@@ -23,6 +24,20 @@ impl Paths {
         Ok(Self { rows })
     }
 
+    pub(crate) fn with_server(
+        mut self,
+        actual: SocketAddr,
+        local: String,
+        network: Option<String>,
+    ) -> Self {
+        self.rows.push(value("listen", actual.to_string()));
+        self.rows.push(value("local", local));
+        if let Some(network) = network {
+            self.rows.push(value("network", network));
+        }
+        self
+    }
+
     pub(crate) fn rows(&self) -> &[PathRow] {
         &self.rows
     }
@@ -33,6 +48,10 @@ fn row(label: &'static str, path: impl AsRef<Path>) -> PathRow {
         label,
         value: path.as_ref().to_string_lossy().into_owned(),
     }
+}
+
+fn value(label: &'static str, value: String) -> PathRow {
+    PathRow { label, value }
 }
 
 #[cfg(test)]

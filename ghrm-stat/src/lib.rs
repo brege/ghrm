@@ -1,3 +1,4 @@
+pub mod filesystem;
 pub mod tools;
 
 use anyhow::{Context as AnyhowContext, Result, anyhow};
