@@ -14,14 +14,19 @@ pub struct NavCache {
     pub alternate: Arc<RwLock<Option<NavSet>>>,
 }
 
+pub struct DirWatchOptions {
+    pub use_ignore: bool,
+    pub exclude_names: Vec<String>,
+    pub extensions: Vec<String>,
+    pub show_hidden: bool,
+    pub show_excludes: bool,
+}
+
 pub fn spawn_dir(
     root: PathBuf,
     nav: NavCache,
     reload_tx: broadcast::Sender<&'static str>,
-    use_ignore: bool,
-    exclude_names: Vec<String>,
-    extensions: Vec<String>,
-    show_excludes: bool,
+    opts: DirWatchOptions,
 ) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(150), None, tx)?;
@@ -44,23 +49,37 @@ pub fn spawn_dir(
             if events.is_empty() {
                 continue;
             }
-            let changed = changed_paths(&root, &events, use_ignore, &exclude_names, None);
+            let changed = changed_paths(
+                &root,
+                &events,
+                opts.use_ignore,
+                &opts.exclude_names,
+                opts.show_hidden,
+                None,
+            );
             if changed.is_empty() {
                 continue;
             }
-            let nav_dirty = events
-                .iter()
-                .any(|e| is_nav_event(&root, e, use_ignore, &exclude_names, None));
+            let nav_dirty = events.iter().any(|e| {
+                is_nav_event(
+                    &root,
+                    e,
+                    opts.use_ignore,
+                    &opts.exclude_names,
+                    opts.show_hidden,
+                    None,
+                )
+            });
             if nav_dirty {
                 if let Ok(mut guard) = nav.alternate.write() {
                     *guard = None;
                 }
                 let fresh = walk::build_all(
                     &root,
-                    use_ignore,
-                    &exclude_names,
-                    &extensions,
-                    show_excludes,
+                    opts.use_ignore,
+                    &opts.exclude_names,
+                    &opts.extensions,
+                    opts.show_excludes,
                 );
                 if let Ok(mut guard) = nav.current.write() {
                     *guard = fresh;
@@ -111,6 +130,7 @@ fn changed_paths(
     events: &[DebouncedEvent],
     use_ignore: bool,
     exclude_names: &[String],
+    show_hidden: bool,
     global_ignore: Option<&Path>,
 ) -> Vec<PathBuf> {
     use notify::event::EventKind;
@@ -120,7 +140,14 @@ fn changed_paths(
             continue;
         }
         for p in &ev.event.paths {
-            if !is_relevant_watch_path(root, p, use_ignore, exclude_names, global_ignore) {
+            if !is_relevant_watch_path(
+                root,
+                p,
+                use_ignore,
+                exclude_names,
+                show_hidden,
+                global_ignore,
+            ) {
                 continue;
             }
             if !seen.contains(p) {
@@ -136,6 +163,7 @@ fn is_nav_event(
     ev: &DebouncedEvent,
     use_ignore: bool,
     exclude_names: &[String],
+    show_hidden: bool,
     global_ignore: Option<&Path>,
 ) -> bool {
     use notify::event::{EventKind, ModifyKind};
@@ -146,10 +174,16 @@ fn is_nav_event(
     if !kind_nav {
         return false;
     }
-    ev.event
-        .paths
-        .iter()
-        .any(|p| is_relevant_watch_path(root, p, use_ignore, exclude_names, global_ignore))
+    ev.event.paths.iter().any(|p| {
+        is_relevant_watch_path(
+            root,
+            p,
+            use_ignore,
+            exclude_names,
+            show_hidden,
+            global_ignore,
+        )
+    })
 }
 
 fn is_relevant_watch_path(
@@ -157,11 +191,15 @@ fn is_relevant_watch_path(
     path: &Path,
     use_ignore: bool,
     exclude_names: &[String],
+    show_hidden: bool,
     global_ignore: Option<&Path>,
 ) -> bool {
     let Ok(rel) = path.strip_prefix(root) else {
         return false;
     };
+    if !show_hidden && paths::has_hidden_part(rel) {
+        return false;
+    }
     if paths::has_excluded_part(rel, exclude_names) {
         return false;
     }
@@ -315,6 +353,7 @@ mod tests {
             )],
             true,
             &[".venv".to_string()],
+            true,
             None,
         );
 
@@ -337,6 +376,7 @@ mod tests {
             )],
             true,
             &[],
+            true,
             None,
         );
 
@@ -361,6 +401,7 @@ mod tests {
             )],
             true,
             &[],
+            true,
             Some(&ignore_file),
         );
 
@@ -382,6 +423,51 @@ mod tests {
             )],
             true,
             &[],
+            false,
+            None,
+        );
+
+        assert_eq!(changed, vec![path]);
+    }
+
+    #[test]
+    fn changed_paths_skip_hidden_by_default() {
+        let td = TempDir::new("ghrm-watch-test");
+        let path = td.path().join(".git/index");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "").unwrap();
+
+        let changed = changed_paths(
+            td.path(),
+            &[DebouncedEvent::new(
+                Event::default().add_path(path),
+                Instant::now(),
+            )],
+            false,
+            &[],
+            false,
+            None,
+        );
+
+        assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn changed_paths_keep_hidden_when_enabled() {
+        let td = TempDir::new("ghrm-watch-test");
+        let path = td.path().join(".git/index");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "").unwrap();
+
+        let changed = changed_paths(
+            td.path(),
+            &[DebouncedEvent::new(
+                Event::default().add_path(path.clone()),
+                Instant::now(),
+            )],
+            false,
+            &[],
+            true,
             None,
         );
 

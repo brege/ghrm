@@ -205,10 +205,13 @@ pub async fn run(options: Options) -> Result<()> {
                     alternate: alternate_nav.clone(),
                 },
                 reload_tx.clone(),
-                use_ignore,
-                exclude_names.clone(),
-                extensions.clone(),
-                show_excludes,
+                watch::DirWatchOptions {
+                    use_ignore,
+                    exclude_names: exclude_names.clone(),
+                    extensions: extensions.clone(),
+                    show_hidden: default_hidden,
+                    show_excludes,
+                },
             ) {
                 warn!("file watcher disabled: {e}");
             }
