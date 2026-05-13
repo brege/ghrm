@@ -11,6 +11,7 @@ Shared app contracts and binary-level support stay flat.
 | main.rs | binary entry |
 | config.rs | config schema and loading |
 | dirs.rs | OS app directories |
+| options.rs | CLI and config resolution |
 | paths.rs | path safety helpers |
 | runtime.rs | runtime paths shown in UI |
 | repo.rs | git source metadata |
@@ -28,6 +29,7 @@ Markdown rendering code sits behind the render namespace.
 | render/code.rs | code and source blocks |
 | render/math.rs | markdown math blocks |
 | render/path.rs | local URL rewriting |
+| render/tests.rs | render behavior tests |
 
 ## HTTP
 
@@ -38,6 +40,7 @@ Local web-serving code sits behind the HTTP namespace.
 | http.rs | HTTP namespace |
 | http/server.rs | Axum router and server state |
 | http/api.rs | JSON and fragment API routes |
+| http/archive.rs | directory archive downloads |
 | http/auth.rs | auth middleware and handlers |
 | http/delivery.rs | native file delivery |
 | http/shell.rs | full page and fragment responses |
