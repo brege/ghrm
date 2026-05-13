@@ -78,7 +78,7 @@ pub struct Context {
     repo: gix::Repository,
     history: OnceLock<Result<tools::history::History, String>>,
     language_summary: OnceLock<Result<tools::languages::Summary, String>>,
-    manifest: OnceLock<Result<tools::manifest::Manifest, String>>,
+    metadata: OnceLock<Result<tools::metadata::Metadata, String>>,
 }
 
 impl Tool {
@@ -177,7 +177,7 @@ pub fn resolve_with_config(input: &Path, config: Config) -> Result<Report> {
         repo,
         history: OnceLock::new(),
         language_summary: OnceLock::new(),
-        manifest: OnceLock::new(),
+        metadata: OnceLock::new(),
     };
     if !ctx.config.enabled {
         return Ok(Report {
@@ -246,10 +246,10 @@ pub fn language_summary(ctx: &Context) -> Result<&tools::languages::Summary> {
     result.as_ref().map_err(|message| anyhow!(message.clone()))
 }
 
-pub fn manifest(ctx: &Context) -> Result<&tools::manifest::Manifest> {
+pub fn metadata(ctx: &Context) -> Result<&tools::metadata::Metadata> {
     let result = ctx
-        .manifest
-        .get_or_init(|| tools::manifest::load(&ctx.root).map_err(|err| err.to_string()));
+        .metadata
+        .get_or_init(|| tools::metadata::load(&ctx.root).map_err(|err| err.to_string()));
     result.as_ref().map_err(|message| anyhow!(message.clone()))
 }
 
