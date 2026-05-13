@@ -9,6 +9,7 @@ use crate::tmpl::{
     AboutStatMetric, AboutStatPart, AboutStatRow, AboutStats,
 };
 
+use anyhow::{Context, Result};
 use axum::{
     body::Body,
     extract::{Query, RawQuery, State},
@@ -36,6 +37,13 @@ pub(crate) async fn show(
     RawQuery(raw_query): RawQuery,
     Query(q): Query<AboutQuery>,
 ) -> Response {
+    match show_inner(s, raw_query, q).await {
+        Ok(response) => response,
+        Err(_) => server_error(),
+    }
+}
+
+async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Result<Response> {
     let stats_path = about_path(&s, q.path.as_deref());
     let view = view::from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let source = s.repos.source_for(&stats_path);
@@ -49,39 +57,38 @@ pub(crate) async fn show(
         tokio::task::spawn_blocking(move || {
             ghrm_stat::resolve_with_config(&stats_input_for_repo, stats_cfg)
                 .map(|report| stats_model(report, &stats_source, &served_root))
-                .unwrap_or_default()
         })
         .await
-        .unwrap_or_default()
+        .context("join repository stats task")?
+        .context("load repository stats")?
     } else {
         AboutStats::default()
     };
-    let details = detail_sections(&s, &stats_input, &view).await;
+    let details = detail_sections(&s, &stats_input, &view).await?;
 
-    html_response(&html_with_mode(&details, &stats, true, mode))
+    Ok(html_response(&html_with_mode(&details, &stats, true, mode)))
 }
 
 async fn detail_sections(
     s: &AppState,
     path: &Path,
     view: &view::ViewState,
-) -> Vec<AboutDetailSection> {
+) -> Result<Vec<AboutDetailSection>> {
     let fs_config = fs_config(s, view);
     let path = path.to_path_buf();
+    let display_path = path.display().to_string();
     let fs_report =
         tokio::task::spawn_blocking(move || ghrm_stat::filesystem::scan(&path, &fs_config))
             .await
-            .ok()
-            .and_then(Result::ok);
+            .context("join filesystem stats task")?
+            .with_context(|| format!("scan filesystem stats for {display_path}"))?;
 
     let mut sections = vec![runtime_section(&s.runtime_paths), config_section(s)];
-    if let Some(report) = fs_report {
-        if !report.filters.is_empty() {
-            sections.push(filter_totals_section(&report));
-        }
-        sections.push(filesystem_section(s, &report));
+    if !fs_report.filters.is_empty() {
+        sections.push(filter_totals_section(&fs_report));
     }
-    sections
+    sections.push(filesystem_section(s, &fs_report));
+    Ok(sections)
 }
 
 fn fs_config(s: &AppState, view: &view::ViewState) -> ghrm_stat::filesystem::FsConfig {
@@ -368,6 +375,14 @@ fn html_response(html: &str) -> Response {
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
         .header(header::CACHE_CONTROL, "no-store")
         .body(Body::from(html.to_string()))
+        .unwrap()
+}
+
+fn server_error() -> Response {
+    Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .header(header::CACHE_CONTROL, "no-store")
+        .body(Body::from("500"))
         .unwrap()
 }
 

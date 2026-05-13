@@ -146,7 +146,9 @@ pub(crate) async fn start(
     };
 
     let root_name = archive_root_name(&s.target, &rel);
-    let entries = archive_entries(&s.target, &rel, &root_name, &files);
+    let Ok(entries) = archive_entries(&s.target, &rel, &root_name, &files) else {
+        return server_error();
+    };
     let filename = archive_filename(&root_name, format);
 
     match s
@@ -247,7 +249,7 @@ impl ArchiveJobs {
         self.cleanup_expired();
         let id = self.next_id();
         let total_files = entries.len();
-        let total_bytes = archive_total_bytes(&entries);
+        let total_bytes = archive_total_bytes(&entries)?;
         let job = ArchiveJob {
             source_dir,
             root_name,
@@ -464,12 +466,18 @@ fn archive_entries(
     rel: &Path,
     root_name: &str,
     files: &[PathBuf],
-) -> Vec<ArchiveEntry> {
+) -> Result<Vec<ArchiveEntry>> {
     files
         .iter()
-        .filter_map(|file| {
-            let inner = file.strip_prefix(rel).ok()?;
-            Some(ArchiveEntry {
+        .map(|file| {
+            let inner = file.strip_prefix(rel).with_context(|| {
+                format!(
+                    "archive file {} is outside selected path {}",
+                    file.display(),
+                    rel.display()
+                )
+            })?;
+            Ok(ArchiveEntry {
                 source: root.join(file),
                 archive_path: Path::new(root_name).join(inner),
             })
@@ -587,12 +595,14 @@ fn archive_filename(root_name: &str, format: ArchiveFormat) -> String {
     )
 }
 
-fn archive_total_bytes(entries: &[ArchiveEntry]) -> u64 {
-    entries
-        .iter()
-        .filter_map(|entry| fs::metadata(&entry.source).ok())
-        .map(|metadata| metadata.len())
-        .sum()
+fn archive_total_bytes(entries: &[ArchiveEntry]) -> Result<u64> {
+    entries.iter().try_fold(0u64, |total, entry| {
+        let metadata = fs::metadata(&entry.source)
+            .with_context(|| format!("stat archive source {}", entry.source.display()))?;
+        total
+            .checked_add(metadata.len())
+            .context("archive byte total overflow")
+    })
 }
 
 fn job_status(id: &str, job: &ArchiveJob) -> JobStatus {
