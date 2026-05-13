@@ -10,7 +10,7 @@ pub mod languages;
 pub mod last_change;
 pub mod license;
 pub mod loc;
-pub mod manifest;
+pub mod metadata;
 pub mod pending;
 pub mod project;
 pub mod size;

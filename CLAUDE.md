@@ -146,6 +146,13 @@ Onefetch has been inspirational for the `ghrm-stat` crate:
 
 - onefetch: @refs/onefetch/README.md
 
+### Resources
+
+Some upstream-derived assets should be checked from time to time. When updating the referenced projects above, check whether these need to be refreshed:
+
+- `license.cache.zstd`: AskAlono license cache copied from Onefetch
+- `languages.json`: tokei's project extension and shebang database
+
 ### Benchmark Utility
 
 For details not available in `bench/README.md`:
