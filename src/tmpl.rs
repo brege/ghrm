@@ -22,6 +22,7 @@ pub struct AboutPeek<'a> {
     pub detail_sections: &'a [AboutDetailSection],
     pub stats_loaded: bool,
     pub stats: &'a AboutStats,
+    pub local_path: &'a str,
     pub project_href: &'a str,
     pub project_release_href: &'a str,
     pub project_version: &'static str,
@@ -33,6 +34,12 @@ pub struct AboutStats {
     pub stats: Vec<AboutStatRow>,
     pub languages: Vec<AboutLanguage>,
     pub language_total: String,
+}
+
+impl AboutStats {
+    pub fn has_summary(&self) -> bool {
+        !self.metadata.is_empty() || !self.stats.is_empty() || !self.languages.is_empty()
+    }
 }
 
 pub struct AboutStatRow {

@@ -63,9 +63,19 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     } else {
         AboutStats::default()
     };
+    let local_path = if source == SourceState::NoRepo {
+        stats_path.display().to_string()
+    } else {
+        String::new()
+    };
     let details = detail_sections(&s, &stats_input, &view).await?;
 
-    Ok(html_response(&html_with_details(&details, &stats, true)))
+    Ok(html_response(&html_with_details(
+        &details,
+        &stats,
+        true,
+        &local_path,
+    )))
 }
 
 async fn detail_sections(
@@ -120,13 +130,14 @@ pub(crate) fn html(
     stats_loaded: bool,
 ) -> String {
     let details = vec![runtime_section(runtime_paths)];
-    html_with_details(&details, stats, stats_loaded)
+    html_with_details(&details, stats, stats_loaded, "")
 }
 
 fn html_with_details(
     detail_sections: &[AboutDetailSection],
     stats: &AboutStats,
     stats_loaded: bool,
+    local_path: &str,
 ) -> String {
     let project_version = env!("CARGO_PKG_VERSION");
     let project_release_href = format!("{PROJECT_URL}/releases/tag/v{project_version}");
@@ -134,6 +145,7 @@ fn html_with_details(
         detail_sections,
         stats_loaded,
         stats,
+        local_path,
         project_href: PROJECT_URL,
         project_release_href: &project_release_href,
         project_version,
@@ -783,9 +795,32 @@ mod tests {
     }
 
     #[test]
-    fn about_html_keeps_no_repo_on_stamp_details() {
+    fn about_html_omits_empty_summary() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
+        let html = html(&runtime_paths, &stats, true);
+
+        assert!(html.contains("class=\"ghrm-about-peek\""));
+        assert!(!html.contains("data-details-only"));
+        assert!(!html.contains("ghrm-about-summary"));
+        assert!(html.contains("ghrm-about-stamp-shell"));
+        assert!(html.contains("ghrm-about-stamp-button"));
+    }
+
+    #[test]
+    fn about_html_renders_summary_when_stats_exist() {
+        let runtime_paths = test_runtime_paths();
+        let mut stats = AboutStats::default();
+        stats.metadata.push(AboutStatRow {
+            label: "Project".to_string(),
+            value: "ghrm".to_string(),
+            title: String::new(),
+            title_ts: None,
+            parts: Vec::new(),
+            icon: "",
+            href: String::new(),
+            items: Vec::new(),
+        });
         let html = html(&runtime_paths, &stats, true);
 
         assert!(html.contains("class=\"ghrm-about-peek\""));
@@ -795,15 +830,16 @@ mod tests {
     }
 
     #[test]
-    fn about_html_keeps_repo_summary_toggle() {
+    fn about_html_renders_local_path_above_stamp_shell() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, true);
+        let details = vec![runtime_section(&runtime_paths)];
+        let html = html_with_details(&details, &stats, true, "/tmp/local");
 
-        assert!(html.contains("class=\"ghrm-about-peek\""));
-        assert!(!html.contains("data-details-only"));
-        assert!(html.contains("ghrm-about-summary"));
-        assert!(html.contains("ghrm-about-stamp-button"));
+        let path = html.find("/tmp/local").unwrap();
+        let stamp = html.find("ghrm-about-stamp-shell").unwrap();
+        assert!(html.contains("not a git repo"));
+        assert!(path < stamp);
     }
 
     #[test]

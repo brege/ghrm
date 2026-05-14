@@ -321,13 +321,9 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 
 .ghrm-about-footer {
   min-width: 0;
-  min-height: 54px;
-  margin-top: 2px;
-  padding: 12px 128px 0 0;
-  grid-column: 1 / -1;
-  border-top: 1px solid var(--borderColor-muted, #d0d7de);
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 14px;
   color: var(--fgColor-muted, #636c76);
 }
@@ -338,6 +334,36 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   font-weight: 600;
   letter-spacing: 0;
   text-transform: uppercase;
+}
+
+.ghrm-about-local-path {
+  min-width: 0;
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 14px;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+}
+
+.ghrm-about-local-path code {
+  max-width: 100%;
+  color: var(--fgColor-default, #1f2328);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.ghrm-about-stamp-shell {
+  min-width: 0;
+  min-height: 54px;
+  margin-top: 2px;
+  padding: 12px 128px 0 0;
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--borderColor-muted, #d0d7de);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
 }
 
 .ghrm-about-peek:not(.is-details-open) .ghrm-about-stamp-button {
@@ -561,17 +587,6 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   .ghrm-detail-section-config,
   .ghrm-detail-section-filesystem,
   .ghrm-detail-section-filter-totals,
-  .ghrm-about-footer {
-    grid-column: auto;
-  }
-
-  .ghrm-about-footer {
-    min-height: 64px;
-    padding-right: 96px;
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-
   .ghrm-languages {
     max-width: none;
   }

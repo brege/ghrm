@@ -1,5 +1,6 @@
 <section id="ghrm-about-peek" class="ghrm-about-peek" data-stats-loaded="{% if stats_loaded %}true{% else %}false{% endif %}" hidden>
   <div class="ghrm-about-peek-inner">
+{% if stats.has_summary() %}
     <div class="ghrm-about-summary">
       <div class="ghrm-about-main">
 {% if !stats.metadata.is_empty() %}        <div class="ghrm-about-stats" aria-label="Repository metadata">
@@ -60,6 +61,7 @@
 {% endfor %}        </dl>
       </div>
 {% endif %}    </div>
+{% endif %}
     <div class="ghrm-about-details" aria-label="ghrm details">
 {% for section in detail_sections %}      <div class="ghrm-runtime-paths {{ section.class_name }}" aria-label="{{ section.heading }}">
         <div class="ghrm-about-heading">{{ section.heading }}</div>
@@ -72,23 +74,30 @@
       </div>
 {% endfor %}
     </div>
-    <div class="ghrm-about-footer" aria-label="ghrm app">
-      <span class="ghrm-about-footer-label">ghrm</span>
-      <a class="ghrm-about-project" href="{{ project_href }}" target="_blank" rel="noopener noreferrer">
-        <svg aria-hidden="true">
-          <use href="#ghrm-icon-github"></use>
-        </svg>
-        <span>brege/ghrm</span>
-      </a>
-      <a class="ghrm-about-project" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer">
-        <svg aria-hidden="true">
-          <use href="#ghrm-icon-fork"></use>
-        </svg>
-        <span>v{{ project_version }}</span>
-      </a>
+{% if !local_path.is_empty() %}    <div class="ghrm-about-local-path" aria-label="Local path">
+      <span>not a git repo</span>
+      <code>{{ local_path }}</code>
     </div>
-    <button class="ghrm-about-stamp-button" type="button" aria-label="Show runtime details" title="Show runtime details" aria-expanded="false">
-      <img class="ghrm-about-stamp" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">
-    </button>
+{% endif %}
+    <div class="ghrm-about-stamp-shell">
+      <div class="ghrm-about-footer" aria-label="ghrm app">
+        <span class="ghrm-about-footer-label">ghrm</span>
+        <a class="ghrm-about-project" href="{{ project_href }}" target="_blank" rel="noopener noreferrer">
+          <svg aria-hidden="true">
+            <use href="#ghrm-icon-github"></use>
+          </svg>
+          <span>brege/ghrm</span>
+        </a>
+        <a class="ghrm-about-project" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer">
+          <svg aria-hidden="true">
+            <use href="#ghrm-icon-fork"></use>
+          </svg>
+          <span>v{{ project_version }}</span>
+        </a>
+      </div>
+      <button class="ghrm-about-stamp-button" type="button" aria-label="Show runtime details" title="Show runtime details" aria-expanded="false">
+        <img class="ghrm-about-stamp" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">
+      </button>
+    </div>
   </div>
 </section>
