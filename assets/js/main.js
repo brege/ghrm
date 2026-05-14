@@ -67,11 +67,7 @@ function setupSearch() {
   setupPathSearch({ populateDates, setupNavExternalLinks, syncColumnControls });
 }
 
-function afterContentSwap(xhr) {
-  const title = xhr.getResponseHeader('HX-Title');
-  if (title !== null) {
-    document.title = decodeURIComponent(title);
-  }
+function refreshContent({ resetScroll }) {
   syncServerStatus();
   setupFileViews();
   setupSearch();
@@ -81,14 +77,24 @@ function afterContentSwap(xhr) {
   applyDocChromePref();
   populateDates();
   buildToc();
-  const hash = location.hash;
-  if (hash) {
-    scrollToHash(hash);
-  } else if (!pendingSamePathSwap) {
-    window.scrollTo(0, 0);
+  if (resetScroll) {
+    const hash = location.hash;
+    if (hash) {
+      scrollToHash(hash);
+    } else if (!pendingSamePathSwap) {
+      window.scrollTo(0, 0);
+    }
   }
   pendingSamePathSwap = false;
   document.dispatchEvent(new CustomEvent('ghrm:contentready'));
+}
+
+function afterContentSwap(xhr) {
+  const title = xhr.getResponseHeader('HX-Title');
+  if (title !== null) {
+    document.title = decodeURIComponent(title);
+  }
+  refreshContent({ resetScroll: true });
 }
 
 function shouldBoostLink(a) {
@@ -115,6 +121,10 @@ function setupHtmxNav() {
     if (e.detail.target?.matches('article.markdown-body')) {
       afterContentSwap(e.detail.xhr);
     }
+  });
+
+  document.body.addEventListener('htmx:historyRestore', () => {
+    refreshContent({ resetScroll: false });
   });
 
   document.body.addEventListener('htmx:beforeRequest', (e) => {
