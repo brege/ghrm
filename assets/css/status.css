@@ -148,16 +148,6 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   display: grid;
 }
 
-.ghrm-about-peek.is-details-only .ghrm-about-summary,
-.ghrm-about-peek.is-details-only .ghrm-about-stamp-button {
-  display: none;
-}
-
-.ghrm-about-peek.is-details-only .ghrm-about-details {
-  padding-top: 0;
-  display: grid;
-}
-
 .ghrm-about-project {
   display: inline-flex;
   align-items: center;
@@ -350,13 +340,12 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   text-transform: uppercase;
 }
 
-.ghrm-about-peek:not(.is-details-open):not(.is-details-only)
-  .ghrm-about-stamp-button {
+.ghrm-about-peek:not(.is-details-open) .ghrm-about-stamp-button {
   width: 54px;
   height: 54px;
 }
 
-.ghrm-about-peek:not(.is-details-open):not(.is-details-only)
+.ghrm-about-peek:not(.is-details-open)
   .ghrm-about-stamp-button
   .ghrm-about-stamp {
   width: 54px;
@@ -395,11 +384,6 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   transition:
     opacity 120ms ease,
     transform 120ms ease;
-}
-
-.ghrm-about-stamp-mark {
-  inset: auto 42px -1px auto;
-  pointer-events: none;
 }
 
 .ghrm-about-heading {
@@ -596,10 +580,6 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
     right: 20px;
     width: 72px;
     height: 72px;
-  }
-
-  .ghrm-about-stamp-mark {
-    inset: auto 20px -1px auto;
   }
 
   .ghrm-about-stamp {

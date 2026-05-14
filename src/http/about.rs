@@ -47,13 +47,12 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     let stats_path = about_path(&s, q.path.as_deref());
     let view = view::from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let source = s.repos.source_for(&stats_path);
-    let mode = PeekMode::from_source(&source);
     let stats_input = stats_input_path(&stats_path);
     let served_root = served_root(&s);
     let stats_cfg = s.stats.clone();
     let stats_source = source.clone();
     let stats_input_for_repo = stats_input.clone();
-    let stats = if stats_cfg.enabled && mode.loads_stats() {
+    let stats = if stats_cfg.enabled && source != SourceState::NoRepo {
         tokio::task::spawn_blocking(move || {
             ghrm_stat::resolve_with_config(&stats_input_for_repo, stats_cfg)
                 .map(|report| stats_model(report, &stats_source, &served_root))
@@ -66,7 +65,7 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     };
     let details = detail_sections(&s, &stats_input, &view).await?;
 
-    Ok(html_response(&html_with_mode(&details, &stats, true, mode)))
+    Ok(html_response(&html_with_details(&details, &stats, true)))
 }
 
 async fn detail_sections(
@@ -74,6 +73,7 @@ async fn detail_sections(
     path: &Path,
     view: &view::ViewState,
 ) -> Result<Vec<AboutDetailSection>> {
+    let mut sections = vec![runtime_section(&s.runtime_paths), config_section(s)];
     let fs_config = fs_config(s, view);
     let path = path.to_path_buf();
     let display_path = path.display().to_string();
@@ -83,7 +83,6 @@ async fn detail_sections(
             .context("join filesystem stats task")?
             .with_context(|| format!("scan filesystem stats for {display_path}"))?;
 
-    let mut sections = vec![runtime_section(&s.runtime_paths), config_section(s)];
     if !fs_report.filters.is_empty() {
         sections.push(filter_totals_section(&fs_report));
     }
@@ -119,24 +118,21 @@ pub(crate) fn html(
     runtime_paths: &runtime::Paths,
     stats: &AboutStats,
     stats_loaded: bool,
-    source: &SourceState,
 ) -> String {
     let details = vec![runtime_section(runtime_paths)];
-    html_with_mode(&details, stats, stats_loaded, PeekMode::from_source(source))
+    html_with_details(&details, stats, stats_loaded)
 }
 
-fn html_with_mode(
+fn html_with_details(
     detail_sections: &[AboutDetailSection],
     stats: &AboutStats,
     stats_loaded: bool,
-    mode: PeekMode,
 ) -> String {
     let project_version = env!("CARGO_PKG_VERSION");
     let project_release_href = format!("{PROJECT_URL}/releases/tag/v{project_version}");
     let about = AboutPeek {
         detail_sections,
         stats_loaded,
-        details_only: mode.details_only(),
         stats,
         project_href: PROJECT_URL,
         project_release_href: &project_release_href,
@@ -316,29 +312,6 @@ fn filter_total_value(totals: &ghrm_stat::filesystem::FsTotals) -> String {
         totals.dirs,
         ghrm_stat::filesystem::format_bytes(totals.bytes)
     )
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PeekMode {
-    RepoSummary,
-    DetailsOnly,
-}
-
-impl PeekMode {
-    fn from_source(source: &SourceState) -> Self {
-        match source {
-            SourceState::NoRepo => Self::DetailsOnly,
-            _ => Self::RepoSummary,
-        }
-    }
-
-    fn loads_stats(self) -> bool {
-        matches!(self, Self::RepoSummary)
-    }
-
-    fn details_only(self) -> bool {
-        matches!(self, Self::DetailsOnly)
-    }
 }
 
 fn about_path(s: &AppState, raw_path: Option<&str>) -> PathBuf {
@@ -801,7 +774,7 @@ mod tests {
     fn about_html_renders_runtime_and_app_links() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, false, &SourceState::NoRepo);
+        let html = html(&runtime_paths, &stats, false);
 
         assert!(html.contains("Runtime"));
         assert!(html.contains("href=\"https://github.com/brege/ghrm\""));
@@ -810,25 +783,25 @@ mod tests {
     }
 
     #[test]
-    fn about_html_renders_no_repo_details_only() {
+    fn about_html_keeps_no_repo_on_stamp_details() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, true, &SourceState::NoRepo);
+        let html = html(&runtime_paths, &stats, true);
 
-        assert!(html.contains("class=\"ghrm-about-peek is-details-only\""));
-        assert!(html.contains("data-details-only=\"true\""));
-        assert!(!html.contains("ghrm-about-summary"));
-        assert!(!html.contains("ghrm-about-stamp-button"));
+        assert!(html.contains("class=\"ghrm-about-peek\""));
+        assert!(!html.contains("data-details-only"));
+        assert!(html.contains("ghrm-about-summary"));
+        assert!(html.contains("ghrm-about-stamp-button"));
     }
 
     #[test]
     fn about_html_keeps_repo_summary_toggle() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, true, &SourceState::NoRemote);
+        let html = html(&runtime_paths, &stats, true);
 
         assert!(html.contains("class=\"ghrm-about-peek\""));
-        assert!(html.contains("data-details-only=\"false\""));
+        assert!(!html.contains("data-details-only"));
         assert!(html.contains("ghrm-about-summary"));
         assert!(html.contains("ghrm-about-stamp-button"));
     }
@@ -837,7 +810,7 @@ mod tests {
     fn about_html_omits_current_source() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, false, &SourceState::NoRepo);
+        let html = html(&runtime_paths, &stats, false);
 
         assert!(!html.contains("Current Source"));
     }
