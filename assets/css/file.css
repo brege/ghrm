@@ -96,6 +96,10 @@
 .markdown-body .ghrm-file-link:visited,
 .markdown-body .ghrm-file-link:hover,
 .markdown-body .ghrm-file-link:active,
+.markdown-body .ghrm-file-toggle,
+.markdown-body .ghrm-file-toggle:visited,
+.markdown-body .ghrm-file-toggle:hover,
+.markdown-body .ghrm-file-toggle:active,
 .markdown-body .ghrm-file-action,
 .markdown-body .ghrm-file-action:visited,
 .markdown-body .ghrm-file-action:hover,
@@ -161,6 +165,12 @@
   display: block;
 }
 
+.ghrm-file-toggle svg,
+.ghrm-file-action svg,
 .ghrm-file-icon {
+  width: 16px;
+  height: 16px;
   fill: currentColor;
+  color: inherit;
+  flex: 0 0 auto;
 }

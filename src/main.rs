@@ -1,6 +1,7 @@
 mod config;
 mod dirs;
 mod explorer;
+mod gist;
 mod http;
 mod options;
 mod paths;
@@ -80,6 +81,9 @@ struct Cli {
 
     #[arg(long, help = "Print resolved configuration and exit")]
     dump_config: bool,
+
+    #[arg(long, help = "Enable the shared paste space")]
+    gist: bool,
 }
 
 fn main() -> Result<()> {
@@ -114,6 +118,7 @@ fn main() -> Result<()> {
             no_excludes: cli.no_excludes,
             dangerously_traverse_excludes: cli.dangerously_traverse_excludes,
             max_rows: cli.max_rows,
+            gist: cli.gist,
             ghrm_open: std::env::var("GHRM_OPEN").ok(),
         },
         &cfg,
@@ -153,5 +158,6 @@ fn main() -> Result<()> {
         config_path: resolved.config_path,
         stats: resolved.stats,
         auth: resolved.auth,
+        gist: resolved.gist,
     }))
 }

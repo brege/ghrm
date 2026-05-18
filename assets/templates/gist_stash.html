@@ -1,0 +1,48 @@
+<article class="markdown-body ghrm-has-edge-meta" hx-history-elt data-ghrm-features="" data-ghrm-gist-stash>
+  <section class="ghrm-explorer-shell">
+    <div class="ghrm-explorer-header">
+      <nav class="ghrm-breadcrumbs" aria-label="Path">
+        <a href="/_ghrm/gist">gist</a>
+        <span class="ghrm-crumb-sep">/</span>
+        <span class="ghrm-crumb-current">stash</span>
+      </nav>
+      <div class="ghrm-header-actions">
+        <a class="ghrm-file-link" href="/_ghrm/gist" aria-label="Open current paste" title="Open current paste">Current</a>
+      </div>
+    </div>
+{% if entries.is_empty() %}    <p class="ghrm-nav-empty">No pastes found.</p>
+{% else %}    <table class="ghrm-nav-table">
+      <colgroup>
+        <col class="ghrm-nav-icon-col">
+        <col class="ghrm-nav-name-col">
+        <col class="ghrm-nav-col" data-column-key="date">
+        <col class="ghrm-nav-col" data-column-key="size">
+        <col class="ghrm-nav-col" data-column-key="lines">
+      </colgroup>
+      <thead class="ghrm-column-headers">
+        <tr>
+          <th class="ghrm-nav-name" colspan="2">Name</th>
+          <th class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta" data-column-key="date">Modified date</th>
+          <th class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="size">Size</th>
+          <th class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="lines">Lines</th>
+        </tr>
+      </thead>
+      <tbody>
+{% for e in entries %}        <tr>
+          <td class="ghrm-nav-icon">
+            <svg aria-hidden="true" focusable="false" class="octicon">
+              <use href="#ghrm-icon-file"></use>
+            </svg>
+          </td>
+          <td class="ghrm-nav-name">
+            <a href="{{ e.href }}">{{ e.name }}</a>
+{% if e.current %}            <span class="ghrm-gist-current-badge">current</span>
+{% endif %}          </td>
+          <td class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta" data-column-key="date"{% if let Some(ts) = e.modified %} data-ts="{{ ts }}"{% endif %}></td>
+          <td class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="size">{{ e.size }}</td>
+          <td class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="lines">{{ e.lines }}</td>
+        </tr>
+{% endfor %}      </tbody>
+    </table>
+{% endif %}  </section>
+</article>

@@ -38,8 +38,19 @@ impl Paths {
         self
     }
 
+    pub(crate) fn with_gist(mut self, gist: Option<&Path>) -> Self {
+        if let Some(gist) = gist {
+            self.rows.push(row("gist", gist));
+        }
+        self
+    }
+
     pub(crate) fn rows(&self) -> &[PathRow] {
         &self.rows
+    }
+
+    pub(crate) fn has_gist(&self) -> bool {
+        self.rows.iter().any(|row| row.label == "gist")
     }
 }
 
@@ -68,5 +79,17 @@ mod tests {
         let labels: Vec<&str> = paths.rows().iter().map(|row| row.label).collect();
 
         assert_eq!(labels, vec!["root", "config", "theme", "vendor"]);
+    }
+
+    #[test]
+    fn rows_include_gist_when_enabled() {
+        let td = TempDir::new("ghrm-runtime-gist");
+        let gist = td.path().join("gist");
+
+        let paths = Paths::new(td.path(), None).unwrap().with_gist(Some(&gist));
+        let labels: Vec<&str> = paths.rows().iter().map(|row| row.label).collect();
+
+        assert!(labels.contains(&"gist"));
+        assert!(paths.has_gist());
     }
 }

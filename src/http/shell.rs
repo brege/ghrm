@@ -34,6 +34,7 @@ pub(crate) fn full_page(
         source: &source,
         about: &about,
         show_logout,
+        show_gist: runtime_paths.has_gist(),
         asset_json: vendor::client_json(),
         vendor_styles: &assets.styles,
         vendor_scripts: &assets.scripts,

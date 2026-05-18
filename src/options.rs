@@ -23,6 +23,7 @@ pub struct Resolved {
     pub exclude_names: Vec<String>,
     pub max_rows: usize,
     pub stats: ghrm_stat::Config,
+    pub gist: bool,
 }
 
 pub struct Input<'a> {
@@ -37,6 +38,7 @@ pub struct Input<'a> {
     pub no_excludes: bool,
     pub dangerously_traverse_excludes: bool,
     pub max_rows: Option<usize>,
+    pub gist: bool,
     pub ghrm_open: Option<String>,
 }
 
@@ -100,6 +102,7 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
 
     let show_hidden = cli.hidden || cfg.walk.hidden.unwrap_or(false);
     let filter_ext = has_explicit_ext_filter || cfg.walk.filter.enabled.unwrap_or(false);
+    let gist = cli.gist || cfg.gist.enabled.unwrap_or(false);
 
     Ok(Resolved {
         target,
@@ -118,6 +121,7 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
         exclude_names,
         max_rows,
         stats: cfg.stats.clone().resolve(),
+        gist,
     })
 }
 
@@ -212,6 +216,7 @@ pub fn dump(resolved: &Resolved) -> String {
     writeln!(out, "exclude_names = {}", resolved.exclude_names.join(", ")).unwrap();
     writeln!(out, "max_rows = {}", resolved.max_rows).unwrap();
     writeln!(out, "stats.enabled = {}", resolved.stats.enabled).unwrap();
+    writeln!(out, "gist.enabled = {}", resolved.gist).unwrap();
 
     out
 }
@@ -234,6 +239,7 @@ mod tests {
             no_excludes: false,
             dangerously_traverse_excludes: false,
             max_rows: None,
+            gist: false,
             ghrm_open: None,
         }
     }
@@ -461,5 +467,38 @@ mod tests {
         assert!(output.contains("dangerously_traverse_excludes = false"));
         assert!(output.contains("extensions = md"));
         assert!(output.contains("stats.enabled = true"));
+        assert!(output.contains("gist.enabled = false"));
+    }
+
+    #[test]
+    fn gist_disabled_by_default() {
+        let resolved = resolve(default_input(), &Config::default()).unwrap();
+
+        assert!(!resolved.gist);
+    }
+
+    #[test]
+    fn cli_gist_enables_gist() {
+        let input = Input {
+            gist: true,
+            ..default_input()
+        };
+        let resolved = resolve(input, &Config::default()).unwrap();
+
+        assert!(resolved.gist);
+    }
+
+    #[test]
+    fn config_gist_enables_gist() {
+        let cfg: Config = toml::from_str(
+            r#"
+            [gist]
+            enabled = true
+            "#,
+        )
+        .unwrap();
+        let resolved = resolve(default_input(), &cfg).unwrap();
+
+        assert!(resolved.gist);
     }
 }

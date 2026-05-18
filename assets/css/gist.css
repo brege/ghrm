@@ -1,0 +1,114 @@
+.ghrm-gist-form {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.ghrm-gist-editor {
+  position: relative;
+  overflow: hidden;
+  min-height: min(66vh, 720px);
+  border: 2px solid var(--fgColor-accent, #0969da);
+  border-radius: 6px;
+  background: var(--bgColor-default, #ffffff);
+}
+
+.ghrm-gist-editor .ghrm-blob {
+  min-height: min(66vh, 720px);
+  margin: 0;
+}
+
+.ghrm-gist-input {
+  display: block;
+  box-sizing: border-box;
+  position: absolute;
+  top: 0;
+  left: calc(4ch + 24px);
+  width: calc(100% - 4ch - 24px);
+  min-height: 100%;
+  resize: none;
+  overflow: hidden;
+  padding: 0 16px 0 34px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  caret-color: var(--fgColor-default, #1f2328);
+  color: transparent;
+  font:
+    400 12px / 20px
+    var(
+      --fontStack-monospace,
+      ui-monospace,
+      SFMono-Regular,
+      SF Mono,
+      Menlo,
+      Consolas,
+      Liberation Mono,
+      monospace
+    );
+  tab-size: 2;
+  white-space: pre;
+}
+
+.ghrm-gist-editor:focus-within {
+  box-shadow: 0 0 0 1px var(--fgColor-accent, #0969da);
+}
+
+body.ghrm-wrap .ghrm-gist-input {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.ghrm-gist-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ghrm-gist-submit {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ghrm-gist-submit:hover:not(:disabled) {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+.ghrm-gist-submit:disabled {
+  color: var(--fgColor-muted, #636c76);
+  cursor: default;
+  opacity: 0.65;
+}
+
+.ghrm-gist-status {
+  margin-left: auto;
+  min-width: 0;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ghrm-gist-current {
+  min-width: 0;
+  margin: 0;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+}
+
+.ghrm-gist-current-badge {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+  line-height: 18px;
+}

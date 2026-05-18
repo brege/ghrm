@@ -1,0 +1,50 @@
+<article class="markdown-body" hx-history-elt data-ghrm-features="" data-ghrm-gist data-ghrm-gist-page="{{ page_href }}">
+  <section class="ghrm-page-shell" data-ghrm-gist>
+    <div class="ghrm-explorer-header">
+      <nav class="ghrm-breadcrumbs" aria-label="Path">
+        <span class="ghrm-crumb-current">gist</span>
+      </nav>
+      <div class="ghrm-header-actions">
+        <div class="ghrm-file-tools">
+          <div class="ghrm-file-toggles">
+            <button type="button" class="ghrm-file-toggle" data-ghrm-gist-wrap aria-label="Wrap lines" aria-pressed="false" title="Wrap lines">
+              <svg class="ghrm-file-icon" aria-hidden="true" focusable="false" height="16" width="16">
+                <use href="#ghrm-icon-wrap"></use>
+              </svg>
+            </button>
+            <a class="ghrm-file-toggle" href="{{ stash_href }}" aria-label="Browse paste stash" title="Browse paste stash">
+              <svg class="ghrm-file-icon" aria-hidden="true" focusable="false" height="16" width="16">
+                <use href="#ghrm-icon-list"></use>
+              </svg>
+            </a>
+          </div>
+          <div class="ghrm-file-actions">
+{% if has_paste %}            <a class="ghrm-file-link" href="{{ raw_href }}" target="_blank" rel="noopener noreferrer" data-ghrm-native="1" hx-boost="false" aria-label="Open raw paste" title="Open raw paste">Raw</a>
+{% endif %}            <button type="button" class="ghrm-file-action" data-ghrm-gist-copy data-copy-label="Copy paste" data-copy-feedback="Copied!" aria-label="Copy paste" title="Copy paste">
+          <svg class="ghrm-copy-icon ghrm-copy-icon-copy" aria-hidden="true" height="16" width="16">
+            <use href="#ghrm-icon-copy"></use>
+          </svg>
+          <svg class="ghrm-copy-icon ghrm-copy-icon-check" aria-hidden="true" height="16" width="16">
+            <use href="#ghrm-icon-check"></use>
+          </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ghrm-page-content">
+      <form class="ghrm-gist-form" data-ghrm-gist-form hx-boost="false">
+        <div class="ghrm-gist-editor ghrm-file-pane ghrm-raw-pane" data-ghrm-gist-editor>
+{{ raw_html|safe }}
+          <textarea class="ghrm-gist-input" name="paste" rows="24" autocomplete="off" spellcheck="false" aria-label="Paste text" wrap="off">{{ paste_body }}</textarea>
+        </div>
+        <div class="ghrm-gist-actions">
+          <button type="button" class="ghrm-gist-submit" data-ghrm-gist-publish>Publish</button>
+{% if has_paste %}          <span class="ghrm-gist-current"><code>{{ paste_id }}</code></span>
+{% endif %}
+          <span class="ghrm-gist-status" data-ghrm-gist-status aria-live="polite"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+</article>

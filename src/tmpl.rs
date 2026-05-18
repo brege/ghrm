@@ -11,6 +11,7 @@ pub struct PageShell<'a> {
     pub source: &'a str,
     pub about: &'a str,
     pub show_logout: bool,
+    pub show_gist: bool,
     pub asset_json: &'a str,
     pub vendor_styles: &'a [String],
     pub vendor_scripts: &'a [String],
@@ -177,6 +178,33 @@ pub struct ExplorerReadme<'a> {
 }
 
 #[derive(Template)]
+#[template(path = "gist.html")]
+pub struct GistCtx<'a> {
+    pub has_paste: bool,
+    pub paste_id: &'a str,
+    pub page_href: &'a str,
+    pub raw_href: &'a str,
+    pub stash_href: &'a str,
+    pub paste_body: &'a str,
+    pub raw_html: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "gist_stash.html")]
+pub struct GistStashCtx<'a> {
+    pub entries: &'a [GistStashEntry],
+}
+
+pub struct GistStashEntry {
+    pub name: String,
+    pub href: String,
+    pub modified: Option<u64>,
+    pub size: String,
+    pub lines: String,
+    pub current: bool,
+}
+
+#[derive(Template)]
 #[template(path = "fragments/search/path.html")]
 pub struct PathSearchCtx<'a> {
     pub pending: bool,
@@ -223,6 +251,14 @@ pub fn page(ctx: PageCtx<'_>) -> Result<String> {
 }
 
 pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
+    Ok(ctx.render()?)
+}
+
+pub fn gist(ctx: GistCtx<'_>) -> Result<String> {
+    Ok(ctx.render()?)
+}
+
+pub fn gist_stash(ctx: GistStashCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
 
