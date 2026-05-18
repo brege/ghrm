@@ -42,7 +42,7 @@
 .markdown-body .ghrm-blob-table td {
   padding: 0;
   border: 0;
-  vertical-align: baseline;
+  vertical-align: top;
   white-space: pre;
 }
 

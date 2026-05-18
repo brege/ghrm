@@ -43,14 +43,16 @@ pub(crate) async fn show(State(s): State<AppState>, headers: HeaderMap) -> Respo
         .as_ref()
         .map(|paste| paste.id.as_str())
         .unwrap_or("");
-    let raw_html = current
+    let paste_body = current
         .as_ref()
-        .map(|paste| delivery::raw_blob_html(&paste.body, None))
-        .unwrap_or_default();
+        .map(|paste| paste.body.as_str())
+        .unwrap_or("");
+    let raw_html = delivery::raw_blob_html(paste_body, None);
     let body = match tmpl::gist(GistCtx {
         has_paste: current.is_some(),
         paste_id,
         raw_href: RAW_HREF,
+        paste_body,
         raw_html: &raw_html,
     }) {
         Ok(body) => body,

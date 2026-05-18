@@ -183,6 +183,7 @@ pub struct GistCtx<'a> {
     pub has_paste: bool,
     pub paste_id: &'a str,
     pub raw_href: &'a str,
+    pub paste_body: &'a str,
     pub raw_html: &'a str,
 }
 
