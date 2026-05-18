@@ -27,6 +27,21 @@ import { buildToc, setupToc } from './toc.js';
 
 let pendingSamePathSwap = false;
 
+function dispatchLiveEvent(name) {
+  const detail = { name };
+  document.dispatchEvent(new CustomEvent('ghrm:live', { detail }));
+  document.dispatchEvent(new CustomEvent(`ghrm:live:${name}`, { detail }));
+}
+
+function handleLiveEvent(name) {
+  dispatchLiveEvent(name);
+  if (name === 'reload') {
+    location.reload();
+  } else if (name === 'nav-ready') {
+    refreshActiveSearch();
+  }
+}
+
 function setupLiveReload() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${proto}//${location.host}/_ghrm/ws`;
@@ -42,11 +57,7 @@ function setupLiveReload() {
       connectedOnce = true;
     };
     ws.onmessage = (ev) => {
-      if (ev.data === 'reload') {
-        location.reload();
-      } else if (ev.data === 'nav-ready') {
-        refreshActiveSearch();
-      }
+      handleLiveEvent(ev.data);
     };
     ws.onerror = () => {
       setConnected(false);
