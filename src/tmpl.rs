@@ -177,6 +177,15 @@ pub struct ExplorerReadme<'a> {
 }
 
 #[derive(Template)]
+#[template(path = "gist.html")]
+pub struct GistCtx<'a> {
+    pub has_paste: bool,
+    pub paste_id: &'a str,
+    pub raw_href: &'a str,
+    pub raw_html: &'a str,
+}
+
+#[derive(Template)]
 #[template(path = "fragments/search/path.html")]
 pub struct PathSearchCtx<'a> {
     pub pending: bool,
@@ -223,6 +232,10 @@ pub fn page(ctx: PageCtx<'_>) -> Result<String> {
 }
 
 pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
+    Ok(ctx.render()?)
+}
+
+pub fn gist(ctx: GistCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
 

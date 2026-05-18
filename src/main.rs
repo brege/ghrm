@@ -1,7 +1,7 @@
 mod config;
 mod dirs;
 mod explorer;
-pub mod gist;
+mod gist;
 mod http;
 mod options;
 mod paths;

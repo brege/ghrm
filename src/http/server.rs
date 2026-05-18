@@ -3,7 +3,7 @@ use crate::explorer::view::{ViewConfig, ViewQuery, ViewState};
 use crate::explorer::walk::{NavSet, ViewOpts};
 use crate::explorer::{column, crumbs, filter, view, walk, watch};
 use crate::gist;
-use crate::http::{about, api, archive, auth, delivery, shell, vendor};
+use crate::http::{about, api, archive, auth, delivery, gist as http_gist, shell, vendor};
 use crate::render::{self, Rendered};
 use crate::repo::RepoSet;
 use crate::runtime;
@@ -266,22 +266,7 @@ pub async fn run(options: Options) -> Result<()> {
         info!("gist: {}", gist.root().display());
     }
 
-    let protected = Router::new()
-        .route("/", get(root))
-        .route("/_ghrm/ws", get(ws_handler))
-        .route("/_ghrm/tree", get(api::tree))
-        .route("/_ghrm/path-search", get(api::path_search))
-        .route("/_ghrm/search", get(api::search))
-        .route("/_ghrm/render", get(api::render))
-        .route("/_ghrm/about", get(about::show))
-        .route("/_ghrm/archive/{format}", post(archive::start))
-        .route("/_ghrm/archive/{format}/{*path}", post(archive::start))
-        .route("/_ghrm/archive-jobs/{id}", get(archive::status))
-        .route("/_ghrm/archive-jobs/{id}/download", get(archive::download))
-        .route("/_ghrm/raw/{*path}", get(delivery::raw_file))
-        .route("/_ghrm/html/{*path}", get(delivery::html_file))
-        .route("/_ghrm/download/{*path}", get(delivery::download_file))
-        .route("/{*path}", get(any_path));
+    let protected = protected_routes(state.gist.is_some());
 
     let app = if auth_enabled {
         Router::new()
@@ -320,6 +305,33 @@ pub async fn run(options: Options) -> Result<()> {
     )
     .await?;
     Ok(())
+}
+
+fn protected_routes(gist_enabled: bool) -> Router<AppState> {
+    let router = Router::new()
+        .route("/", get(root))
+        .route("/_ghrm/ws", get(ws_handler))
+        .route("/_ghrm/tree", get(api::tree))
+        .route("/_ghrm/path-search", get(api::path_search))
+        .route("/_ghrm/search", get(api::search))
+        .route("/_ghrm/render", get(api::render))
+        .route("/_ghrm/about", get(about::show))
+        .route("/_ghrm/archive/{format}", post(archive::start))
+        .route("/_ghrm/archive/{format}/{*path}", post(archive::start))
+        .route("/_ghrm/archive-jobs/{id}", get(archive::status))
+        .route("/_ghrm/archive-jobs/{id}/download", get(archive::download))
+        .route("/_ghrm/raw/{*path}", get(delivery::raw_file))
+        .route("/_ghrm/html/{*path}", get(delivery::html_file))
+        .route("/_ghrm/download/{*path}", get(delivery::download_file))
+        .route("/{*path}", get(any_path));
+
+    if gist_enabled {
+        router
+            .route("/_ghrm/gist", get(http_gist::show).post(http_gist::create))
+            .route("/_ghrm/gist/raw", get(http_gist::raw))
+    } else {
+        router
+    }
 }
 
 impl AppState {

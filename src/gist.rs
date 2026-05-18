@@ -8,37 +8,35 @@ const CURRENT: &str = "current";
 const ID_LEN: usize = 26;
 
 #[derive(Clone)]
-pub struct Store {
+pub(crate) struct Store {
     root: PathBuf,
 }
 
-pub struct Paste {
+pub(crate) struct Paste {
     pub id: String,
-    pub path: PathBuf,
     pub body: String,
-    pub modified: SystemTime,
 }
 
 impl Store {
-    pub fn new() -> Result<Self> {
+    pub(crate) fn new() -> Result<Self> {
         Self::from_root(default_root()?)
     }
 
-    pub fn from_root(root: PathBuf) -> Result<Self> {
+    pub(crate) fn from_root(root: PathBuf) -> Result<Self> {
         fs::create_dir_all(&root)
             .with_context(|| format!("create gist directory {}", root.display()))?;
         Ok(Self { root })
     }
 
-    pub fn root(&self) -> &Path {
+    pub(crate) fn root(&self) -> &Path {
         &self.root
     }
 
-    pub fn write(&self, body: &str) -> Result<Paste> {
+    pub(crate) fn write(&self, body: &str) -> Result<Paste> {
         self.write_at(body, SystemTime::now())
     }
 
-    pub fn current(&self) -> Result<Option<Paste>> {
+    pub(crate) fn current(&self) -> Result<Option<Paste>> {
         let current = self.root.join(CURRENT);
         let raw = match fs::read_to_string(&current) {
             Ok(raw) => raw,
@@ -52,17 +50,10 @@ impl Store {
         }
         let body = fs::read_to_string(&path)
             .with_context(|| format!("read gist paste {}", path.display()))?;
-        let modified = path
-            .metadata()
-            .with_context(|| format!("stat gist paste {}", path.display()))?
-            .modified()
-            .with_context(|| format!("read gist paste mtime {}", path.display()))?;
 
         Ok(Some(Paste {
             id: id.to_string(),
-            path,
             body,
-            modified,
         }))
     }
 
@@ -154,11 +145,9 @@ mod tests {
 
         assert_eq!(paste.id, "19700101T000000.123456789Z");
         assert_eq!(paste.body, "hello\nworld\n");
-        assert_eq!(paste.modified, created);
-        assert_eq!(
-            paste.path,
-            store.root().join("19700101T000000.123456789Z.txt")
-        );
+        let path = store.root().join("19700101T000000.123456789Z.txt");
+        assert!(path.is_file());
+        assert_eq!(path.metadata().unwrap().modified().unwrap(), created);
         assert_eq!(
             fs::read_to_string(store.root().join(CURRENT)).unwrap(),
             "19700101T000000.123456789Z\n"
