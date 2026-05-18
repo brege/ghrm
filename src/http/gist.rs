@@ -8,7 +8,7 @@ use crate::tmpl::{self, GistCtx};
 use axum::{
     Json,
     body::{Body, Bytes},
-    extract::State,
+    extract::{Path as AxPath, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -17,7 +17,9 @@ use tokio::sync::broadcast;
 use tracing::warn;
 
 const MAX_PASTE_BYTES: usize = 1024 * 1024;
+const GIST_HREF: &str = "/_ghrm/gist";
 const RAW_HREF: &str = "/_ghrm/gist/raw";
+const STASH_HREF: &str = "/_ghrm/gist/stash";
 
 #[derive(Serialize)]
 struct PasteSummary {
@@ -31,7 +33,6 @@ pub(crate) async fn show(State(s): State<AppState>, headers: HeaderMap) -> Respo
     let Some(store) = s.gist.as_ref() else {
         return not_found();
     };
-    let hx = HtmxContext::from_headers(&headers);
     let current = match store.current() {
         Ok(current) => current,
         Err(err) => {
@@ -39,6 +40,38 @@ pub(crate) async fn show(State(s): State<AppState>, headers: HeaderMap) -> Respo
             return server_error();
         }
     };
+    show_paste(&s, &headers, current, GIST_HREF, RAW_HREF)
+}
+
+pub(crate) async fn show_id(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    AxPath(id): AxPath<String>,
+) -> Response {
+    let Some(store) = s.gist.as_ref() else {
+        return not_found();
+    };
+    let paste = match store.get(&id) {
+        Ok(Some(paste)) => Some(paste),
+        Ok(None) => return not_found(),
+        Err(err) => {
+            warn!("gist read failed: {err}");
+            return not_found();
+        }
+    };
+    let page_href = format!("{GIST_HREF}/p/{id}");
+    let raw_href = format!("{RAW_HREF}/{id}");
+    show_paste(&s, &headers, paste, &page_href, &raw_href)
+}
+
+fn show_paste(
+    s: &AppState,
+    headers: &HeaderMap,
+    current: Option<crate::gist::Paste>,
+    page_href: &str,
+    raw_href: &str,
+) -> Response {
+    let hx = HtmxContext::from_headers(headers);
     let paste_id = current
         .as_ref()
         .map(|paste| paste.id.as_str())
@@ -51,7 +84,9 @@ pub(crate) async fn show(State(s): State<AppState>, headers: HeaderMap) -> Respo
     let body = match tmpl::gist(GistCtx {
         has_paste: current.is_some(),
         paste_id,
-        raw_href: RAW_HREF,
+        page_href,
+        raw_href,
+        stash_href: STASH_HREF,
         paste_body,
         raw_html: &raw_html,
     }) {
@@ -97,11 +132,83 @@ pub(crate) async fn raw(State(s): State<AppState>) -> Response {
         }
     };
 
+    text_response(current.body)
+}
+
+pub(crate) async fn raw_id(State(s): State<AppState>, AxPath(id): AxPath<String>) -> Response {
+    let Some(store) = s.gist.as_ref() else {
+        return not_found();
+    };
+    let paste = match store.get(&id) {
+        Ok(Some(paste)) => paste,
+        Ok(None) => return not_found(),
+        Err(err) => {
+            warn!("gist read failed: {err}");
+            return not_found();
+        }
+    };
+
+    text_response(paste.body)
+}
+
+pub(crate) async fn stash(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let Some(store) = s.gist.as_ref() else {
+        return not_found();
+    };
+    let entries = match store.entries() {
+        Ok(entries) => entries,
+        Err(err) => {
+            warn!("gist stash read failed: {err}");
+            return server_error();
+        }
+    };
+    let entries: Vec<_> = entries
+        .into_iter()
+        .map(|entry| tmpl::GistStashEntry {
+            href: format!("{GIST_HREF}/p/{}", entry.id),
+            name: entry.name,
+            modified: entry.modified,
+            size: crate::explorer::column::size_text(entry.size).unwrap_or_default(),
+            lines: crate::explorer::column::count_text(entry.lines).unwrap_or_default(),
+            current: entry.current,
+        })
+        .collect();
+    let body = match tmpl::gist_stash(tmpl::GistStashCtx { entries: &entries }) {
+        Ok(body) => body,
+        Err(err) => {
+            warn!("template error: {err}");
+            return server_error();
+        }
+    };
+
+    let title = "Gist stash";
+    if HtmxContext::from_headers(&headers).is_htmx {
+        return shell::fragment(&body, title, SourceState::NoRepo);
+    }
+
+    let rendered = Rendered {
+        html: String::new(),
+        title: title.to_string(),
+        lang: None,
+        has_mermaid: false,
+        has_math: false,
+        has_map: false,
+    };
+    shell::full_page(
+        &rendered,
+        &body,
+        SourceState::NoRepo,
+        s.auth.is_some(),
+        &s.runtime_paths,
+    )
+}
+
+fn text_response(body: String) -> Response {
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
         .header(header::CACHE_CONTROL, "no-cache")
-        .body(Body::from(current.body))
+        .body(Body::from(body))
         .unwrap()
 }
 

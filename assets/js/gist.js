@@ -3,12 +3,21 @@ import { showCopied, writeClipboard } from './adapters/copy.js';
 import { applyWrapState, getWrapPref, setWrapPref } from './prefs.js';
 
 const gistPath = '/_ghrm/gist';
+const stashPath = '/_ghrm/gist/stash';
 
 let liveBound = false;
 let resizeBound = false;
 
 function currentArticle() {
   return document.querySelector('article[data-ghrm-gist]');
+}
+
+function currentStash() {
+  return document.querySelector('article[data-ghrm-gist-stash]');
+}
+
+function currentGistPath(article) {
+  return article?.dataset.ghrmGistPage || gistPath;
 }
 
 function currentText(article) {
@@ -71,6 +80,12 @@ function setStatus(article, message) {
   }
 }
 
+function replaceGistUrl() {
+  if (window.location.pathname !== gistPath) {
+    window.history.replaceState(window.history.state, '', gistPath);
+  }
+}
+
 async function publish(article) {
   const input = article.querySelector('[data-ghrm-gist-form] textarea');
   const button = article.querySelector('.ghrm-gist-submit');
@@ -91,8 +106,11 @@ async function publish(article) {
     if (!response.ok) {
       throw new Error(`gist publish failed: ${response.status}`);
     }
-    const next = await refreshGist();
-    setStatus(next, 'Published');
+    const next = await refreshGist(gistPath);
+    if (next) {
+      replaceGistUrl();
+      setStatus(next, 'Published');
+    }
   } catch {
     setStatus(article, 'Publish failed');
   } finally {
@@ -102,10 +120,9 @@ async function publish(article) {
   }
 }
 
-async function refreshGist() {
-  const article = currentArticle();
+async function refreshArticle(article, path, selector) {
   if (!article) return;
-  const response = await fetch(gistPath, {
+  const response = await fetch(path, {
     headers: {
       Accept: 'text/html',
       'HX-Request': 'true',
@@ -118,16 +135,33 @@ async function refreshGist() {
 
   const html = await response.text();
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  const next = doc.querySelector('article[data-ghrm-gist]');
+  const next = doc.querySelector(selector);
   if (!next) {
     setStatus(article, 'Refresh failed');
     return;
   }
 
   article.replaceWith(next);
-  setupGist();
   document.dispatchEvent(new CustomEvent('ghrm:contentready'));
   return next;
+}
+
+async function refreshGist(path = currentGistPath(currentArticle())) {
+  const next = await refreshArticle(
+    currentArticle(),
+    path,
+    'article[data-ghrm-gist]',
+  );
+  setupGist();
+  return next;
+}
+
+async function refreshStash() {
+  return refreshArticle(
+    currentStash(),
+    stashPath,
+    'article[data-ghrm-gist-stash]',
+  );
 }
 
 function syncWrapToggle(article) {
@@ -190,7 +224,11 @@ function setupLiveGist() {
   if (liveBound) return;
   liveBound = true;
   document.addEventListener('ghrm:live:gist', () => {
-    refreshGist();
+    if (currentArticle()) {
+      refreshGist();
+    } else if (currentStash()) {
+      refreshStash();
+    }
   });
 }
 

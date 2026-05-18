@@ -329,6 +329,9 @@ fn protected_routes(gist_enabled: bool) -> Router<AppState> {
         router
             .route("/_ghrm/gist", get(http_gist::show).post(http_gist::create))
             .route("/_ghrm/gist/raw", get(http_gist::raw))
+            .route("/_ghrm/gist/raw/{id}", get(http_gist::raw_id))
+            .route("/_ghrm/gist/stash", get(http_gist::stash))
+            .route("/_ghrm/gist/p/{id}", get(http_gist::show_id))
     } else {
         router
     }

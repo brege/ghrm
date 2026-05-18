@@ -104,3 +104,11 @@ body.ghrm-wrap .ghrm-gist-input {
   color: var(--fgColor-muted, #636c76);
   font-size: 12px;
 }
+
+.ghrm-gist-current-badge {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+  line-height: 18px;
+}

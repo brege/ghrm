@@ -182,9 +182,26 @@ pub struct ExplorerReadme<'a> {
 pub struct GistCtx<'a> {
     pub has_paste: bool,
     pub paste_id: &'a str,
+    pub page_href: &'a str,
     pub raw_href: &'a str,
+    pub stash_href: &'a str,
     pub paste_body: &'a str,
     pub raw_html: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "gist_stash.html")]
+pub struct GistStashCtx<'a> {
+    pub entries: &'a [GistStashEntry],
+}
+
+pub struct GistStashEntry {
+    pub name: String,
+    pub href: String,
+    pub modified: Option<u64>,
+    pub size: String,
+    pub lines: String,
+    pub current: bool,
 }
 
 #[derive(Template)]
@@ -238,6 +255,10 @@ pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
 }
 
 pub fn gist(ctx: GistCtx<'_>) -> Result<String> {
+    Ok(ctx.render()?)
+}
+
+pub fn gist_stash(ctx: GistStashCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
 
