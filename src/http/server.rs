@@ -2,6 +2,7 @@ use crate::explorer;
 use crate::explorer::view::{ViewConfig, ViewQuery, ViewState};
 use crate::explorer::walk::{NavSet, ViewOpts};
 use crate::explorer::{column, crumbs, filter, view, walk, watch};
+use crate::gist;
 use crate::http::{about, api, archive, auth, delivery, shell, vendor};
 use crate::render::{self, Rendered};
 use crate::repo::RepoSet;
@@ -47,6 +48,7 @@ pub struct AppState {
     pub runtime_paths: runtime::Paths,
     pub stats: ghrm_stat::Config,
     pub auth: Option<Arc<auth::AuthState>>,
+    pub gist: Option<gist::Store>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,6 +115,7 @@ pub struct Options {
     pub config_path: Option<PathBuf>,
     pub stats: ghrm_stat::Config,
     pub auth: Option<auth::AuthConfig>,
+    pub gist: bool,
 }
 
 pub async fn run(options: Options) -> Result<()> {
@@ -135,6 +138,7 @@ pub async fn run(options: Options) -> Result<()> {
         config_path,
         stats,
         auth,
+        gist,
     } = options;
 
     let meta = std::fs::metadata(&target)?;
@@ -148,6 +152,11 @@ pub async fn run(options: Options) -> Result<()> {
         .transpose()?
         .map(Arc::new);
     let auth_enabled = auth.is_some();
+    let gist_store = if gist {
+        Some(gist::Store::new()?)
+    } else {
+        None
+    };
     let listener = bind_listener(&bind, port, exact_port).await?;
     let actual = listener.local_addr()?;
     let url = server_url(&actual);
@@ -227,6 +236,10 @@ pub async fn run(options: Options) -> Result<()> {
         }
     };
 
+    let runtime_paths = runtime::Paths::new(&target, config_path.as_deref())?
+        .with_gist(gist_store.as_ref().map(|store| store.root()))
+        .with_server(actual, url.clone(), network.clone());
+
     let state = AppState {
         target: target.clone(),
         mode,
@@ -244,14 +257,14 @@ pub async fn run(options: Options) -> Result<()> {
         archive_jobs: archive::ArchiveJobs::new()?,
         search_max_rows,
         home: std::env::var_os("HOME").map(PathBuf::from),
-        runtime_paths: runtime::Paths::new(&target, config_path.as_deref())?.with_server(
-            actual,
-            url.clone(),
-            network.clone(),
-        ),
+        runtime_paths,
         stats,
         auth,
+        gist: gist_store,
     };
+    if let Some(gist) = &state.gist {
+        info!("gist: {}", gist.root().display());
+    }
 
     let protected = Router::new()
         .route("/", get(root))

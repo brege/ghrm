@@ -23,6 +23,8 @@ pub struct Config {
     pub auth: AuthConfig,
     #[serde(default)]
     pub stats: StatsConfig,
+    #[serde(default)]
+    pub gist: GistConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -101,6 +103,12 @@ pub struct AuthConfig {
     pub username: Option<String>,
     pub password: Option<String>,
     pub password_hash: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GistConfig {
+    pub enabled: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -375,5 +383,18 @@ mod tests {
         assert_eq!(stats.tools, default_stats_tools());
         assert!(!stats.tools.contains(&ghrm_stat::Tool::Title));
         assert!(!stats.tools.contains(&ghrm_stat::Tool::Description));
+    }
+
+    #[test]
+    fn parses_gist_config() {
+        let config: Config = toml::from_str(
+            r#"
+                [gist]
+                enabled = true
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.gist.enabled, Some(true));
     }
 }
