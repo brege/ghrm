@@ -48,6 +48,10 @@ impl Paths {
     pub(crate) fn rows(&self) -> &[PathRow] {
         &self.rows
     }
+
+    pub(crate) fn has_gist(&self) -> bool {
+        self.rows.iter().any(|row| row.label == "gist")
+    }
 }
 
 fn row(label: &'static str, path: impl AsRef<Path>) -> PathRow {
@@ -86,5 +90,6 @@ mod tests {
         let labels: Vec<&str> = paths.rows().iter().map(|row| row.label).collect();
 
         assert!(labels.contains(&"gist"));
+        assert!(paths.has_gist());
     }
 }

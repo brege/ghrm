@@ -1,5 +1,5 @@
 use crate::http::delivery;
-use crate::http::server::AppState;
+use crate::http::server::{AppState, HtmxContext};
 use crate::http::shell;
 use crate::render::Rendered;
 use crate::repo::SourceState;
@@ -27,10 +27,11 @@ struct PasteSummary {
     lines: usize,
 }
 
-pub(crate) async fn show(State(s): State<AppState>) -> Response {
+pub(crate) async fn show(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let Some(store) = s.gist.as_ref() else {
         return not_found();
     };
+    let hx = HtmxContext::from_headers(&headers);
     let current = match store.current() {
         Ok(current) => current,
         Err(err) => {
@@ -59,9 +60,14 @@ pub(crate) async fn show(State(s): State<AppState>) -> Response {
         }
     };
 
+    let title = "Gist";
+    if hx.is_htmx {
+        return shell::fragment(&body, title, SourceState::NoRepo);
+    }
+
     let rendered = Rendered {
         html: String::new(),
-        title: "Gist".to_string(),
+        title: title.to_string(),
         lang: None,
         has_mermaid: false,
         has_math: false,

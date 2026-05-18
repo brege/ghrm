@@ -63,7 +63,7 @@ pub(crate) struct HtmxContext {
 }
 
 impl HtmxContext {
-    fn from_headers(headers: &HeaderMap) -> Self {
+    pub(crate) fn from_headers(headers: &HeaderMap) -> Self {
         let is_htmx = headers
             .get("HX-Request")
             .and_then(|value| value.to_str().ok())

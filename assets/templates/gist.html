@@ -1,19 +1,34 @@
-<article class="markdown-body" hx-history-elt data-ghrm-features="">
+<article class="markdown-body" hx-history-elt data-ghrm-features="" data-ghrm-gist>
   <section class="ghrm-page-shell" data-ghrm-gist>
     <div class="ghrm-explorer-header">
       <nav class="ghrm-breadcrumbs" aria-label="Path">
         <span class="ghrm-crumb-current">gist</span>
       </nav>
       <div class="ghrm-header-actions">
-{% if has_paste %}        <a class="ghrm-file-link" href="{{ raw_href }}" target="_blank" rel="noopener noreferrer" data-ghrm-native="1" hx-boost="false" aria-label="Open raw paste" title="Open raw paste">Raw</a>
+{% if has_paste %}        <button type="button" class="ghrm-file-action" data-ghrm-gist-copy data-copy-label="Copy paste" data-copy-feedback="Copied!" aria-label="Copy paste" title="Copy paste">
+          <svg class="ghrm-copy-icon ghrm-copy-icon-copy" aria-hidden="true" height="16" width="16">
+            <use href="#ghrm-icon-copy"></use>
+          </svg>
+          <svg class="ghrm-copy-icon ghrm-copy-icon-check" aria-hidden="true" height="16" width="16">
+            <use href="#ghrm-icon-check"></use>
+          </svg>
+        </button>
+        <a class="ghrm-file-link" href="{{ raw_href }}" target="_blank" rel="noopener noreferrer" data-ghrm-native="1" hx-boost="false" aria-label="Open raw paste" title="Open raw paste">Raw</a>
 {% endif %}      </div>
     </div>
     <div class="ghrm-page-content">
+      <form class="ghrm-gist-form" data-ghrm-gist-form>
+        <textarea class="ghrm-gist-input" name="paste" rows="8" autocomplete="off" spellcheck="false" aria-label="Paste text"></textarea>
+        <div class="ghrm-gist-actions">
+          <button type="submit" class="ghrm-gist-submit">Publish</button>
+          <span class="ghrm-gist-status" data-ghrm-gist-status aria-live="polite"></span>
+        </div>
+      </form>
 {% if has_paste %}      <p class="ghrm-gist-current"><code>{{ paste_id }}</code></p>
-      <div class="ghrm-file-pane ghrm-raw-pane">
+      <div class="ghrm-file-pane ghrm-raw-pane" data-ghrm-gist-current>
 {{ raw_html|safe }}
       </div>
-{% else %}      <p class="ghrm-nav-empty">No paste yet.</p>
+{% else %}      <p class="ghrm-nav-empty" data-ghrm-gist-empty>No paste yet.</p>
 {% endif %}    </div>
   </section>
 </article>

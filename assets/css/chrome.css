@@ -49,6 +49,7 @@ body.ghrm-doc-flat #ghrm-source-slot {
 
 #doc-chrome-toggle,
 #theme-toggle,
+#ghrm-gist-link,
 #ghrm-logout {
   width: 32px;
   height: 32px;
@@ -77,6 +78,11 @@ body.ghrm-doc-flat #ghrm-source-slot {
   text-decoration: none;
 }
 
+#ghrm-gist-link {
+  text-decoration: none;
+}
+
+#ghrm-gist-link svg,
 #ghrm-logout svg {
   width: 16px;
   height: 16px;
@@ -85,6 +91,7 @@ body.ghrm-doc-flat #ghrm-source-slot {
 
 #doc-chrome-toggle:hover,
 #theme-toggle:hover,
+#ghrm-gist-link:hover,
 #ghrm-logout:hover {
   background: var(--bgColor-neutral-muted, #afb8c133);
 }

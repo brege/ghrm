@@ -1,0 +1,74 @@
+.ghrm-gist-form {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+
+.ghrm-gist-input {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+  font:
+    400 13px / 20px
+    var(
+      --fontStack-monospace,
+      ui-monospace,
+      SFMono-Regular,
+      SF Mono,
+      Menlo,
+      Consolas,
+      Liberation Mono,
+      monospace
+    );
+}
+
+.ghrm-gist-input:focus {
+  outline: 2px solid var(--fgColor-accent, #0969da);
+  outline-offset: -1px;
+}
+
+.ghrm-gist-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ghrm-gist-submit {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ghrm-gist-submit:hover:not(:disabled) {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+.ghrm-gist-submit:disabled {
+  color: var(--fgColor-muted, #636c76);
+  cursor: default;
+  opacity: 0.65;
+}
+
+.ghrm-gist-status {
+  min-width: 0;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ghrm-gist-current {
+  margin: 0 0 12px;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 12px;
+}
