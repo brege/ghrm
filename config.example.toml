@@ -35,6 +35,9 @@ globs = ["*.md", "*.mdx", "*.txt", "*.rst"]
 [search]
 max_rows = 1000
 
+[gist]
+enabled = false
+
 [stats]
 enabled = true
 tools = [

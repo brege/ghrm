@@ -197,6 +197,9 @@ fn is_relevant_watch_path(
     let Ok(rel) = path.strip_prefix(root) else {
         return false;
     };
+    if has_git_part(rel) {
+        return false;
+    }
     if !show_hidden && paths::has_hidden_part(rel) {
         return false;
     }
@@ -207,6 +210,10 @@ fn is_relevant_watch_path(
         return true;
     }
     !matches_ignore(root, rel, path_kind(path), global_ignore)
+}
+
+fn has_git_part(path: &Path) -> bool {
+    path.iter().any(|part| part == ".git")
 }
 
 fn matches_ignore(
@@ -433,7 +440,7 @@ mod tests {
     #[test]
     fn changed_paths_skip_hidden_by_default() {
         let td = TempDir::new("ghrm-watch-test");
-        let path = td.path().join(".git/index");
+        let path = td.path().join(".draft/notes.md");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, "").unwrap();
 
@@ -455,7 +462,7 @@ mod tests {
     #[test]
     fn changed_paths_keep_hidden_when_enabled() {
         let td = TempDir::new("ghrm-watch-test");
-        let path = td.path().join(".git/index");
+        let path = td.path().join(".draft/notes.md");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, "").unwrap();
 
@@ -472,5 +479,27 @@ mod tests {
         );
 
         assert_eq!(changed, vec![path]);
+    }
+
+    #[test]
+    fn changed_paths_skip_git_when_hidden_enabled() {
+        let td = TempDir::new("ghrm-watch-test");
+        let path = td.path().join(".git/index");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "").unwrap();
+
+        let changed = changed_paths(
+            td.path(),
+            &[DebouncedEvent::new(
+                Event::default().add_path(path),
+                Instant::now(),
+            )],
+            false,
+            &[],
+            true,
+            None,
+        );
+
+        assert!(changed.is_empty());
     }
 }

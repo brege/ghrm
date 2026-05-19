@@ -82,7 +82,7 @@ struct Cli {
     #[arg(long, help = "Print resolved configuration and exit")]
     dump_config: bool,
 
-    #[arg(long, help = "Enable the shared paste space")]
+    #[arg(short = 'g', long, help = "Enable the shared paste space")]
     gist: bool,
 }
 
