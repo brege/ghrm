@@ -186,7 +186,6 @@ pub fn default_exclude_names() -> Vec<String> {
         "__pycache__".to_string(),
         "target".to_string(),
         ".venv".to_string(),
-        ".env".to_string(),
         ".pytest_cache".to_string(),
         ".ruff_cache".to_string(),
         ".uv-cache".to_string(),

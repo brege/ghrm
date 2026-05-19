@@ -17,7 +17,6 @@ exclude_names = [
   "__pycache__",
   "target",
   ".venv",
-  ".env",
   ".pytest_cache",
   ".ruff_cache",
   ".uv-cache",
