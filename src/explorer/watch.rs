@@ -17,6 +17,7 @@ pub struct NavCache {
 pub struct DirWatchOptions {
     pub use_ignore: bool,
     pub exclude_names: Vec<String>,
+    pub silent: Vec<String>,
     pub extensions: Vec<String>,
     pub show_hidden: bool,
     pub show_excludes: bool,
@@ -54,6 +55,7 @@ pub fn spawn_dir(
                 &events,
                 opts.use_ignore,
                 &opts.exclude_names,
+                &opts.silent,
                 opts.show_hidden,
                 None,
             );
@@ -66,6 +68,7 @@ pub fn spawn_dir(
                     e,
                     opts.use_ignore,
                     &opts.exclude_names,
+                    &opts.silent,
                     opts.show_hidden,
                     None,
                 )
@@ -130,6 +133,7 @@ fn changed_paths(
     events: &[DebouncedEvent],
     use_ignore: bool,
     exclude_names: &[String],
+    silent: &[String],
     show_hidden: bool,
     global_ignore: Option<&Path>,
 ) -> Vec<PathBuf> {
@@ -145,6 +149,7 @@ fn changed_paths(
                 p,
                 use_ignore,
                 exclude_names,
+                silent,
                 show_hidden,
                 global_ignore,
             ) {
@@ -163,6 +168,7 @@ fn is_nav_event(
     ev: &DebouncedEvent,
     use_ignore: bool,
     exclude_names: &[String],
+    silent: &[String],
     show_hidden: bool,
     global_ignore: Option<&Path>,
 ) -> bool {
@@ -180,6 +186,7 @@ fn is_nav_event(
             p,
             use_ignore,
             exclude_names,
+            silent,
             show_hidden,
             global_ignore,
         )
@@ -191,13 +198,14 @@ fn is_relevant_watch_path(
     path: &Path,
     use_ignore: bool,
     exclude_names: &[String],
+    silent: &[String],
     show_hidden: bool,
     global_ignore: Option<&Path>,
 ) -> bool {
     let Ok(rel) = path.strip_prefix(root) else {
         return false;
     };
-    if has_git_part(rel) {
+    if paths::has_excluded_part(rel, silent) {
         return false;
     }
     if !show_hidden && paths::has_hidden_part(rel) {
@@ -210,10 +218,6 @@ fn is_relevant_watch_path(
         return true;
     }
     !matches_ignore(root, rel, path_kind(path), global_ignore)
-}
-
-fn has_git_part(path: &Path) -> bool {
-    path.iter().any(|part| part == ".git")
 }
 
 fn matches_ignore(
@@ -360,6 +364,7 @@ mod tests {
             )],
             true,
             &[".venv".to_string()],
+            &[],
             true,
             None,
         );
@@ -382,6 +387,7 @@ mod tests {
                 Instant::now(),
             )],
             true,
+            &[],
             &[],
             true,
             None,
@@ -408,6 +414,7 @@ mod tests {
             )],
             true,
             &[],
+            &[],
             true,
             Some(&ignore_file),
         );
@@ -429,6 +436,7 @@ mod tests {
                 Instant::now(),
             )],
             true,
+            &[],
             &[],
             false,
             None,
@@ -452,6 +460,7 @@ mod tests {
             )],
             false,
             &[],
+            &[],
             false,
             None,
         );
@@ -474,6 +483,7 @@ mod tests {
             )],
             false,
             &[],
+            &[],
             true,
             None,
         );
@@ -482,7 +492,7 @@ mod tests {
     }
 
     #[test]
-    fn changed_paths_skip_git_when_hidden_enabled() {
+    fn changed_paths_skip_silent_when_hidden_enabled() {
         let td = TempDir::new("ghrm-watch-test");
         let path = td.path().join(".git/index");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -496,6 +506,7 @@ mod tests {
             )],
             false,
             &[],
+            &[".git".to_string()],
             true,
             None,
         );

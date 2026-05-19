@@ -22,6 +22,8 @@ pub struct Config {
     #[serde(default)]
     pub auth: AuthConfig,
     #[serde(default)]
+    pub watch: WatchConfig,
+    #[serde(default)]
     pub stats: StatsConfig,
     #[serde(default)]
     pub gist: GistConfig,
@@ -111,6 +113,12 @@ pub struct GistConfig {
     pub enabled: Option<bool>,
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WatchConfig {
+    pub silent: Option<Vec<String>>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StatsConfig {
@@ -184,6 +192,10 @@ pub fn default_exclude_names() -> Vec<String> {
         ".uv-cache".to_string(),
         ".ipynb_checkpoints".to_string(),
     ]
+}
+
+pub fn default_watch_silent() -> Vec<String> {
+    vec![".git".to_string()]
 }
 
 impl Config {
@@ -396,5 +408,21 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.gist.enabled, Some(true));
+    }
+
+    #[test]
+    fn parses_watch_config() {
+        let config: Config = toml::from_str(
+            r#"
+                [watch]
+                silent = [".git", ".hg"]
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.watch.silent.unwrap(),
+            vec![".git".to_string(), ".hg".to_string()]
+        );
     }
 }

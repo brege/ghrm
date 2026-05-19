@@ -109,6 +109,7 @@ pub struct Options {
     pub extensions: Vec<String>,
     pub filters: filter::Set,
     pub exclude_names: Vec<String>,
+    pub watch_silent: Vec<String>,
     pub dangerously_traverse_excludes: bool,
     pub show_excludes: bool,
     pub search_max_rows: usize,
@@ -132,6 +133,7 @@ pub async fn run(options: Options) -> Result<()> {
         extensions,
         filters,
         exclude_names,
+        watch_silent,
         dangerously_traverse_excludes,
         show_excludes,
         search_max_rows,
@@ -217,6 +219,7 @@ pub async fn run(options: Options) -> Result<()> {
                 watch::DirWatchOptions {
                     use_ignore,
                     exclude_names: exclude_names.clone(),
+                    silent: watch_silent.clone(),
                     extensions: extensions.clone(),
                     show_hidden: default_hidden,
                     show_excludes,

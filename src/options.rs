@@ -21,6 +21,7 @@ pub struct Resolved {
     pub filter_ext: bool,
     pub extensions: Vec<String>,
     pub exclude_names: Vec<String>,
+    pub watch_silent: Vec<String>,
     pub max_rows: usize,
     pub stats: ghrm_stat::Config,
     pub gist: bool,
@@ -102,6 +103,12 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
 
     let show_hidden = cli.hidden || cfg.walk.hidden.unwrap_or(false);
     let filter_ext = has_explicit_ext_filter || cfg.walk.filter.enabled.unwrap_or(false);
+    let watch_silent = normalize_names(
+        cfg.watch
+            .silent
+            .clone()
+            .unwrap_or_else(crate::config::default_watch_silent),
+    )?;
     let gist = cli.gist || cfg.gist.enabled.unwrap_or(false);
 
     Ok(Resolved {
@@ -119,6 +126,7 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
         filter_ext,
         extensions,
         exclude_names,
+        watch_silent,
         max_rows,
         stats: cfg.stats.clone().resolve(),
         gist,
@@ -165,6 +173,18 @@ fn normalize_extensions(raw: Vec<String>) -> Result<Vec<String>> {
         extensions.insert(ext);
     }
     Ok(extensions.into_iter().collect())
+}
+
+fn normalize_names(raw: Vec<String>) -> Result<Vec<String>> {
+    let mut names = BTreeSet::new();
+    for name in raw {
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            bail!("empty watch silent name");
+        }
+        names.insert(name);
+    }
+    Ok(names.into_iter().collect())
 }
 
 fn bind_requires_auth(bind: &str) -> bool {
@@ -214,6 +234,7 @@ pub fn dump(resolved: &Resolved) -> String {
     writeln!(out, "filter_ext = {}", resolved.filter_ext).unwrap();
     writeln!(out, "extensions = {}", resolved.extensions.join(", ")).unwrap();
     writeln!(out, "exclude_names = {}", resolved.exclude_names.join(", ")).unwrap();
+    writeln!(out, "watch.silent = {}", resolved.watch_silent.join(", ")).unwrap();
     writeln!(out, "max_rows = {}", resolved.max_rows).unwrap();
     writeln!(out, "stats.enabled = {}", resolved.stats.enabled).unwrap();
     writeln!(out, "gist.enabled = {}", resolved.gist).unwrap();
@@ -466,6 +487,7 @@ mod tests {
         assert!(output.contains("show_hidden = true"));
         assert!(output.contains("dangerously_traverse_excludes = false"));
         assert!(output.contains("extensions = md"));
+        assert!(output.contains("watch.silent = .git"));
         assert!(output.contains("stats.enabled = true"));
         assert!(output.contains("gist.enabled = false"));
     }
@@ -500,5 +522,19 @@ mod tests {
         let resolved = resolve(default_input(), &cfg).unwrap();
 
         assert!(resolved.gist);
+    }
+
+    #[test]
+    fn config_watch_silent_overrides_default() {
+        let cfg: Config = toml::from_str(
+            r#"
+            [watch]
+            silent = [".jj"]
+            "#,
+        )
+        .unwrap();
+        let resolved = resolve(default_input(), &cfg).unwrap();
+
+        assert_eq!(resolved.watch_silent, vec![".jj"]);
     }
 }

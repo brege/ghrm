@@ -38,6 +38,9 @@ max_rows = 1000
 [gist]
 enabled = false
 
+[watch]
+silent = [".git"]
+
 [stats]
 enabled = true
 tools = [
