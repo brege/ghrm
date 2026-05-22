@@ -27,7 +27,8 @@
   width: calc(100% - 4ch - 24px);
   min-height: 100%;
   resize: none;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 0 16px 0 34px;
   border: 0;
   border-radius: 0;
@@ -56,6 +57,7 @@
 }
 
 body.ghrm-wrap .ghrm-gist-input {
+  overflow-x: hidden;
   word-break: break-word;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
