@@ -36,16 +36,30 @@
         </tr>
       </thead>
       <tbody>
-{% for e in entries %}        <tr>
+{% for e in entries %}        <tr data-ghrm-gist-row data-ghrm-gist-id="{{ e.id }}">
           <td class="ghrm-nav-icon">
             <svg aria-hidden="true" focusable="false" class="octicon">
               <use href="#ghrm-icon-file"></use>
             </svg>
           </td>
-          <td class="ghrm-nav-name">
-            <a href="{{ e.href }}">{{ e.name }}</a>
-{% if e.current %}            <span class="ghrm-gist-current-badge">current</span>
-{% endif %}          </td>
+          <td class="ghrm-nav-name ghrm-gist-name-cell">
+            <a href="{{ e.href }}" data-ghrm-gist-row-link>{{ e.name }}</a>
+            <span class="ghrm-gist-row-seat">
+{% if e.current %}              <span class="ghrm-gist-current-badge" aria-label="Current paste" title="Current paste">
+                <svg aria-hidden="true" focusable="false">
+                  <use href="#ghrm-icon-chevron-right"></use>
+                </svg>
+                <svg aria-hidden="true" focusable="false">
+                  <use href="#ghrm-icon-chevron-right"></use>
+                </svg>
+              </span>
+{% endif %}              <button type="button" class="ghrm-gist-row-edit" data-ghrm-gist-rename-start aria-label="Rename paste" title="Rename paste">
+                <svg aria-hidden="true" focusable="false">
+                  <use href="#ghrm-icon-edit"></use>
+                </svg>
+              </button>
+            </span>
+          </td>
           <td class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta" data-column-key="date"{% if let Some(ts) = e.modified %} data-ts="{{ ts }}"{% endif %}></td>
           <td class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="size">{{ e.size }}</td>
           <td class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="lines">{{ e.lines }}</td>

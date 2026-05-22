@@ -1,4 +1,4 @@
-<article class="markdown-body" hx-history-elt data-ghrm-features="" data-ghrm-gist data-ghrm-gist-page="{{ page_href }}">
+<article class="markdown-body" hx-history-elt data-ghrm-features="" data-ghrm-gist data-ghrm-gist-page="{{ page_href }}" data-ghrm-gist-id="{{ paste_id }}">
   <section class="ghrm-page-shell" data-ghrm-gist>
     <div class="ghrm-explorer-header">
       <nav class="ghrm-breadcrumbs" aria-label="Path">
@@ -42,8 +42,9 @@
           <span class="ghrm-gist-save-control" data-ghrm-gist-save-control title="No changes to save">
             <button type="button" class="ghrm-gist-submit" data-ghrm-gist-save disabled aria-label="No changes to save">Save</button>
           </span>
-{% if has_paste %}          <span class="ghrm-gist-current"><code>{{ paste_id }}</code></span>
-{% endif %}
+          <label class="ghrm-gist-name-control" title="Save name">
+            <input class="ghrm-gist-name-input" data-ghrm-gist-name type="text" value="{{ paste_id }}" placeholder="Save name" autocomplete="off" spellcheck="false" aria-label="Save name">
+          </label>
           <span class="ghrm-gist-status" data-ghrm-gist-status aria-live="polite"></span>
         </div>
       </form>

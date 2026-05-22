@@ -196,6 +196,7 @@ pub struct GistStashCtx<'a> {
 }
 
 pub struct GistStashEntry {
+    pub id: String,
     pub name: String,
     pub href: String,
     pub modified: Option<u64>,

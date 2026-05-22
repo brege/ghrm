@@ -20,13 +20,23 @@ const MAX_PASTE_BYTES: usize = 1024 * 1024;
 const GIST_HREF: &str = "/_ghrm/gist";
 const RAW_HREF: &str = "/_ghrm/gist/raw";
 const STASH_HREF: &str = "/_ghrm/gist/stash";
+const GIST_ID_HEADER: &str = "X-Ghrm-Gist-Id";
+const GIST_NAME_HEADER: &str = "X-Ghrm-Gist-Name";
 
 #[derive(Serialize)]
 struct PasteSummary {
     id: String,
+    name: String,
     raw_url: &'static str,
     bytes: usize,
     lines: usize,
+}
+
+#[derive(Serialize)]
+struct RenameSummary {
+    id: String,
+    name: String,
+    href: String,
 }
 
 pub(crate) async fn show(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -166,6 +176,7 @@ pub(crate) async fn stash(State(s): State<AppState>, headers: HeaderMap) -> Resp
     let entries: Vec<_> = entries
         .into_iter()
         .map(|entry| tmpl::GistStashEntry {
+            id: entry.id.clone(),
             href: format!("{GIST_HREF}/p/{}", entry.id),
             name: entry.name,
             modified: entry.modified,
@@ -221,6 +232,18 @@ pub(crate) async fn create(State(s): State<AppState>, headers: HeaderMap, body: 
     create_inner(store, &s.reload, &headers, body)
 }
 
+pub(crate) async fn rename(
+    State(s): State<AppState>,
+    AxPath(id): AxPath<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let Some(store) = s.gist.as_ref() else {
+        return not_found();
+    };
+    rename_inner(store, &s.reload, &id, &headers, &body)
+}
+
 fn create_inner(
     store: &crate::gist::Store,
     reload: &broadcast::Sender<&'static str>,
@@ -233,15 +256,38 @@ fn create_inner(
     if body.len() > MAX_PASTE_BYTES {
         return too_large();
     }
-    let paste = match store.write(text) {
+    let source = gist_header(headers, GIST_ID_HEADER);
+    let name = gist_header(headers, GIST_NAME_HEADER);
+    let paste = match store.save(source, text, name) {
         Ok(paste) => paste,
         Err(err) => {
-            warn!("gist write failed: {err}");
-            return server_error();
+            warn!("gist save failed: {err}");
+            return bad_request("invalid or duplicate gist name");
         }
     };
     let _ = reload.send("gist");
     Json(summary(&paste)).into_response()
+}
+
+fn rename_inner(
+    store: &crate::gist::Store,
+    reload: &broadcast::Sender<&'static str>,
+    id: &str,
+    headers: &HeaderMap,
+    body: &Bytes,
+) -> Response {
+    let Some(name) = paste_text(headers, body) else {
+        return bad_request("expected text/plain UTF-8 gist name");
+    };
+    let paste = match store.rename(id, name) {
+        Ok(paste) => paste,
+        Err(err) => {
+            warn!("gist rename failed: {err}");
+            return bad_request("invalid or duplicate gist name");
+        }
+    };
+    let _ = reload.send("gist");
+    Json(rename_summary(&paste)).into_response()
 }
 
 fn paste_text<'a>(headers: &HeaderMap, body: &'a Bytes) -> Option<&'a str> {
@@ -249,6 +295,10 @@ fn paste_text<'a>(headers: &HeaderMap, body: &'a Bytes) -> Option<&'a str> {
         return None;
     }
     std::str::from_utf8(body).ok()
+}
+
+fn gist_header<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
+    headers.get(name).and_then(|value| value.to_str().ok())
 }
 
 fn is_text_plain(headers: &HeaderMap) -> bool {
@@ -262,9 +312,18 @@ fn is_text_plain(headers: &HeaderMap) -> bool {
 fn summary(paste: &crate::gist::Paste) -> PasteSummary {
     PasteSummary {
         id: paste.id.clone(),
+        name: format!("{}.txt", paste.id),
         raw_url: RAW_HREF,
         bytes: paste.body.len(),
         lines: paste.body.lines().count(),
+    }
+}
+
+fn rename_summary(paste: &crate::gist::Paste) -> RenameSummary {
+    RenameSummary {
+        id: paste.id.clone(),
+        name: format!("{}.txt", paste.id),
+        href: format!("{GIST_HREF}/p/{}", paste.id),
     }
 }
 
@@ -311,6 +370,12 @@ mod tests {
         headers
     }
 
+    fn named_headers(name: &str) -> HeaderMap {
+        let mut headers = headers("text/plain; charset=utf-8");
+        headers.insert(GIST_NAME_HEADER, name.parse().unwrap());
+        headers
+    }
+
     #[test]
     fn text_plain_accepts_charset() {
         assert!(is_text_plain(&headers("text/plain; charset=utf-8")));
@@ -346,6 +411,50 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(store.current().unwrap().unwrap().body, "hello\n");
         assert_eq!(rx.try_recv().unwrap(), "gist");
+    }
+
+    #[test]
+    fn create_uses_requested_name() {
+        let td = TempDir::new("ghrm-gist-named-http");
+        let store = crate::gist::Store::from_root(td.path().join("gist")).unwrap();
+        let (tx, _) = broadcast::channel(4);
+
+        let response = create_inner(
+            &store,
+            &tx,
+            &named_headers("notes"),
+            Bytes::from_static(b"hello\n"),
+        );
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(store.current().unwrap().unwrap().id, "notes");
+        assert!(store.root().join("notes.txt").is_file());
+    }
+
+    #[test]
+    fn rename_updates_paste_name() {
+        let td = TempDir::new("ghrm-gist-rename-http");
+        let store = crate::gist::Store::from_root(td.path().join("gist")).unwrap();
+        let (tx, _) = broadcast::channel(4);
+        create_inner(
+            &store,
+            &tx,
+            &named_headers("before"),
+            Bytes::from_static(b"hello\n"),
+        );
+
+        let response = rename_inner(
+            &store,
+            &tx,
+            "before",
+            &headers("text/plain; charset=utf-8"),
+            &Bytes::from_static(b"after.txt"),
+        );
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(!store.root().join("before.txt").exists());
+        assert!(store.root().join("after.txt").is_file());
+        assert_eq!(store.current().unwrap().unwrap().id, "after");
     }
 
     #[test]
