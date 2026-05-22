@@ -39,7 +39,9 @@
           <textarea class="ghrm-gist-input" name="paste" rows="24" autocomplete="off" spellcheck="false" aria-label="Paste text" wrap="off">{{ paste_body }}</textarea>
         </div>
         <div class="ghrm-gist-actions">
-          <button type="button" class="ghrm-gist-submit" data-ghrm-gist-publish>Publish</button>
+          <span class="ghrm-gist-save-control" data-ghrm-gist-save-control title="No changes to save">
+            <button type="button" class="ghrm-gist-submit" data-ghrm-gist-save disabled aria-label="No changes to save">Save</button>
+          </span>
 {% if has_paste %}          <span class="ghrm-gist-current"><code>{{ paste_id }}</code></span>
 {% endif %}
           <span class="ghrm-gist-status" data-ghrm-gist-status aria-live="polite"></span>

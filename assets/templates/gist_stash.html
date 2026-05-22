@@ -7,7 +7,15 @@
         <span class="ghrm-crumb-current">stash</span>
       </nav>
       <div class="ghrm-header-actions">
-        <a class="ghrm-file-link" href="/_ghrm/gist" aria-label="Open current paste" title="Open current paste">Current</a>
+        <div class="ghrm-file-tools">
+          <div class="ghrm-file-toggles">
+            <a class="ghrm-file-toggle" href="/_ghrm/gist" aria-label="Open current paste" title="Open current paste">
+              <svg class="ghrm-file-icon" aria-hidden="true" focusable="false" height="16" width="16">
+                <use href="#ghrm-icon-note"></use>
+              </svg>
+            </a>
+          </div>
+        </div>
       </div>
     </div>
 {% if entries.is_empty() %}    <p class="ghrm-nav-empty">No pastes found.</p>

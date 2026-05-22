@@ -25,6 +25,26 @@ function currentText(article) {
   return article?.querySelector('[data-ghrm-gist-form] textarea')?.value || '';
 }
 
+function syncSaveAction(article, saving = false) {
+  const input = article.querySelector('[data-ghrm-gist-form] textarea');
+  const control = article.querySelector('[data-ghrm-gist-save-control]');
+  const button = article.querySelector('[data-ghrm-gist-save]');
+  if (!input || !button) return;
+
+  const changed = input.value !== input.dataset.ghrmGistSaved;
+  button.disabled = saving || !changed;
+  const label = saving
+    ? 'Saving'
+    : changed
+      ? 'Save paste'
+      : 'No changes to save';
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  if (control) {
+    control.title = label;
+  }
+}
+
 function syncEditor(article) {
   const editor = article.querySelector('[data-ghrm-gist-editor]');
   const input = article.querySelector('[data-ghrm-gist-form] textarea');
@@ -63,6 +83,7 @@ function syncBlob(article) {
   }
 
   renderBlobs();
+  syncSaveAction(article);
   syncEditorSoon(article);
 }
 
@@ -210,14 +231,15 @@ function replaceGistUrl() {
   }
 }
 
-async function publish(article) {
+async function save(article) {
   const input = article.querySelector('[data-ghrm-gist-form] textarea');
-  const button = article.querySelector('.ghrm-gist-submit');
   if (!input) return;
-  if (button) {
-    button.disabled = true;
+  if (input.value === input.dataset.ghrmGistSaved) {
+    syncSaveAction(article);
+    return;
   }
-  setStatus(article, 'Publishing');
+  syncSaveAction(article, true);
+  setStatus(article, 'Saving');
   try {
     const response = await fetch(gistPath, {
       method: 'POST',
@@ -228,19 +250,18 @@ async function publish(article) {
       body: input.value,
     });
     if (!response.ok) {
-      throw new Error(`gist publish failed: ${response.status}`);
+      throw new Error(`gist save failed: ${response.status}`);
     }
     const next = await refreshGist(gistPath);
     if (next) {
       replaceGistUrl();
-      setStatus(next, 'Published');
+      setStatus(next, 'Saved');
+    } else {
+      syncSaveAction(article);
     }
   } catch {
-    setStatus(article, 'Publish failed');
-  } finally {
-    if (button) {
-      button.disabled = false;
-    }
+    setStatus(article, 'Save failed');
+    syncSaveAction(article);
   }
 }
 
@@ -312,15 +333,18 @@ export function setupGist() {
   const form = article.querySelector('[data-ghrm-gist-form]');
   form?.addEventListener('submit', (event) => {
     event.preventDefault();
-    publish(article);
+    save(article);
   });
 
-  const publishButton = article.querySelector('[data-ghrm-gist-publish]');
-  publishButton?.addEventListener('click', () => {
-    publish(article);
+  const saveButton = article.querySelector('[data-ghrm-gist-save]');
+  saveButton?.addEventListener('click', () => {
+    save(article);
   });
 
   const input = article.querySelector('[data-ghrm-gist-form] textarea');
+  if (input) {
+    input.dataset.ghrmGistSaved = input.value;
+  }
   input?.addEventListener('input', () => {
     syncBlob(article);
   });
@@ -343,6 +367,7 @@ export function setupGist() {
     syncWrapToggle(article);
   });
   syncWrapToggle(article);
+  syncSaveAction(article);
   renderBlobs();
   syncEditorSoon(article);
 }
