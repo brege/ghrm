@@ -637,9 +637,16 @@ async fn render_file(
         &rendered.title
     };
     if hx.is_htmx {
-        return shell::fragment(&body, title, source);
+        return shell::fragment(&body, title, source, &s.runtime_paths, false);
     }
-    shell::full_page(&rendered, &body, source, s.auth.is_some(), &s.runtime_paths)
+    shell::full_page(
+        &rendered,
+        &body,
+        source,
+        s.auth.is_some(),
+        &s.runtime_paths,
+        false,
+    )
 }
 
 async fn dispatch_file(
@@ -721,9 +728,16 @@ async fn render_source_file(
         &rendered.title
     };
     if hx.is_htmx {
-        return shell::fragment(&body, title, source);
+        return shell::fragment(&body, title, source, &s.runtime_paths, false);
     }
-    shell::full_page(&rendered, &body, source, s.auth.is_some(), &s.runtime_paths)
+    shell::full_page(
+        &rendered,
+        &body,
+        source,
+        s.auth.is_some(),
+        &s.runtime_paths,
+        false,
+    )
 }
 
 async fn render_dual_file(
@@ -778,9 +792,16 @@ async fn render_dual_file(
     };
     let source = s.repos.source_for(path);
     if hx.is_htmx {
-        return shell::fragment(&body, &rendered.title, source);
+        return shell::fragment(&body, &rendered.title, source, &s.runtime_paths, false);
     }
-    shell::full_page(&rendered, &body, source, s.auth.is_some(), &s.runtime_paths)
+    shell::full_page(
+        &rendered,
+        &body,
+        source,
+        s.auth.is_some(),
+        &s.runtime_paths,
+        false,
+    )
 }
 
 fn dual_preview_html(ext: Option<&str>, native_url: &str, filename: &str) -> String {

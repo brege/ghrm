@@ -227,9 +227,16 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
     };
     let source = s.repos.source_for(&current);
     if hx.is_htmx {
-        return shell::fragment(&body, &combined.title, source);
+        return shell::fragment(&body, &combined.title, source, &s.runtime_paths, false);
     }
-    shell::full_page(&combined, &body, source, s.auth.is_some(), &s.runtime_paths)
+    shell::full_page(
+        &combined,
+        &body,
+        source,
+        s.auth.is_some(),
+        &s.runtime_paths,
+        false,
+    )
 }
 
 fn archive_href(format: &str, rel: &str, view: &ViewState, cfg: &ViewConfig) -> String {

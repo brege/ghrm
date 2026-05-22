@@ -99,7 +99,7 @@ fn show_paste(
 
     let title = "Gist";
     if hx.is_htmx {
-        return shell::fragment(&body, title, SourceState::NoRepo);
+        return shell::fragment(&body, title, SourceState::NoRepo, &s.runtime_paths, true);
     }
 
     let rendered = Rendered {
@@ -116,6 +116,7 @@ fn show_paste(
         SourceState::NoRepo,
         s.auth.is_some(),
         &s.runtime_paths,
+        true,
     )
 }
 
@@ -183,7 +184,7 @@ pub(crate) async fn stash(State(s): State<AppState>, headers: HeaderMap) -> Resp
 
     let title = "Gist stash";
     if HtmxContext::from_headers(&headers).is_htmx {
-        return shell::fragment(&body, title, SourceState::NoRepo);
+        return shell::fragment(&body, title, SourceState::NoRepo, &s.runtime_paths, true);
     }
 
     let rendered = Rendered {
@@ -200,6 +201,7 @@ pub(crate) async fn stash(State(s): State<AppState>, headers: HeaderMap) -> Resp
         SourceState::NoRepo,
         s.auth.is_some(),
         &s.runtime_paths,
+        true,
     )
 }
 

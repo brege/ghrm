@@ -73,12 +73,7 @@
           <use href="#ghrm-icon-moon"></use>
         </svg>
       </button>
-{% if show_gist %}      <a id="ghrm-gist-link" href="/_ghrm/gist" aria-label="Gist" title="Gist">
-        <svg aria-hidden="true" focusable="false">
-          <use href="#ghrm-icon-note"></use>
-        </svg>
-      </a>
-{% endif %}
+{{ gist_nav|safe }}
 {% if show_logout %}      <a id="ghrm-logout" href="/_ghrm/logout" hx-boost="false" aria-label="Log out" title="Log out">
         <svg aria-hidden="true" focusable="false">
           <use href="#ghrm-icon-logout"></use>

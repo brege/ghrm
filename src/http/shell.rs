@@ -18,6 +18,7 @@ pub(crate) fn full_page(
     source: SourceState,
     show_logout: bool,
     runtime_paths: &runtime::Paths,
+    gist_active: bool,
 ) -> Response {
     let title = if r.title.is_empty() {
         "Preview"
@@ -27,6 +28,7 @@ pub(crate) fn full_page(
     let stats = AboutStats::default();
     let about = about::html(runtime_paths, &stats, false);
     let source = source_html(&source);
+    let gist_nav = gist_nav_html(runtime_paths.has_gist(), gist_active, false);
     let assets = vendor::plan(r);
     let shell = PageShell {
         title,
@@ -34,7 +36,7 @@ pub(crate) fn full_page(
         source: &source,
         about: &about,
         show_logout,
-        show_gist: runtime_paths.has_gist(),
+        gist_nav: &gist_nav,
         asset_json: vendor::client_json(),
         vendor_styles: &assets.styles,
         vendor_scripts: &assets.scripts,
@@ -52,9 +54,16 @@ pub(crate) fn full_page(
     res
 }
 
-pub(crate) fn fragment(body: &str, title: &str, source: SourceState) -> Response {
+pub(crate) fn fragment(
+    body: &str,
+    title: &str,
+    source: SourceState,
+    runtime_paths: &runtime::Paths,
+    gist_active: bool,
+) -> Response {
     let source_oob = source_oob_html(&source);
-    let html = format!("{body}{source_oob}");
+    let gist_oob = gist_nav_html(runtime_paths.has_gist(), gist_active, true);
+    let html = format!("{body}{source_oob}{gist_oob}");
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -83,6 +92,37 @@ pub(crate) fn source_html(source: &SourceState) -> String {
 
 pub(crate) fn source_oob_html(source: &SourceState) -> String {
     source_html_inner(source, true)
+}
+
+fn gist_nav_html(show_gist: bool, active: bool, oob: bool) -> String {
+    let oob_attr = if oob {
+        " hx-swap-oob=\"outerHTML\""
+    } else {
+        ""
+    };
+    if !show_gist {
+        return format!("<span id=\"ghrm-gist-slot\"{oob_attr} hidden></span>");
+    }
+    let (id, href, label, icon, boost) = if active {
+        (
+            "ghrm-home-link",
+            "/",
+            "Home",
+            "ghrm-icon-home",
+            " hx-boost=\"false\"",
+        )
+    } else {
+        (
+            "ghrm-gist-link",
+            "/_ghrm/gist",
+            "Gist",
+            "ghrm-icon-note",
+            " hx-boost=\"false\"",
+        )
+    };
+    format!(
+        "<span id=\"ghrm-gist-slot\"{oob_attr}><a id=\"{id}\" href=\"{href}\"{boost} aria-label=\"{label}\" title=\"{label}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#{icon}\"></use></svg></a></span>"
+    )
 }
 
 fn source_html_inner(source: &SourceState, oob: bool) -> String {
@@ -143,6 +183,17 @@ fn not_found() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutil::TempDir;
+
+    fn runtime_paths(show_gist: bool) -> runtime::Paths {
+        let td = TempDir::new("ghrm-shell-runtime");
+        let paths = runtime::Paths::new(td.path(), None).unwrap();
+        if show_gist {
+            paths.with_gist(Some(&td.path().join("gist")))
+        } else {
+            paths
+        }
+    }
 
     #[test]
     fn web_source_displays_configured_remote() {
@@ -184,17 +235,49 @@ mod tests {
 
     #[test]
     fn fragment_response_varies_on_hx_request() {
-        let response = fragment("body", "Test", SourceState::NoRepo);
+        let paths = runtime_paths(false);
+        let response = fragment("body", "Test", SourceState::NoRepo, &paths, false);
         assert_eq!(response.headers().get(header::VARY).unwrap(), "HX-Request");
         assert_eq!(response.headers().get("HX-Title").unwrap(), "Test");
     }
 
     #[test]
     fn fragment_response_encodes_title_header() {
-        let response = fragment("body", "Test Title\nλ", SourceState::NoRepo);
+        let paths = runtime_paths(false);
+        let response = fragment("body", "Test Title\nλ", SourceState::NoRepo, &paths, false);
         assert_eq!(
             response.headers().get("HX-Title").unwrap(),
             "Test%20Title%0A%CE%BB"
         );
+    }
+
+    #[test]
+    fn gist_nav_uses_home_link_on_gist_pages() {
+        let html = gist_nav_html(true, true, false);
+
+        assert!(html.contains("id=\"ghrm-home-link\""));
+        assert!(html.contains("href=\"/\""));
+        assert!(html.contains("hx-boost=\"false\""));
+        assert!(html.contains("ghrm-icon-home"));
+        assert!(!html.contains("id=\"ghrm-gist-link\""));
+    }
+
+    #[test]
+    fn gist_nav_uses_gist_link_on_content_pages() {
+        let html = gist_nav_html(true, false, false);
+
+        assert!(html.contains("id=\"ghrm-gist-link\""));
+        assert!(html.contains("href=\"/_ghrm/gist\""));
+        assert!(html.contains("hx-boost=\"false\""));
+        assert!(html.contains("ghrm-icon-note"));
+        assert!(!html.contains("id=\"ghrm-home-link\""));
+    }
+
+    #[test]
+    fn gist_nav_oob_keeps_stable_slot() {
+        let html = gist_nav_html(true, true, true);
+
+        assert!(html.contains("id=\"ghrm-gist-slot\""));
+        assert!(html.contains("hx-swap-oob=\"outerHTML\""));
     }
 }

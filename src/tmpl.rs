@@ -11,7 +11,7 @@ pub struct PageShell<'a> {
     pub source: &'a str,
     pub about: &'a str,
     pub show_logout: bool,
-    pub show_gist: bool,
+    pub gist_nav: &'a str,
     pub asset_json: &'a str,
     pub vendor_styles: &'a [String],
     pub vendor_scripts: &'a [String],
