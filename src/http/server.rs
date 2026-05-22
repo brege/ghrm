@@ -34,7 +34,7 @@ pub struct AppState {
     pub nav: Arc<RwLock<NavSet>>,
     pub alternate_nav: Arc<RwLock<Option<NavSet>>>,
     pub repos: RepoSet,
-    pub reload: broadcast::Sender<&'static str>,
+    pub reload: broadcast::Sender<String>,
     pub use_ignore: bool,
     pub show_excludes: bool,
     pub view_cfg: ViewConfig,
@@ -146,7 +146,7 @@ pub async fn run(options: Options) -> Result<()> {
     let meta = std::fs::metadata(&target)?;
     let mode = if meta.is_dir() { Mode::Dir } else { Mode::File };
 
-    let (reload_tx, _) = broadcast::channel::<&'static str>(32);
+    let (reload_tx, _) = broadcast::channel::<String>(32);
     let nav = Arc::new(RwLock::new(NavSet::default()));
     let alternate_nav = Arc::new(RwLock::new(None));
     let auth = auth
@@ -204,7 +204,7 @@ pub async fn run(options: Options) -> Result<()> {
                 );
                 if let Ok(mut guard) = nav_bg.write() {
                     *guard = fresh;
-                    let _ = nav_ready_tx.send("nav-ready");
+                    let _ = nav_ready_tx.send("nav-ready".to_string());
                 }
             });
 

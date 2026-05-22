@@ -246,7 +246,7 @@ pub(crate) async fn rename(
 
 fn create_inner(
     store: &crate::gist::Store,
-    reload: &broadcast::Sender<&'static str>,
+    reload: &broadcast::Sender<String>,
     headers: &HeaderMap,
     body: Bytes,
 ) -> Response {
@@ -265,13 +265,13 @@ fn create_inner(
             return bad_request("invalid or duplicate gist name");
         }
     };
-    let _ = reload.send("gist");
+    let _ = reload.send("gist".to_string());
     Json(summary(&paste)).into_response()
 }
 
 fn rename_inner(
     store: &crate::gist::Store,
-    reload: &broadcast::Sender<&'static str>,
+    reload: &broadcast::Sender<String>,
     id: &str,
     headers: &HeaderMap,
     body: &Bytes,
@@ -286,7 +286,7 @@ fn rename_inner(
             return bad_request("invalid or duplicate gist name");
         }
     };
-    let _ = reload.send("gist");
+    let _ = reload.send("gist".to_string());
     Json(rename_summary(&paste)).into_response()
 }
 

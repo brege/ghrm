@@ -3,6 +3,7 @@ use crate::paths;
 use ignore::gitignore::GitignoreBuilder;
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebouncedEvent, new_debouncer};
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -26,7 +27,7 @@ pub struct DirWatchOptions {
 pub fn spawn_dir(
     root: PathBuf,
     nav: NavCache,
-    reload_tx: broadcast::Sender<&'static str>,
+    reload_tx: broadcast::Sender<String>,
     opts: DirWatchOptions,
 ) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
@@ -95,8 +96,8 @@ pub fn spawn_dir(
                     path = %rel,
                     "change"
                 );
+                let _ = reload_tx.send(reload_event(&root, &p));
             }
-            let _ = reload_tx.send("reload");
         }
     });
 
@@ -106,7 +107,7 @@ pub fn spawn_dir(
     Ok(())
 }
 
-pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<&'static str>) -> anyhow::Result<()> {
+pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<String>) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
     let mut debouncer = new_debouncer(Duration::from_millis(120), None, tx)?;
     let parent = file.parent().unwrap_or(Path::new(".")).to_path_buf();
@@ -121,11 +122,21 @@ pub fn spawn_file(file: PathBuf, reload_tx: broadcast::Sender<&'static str>) -> 
                 .any(|e| e.event.paths.iter().any(|p| p == &file))
             {
                 info!(path = %file.display(), "change");
-                let _ = reload_tx.send("reload");
+                let _ = reload_tx.send(reload_event(&parent, &file));
             }
         }
     });
     Ok(())
+}
+
+fn reload_event(root: &Path, path: &Path) -> String {
+    let rel = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .into_owned();
+    let encoded = utf8_percent_encode(&rel, NON_ALPHANUMERIC);
+    format!("reload:{encoded}")
 }
 
 fn changed_paths(
@@ -370,6 +381,14 @@ mod tests {
         );
 
         assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn reload_event_encodes_relative_path() {
+        let td = TempDir::new("ghrm-watch-test");
+        let path = td.path().join("notes/today.md");
+
+        assert_eq!(reload_event(td.path(), &path), "reload:notes%2Ftoday%2Emd");
     }
 
     #[test]

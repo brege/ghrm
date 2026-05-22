@@ -10,6 +10,7 @@ const nameMax = 80;
 
 let liveBound = false;
 let resizeBound = false;
+let pendingGistRefresh = false;
 
 function currentArticle() {
   return document.querySelector('article[data-ghrm-gist]');
@@ -25,6 +26,30 @@ function currentGistPath(article) {
 
 function currentText(article) {
   return article?.querySelector('[data-ghrm-gist-form] textarea')?.value || '';
+}
+
+function hasUnsavedChanges(article) {
+  const input = article?.querySelector('[data-ghrm-gist-form] textarea');
+  if (!input) return false;
+  const name = nameInput(article);
+  const normalized = name ? normalizeName(name.value) : '';
+  return (
+    input.value !== input.dataset.ghrmGistSaved ||
+    (name && normalized !== name.dataset.ghrmGistSaved)
+  );
+}
+
+function refreshPendingGist(article) {
+  if (!pendingGistRefresh || hasUnsavedChanges(article)) return;
+  refreshGist();
+}
+
+function requestGistRefresh(article) {
+  if (hasUnsavedChanges(article)) {
+    pendingGistRefresh = true;
+    return;
+  }
+  refreshGist();
 }
 
 function pad(value, width) {
@@ -354,6 +379,9 @@ async function refreshGist(path = currentGistPath(currentArticle())) {
     path,
     'article[data-ghrm-gist]',
   );
+  if (next) {
+    pendingGistRefresh = false;
+  }
   setupGist();
   return next;
 }
@@ -410,10 +438,12 @@ function setupGistEditor(article) {
       article.dataset.ghrmGistId || normalizeName(name.value);
     name.addEventListener('input', () => {
       syncSaveAction(article);
+      refreshPendingGist(article);
     });
   }
   input?.addEventListener('input', () => {
     syncBlob(article);
+    refreshPendingGist(article);
   });
   input?.addEventListener('keydown', (event) => {
     handleIndentKey(event, article);
@@ -564,8 +594,9 @@ function setupLiveGist() {
   if (liveBound) return;
   liveBound = true;
   document.addEventListener('ghrm:live:gist', () => {
-    if (currentArticle()) {
-      refreshGist();
+    const article = currentArticle();
+    if (article) {
+      requestGistRefresh(article);
     } else if (currentStash()) {
       refreshStash();
     }

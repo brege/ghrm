@@ -7,6 +7,11 @@ import {
 } from './explorer.js';
 import { setupFileViews } from './file.js';
 import {
+  cleanRelPath,
+  parseLiveMessage,
+  shouldReloadForChange,
+} from './live.js';
+import {
   applyDocChromePref,
   setupDocChromeToggle,
   setupThemeToggle,
@@ -27,17 +32,47 @@ import { buildToc, setupToc } from './toc.js';
 
 let pendingSamePathSwap = false;
 
-function dispatchLiveEvent(name) {
-  const detail = { name };
-  document.dispatchEvent(new CustomEvent('ghrm:live', { detail }));
-  document.dispatchEvent(new CustomEvent(`ghrm:live:${name}`, { detail }));
+function currentContentPath() {
+  const explorer = document.querySelector('article[data-explorer]');
+  if (explorer) {
+    return {
+      kind: 'dir',
+      path: cleanRelPath(explorer.dataset.currentPath || ''),
+    };
+  }
+
+  const file = document.querySelector('.ghrm-page-shell[data-ghrm-view-kind]');
+  if (file) {
+    return {
+      kind: 'file',
+      path: cleanRelPath(file.dataset.currentPath || ''),
+    };
+  }
+
+  return null;
 }
 
-function handleLiveEvent(name) {
-  dispatchLiveEvent(name);
-  if (name === 'reload') {
+function dispatchLiveEvent(event) {
+  const detail = { name: event.name, path: event.path };
+  document.dispatchEvent(new CustomEvent('ghrm:live', { detail }));
+  document.dispatchEvent(
+    new CustomEvent(`ghrm:live:${event.name}`, { detail }),
+  );
+}
+
+function handleLiveEvent(message) {
+  const event = parseLiveMessage(message);
+  if (
+    event.name === 'reload' &&
+    !shouldReloadForChange(currentContentPath(), event.path)
+  ) {
+    return;
+  }
+
+  dispatchLiveEvent(event);
+  if (event.name === 'reload') {
     location.reload();
-  } else if (name === 'nav-ready') {
+  } else if (event.name === 'nav-ready') {
     refreshActiveSearch();
   }
 }
@@ -51,7 +86,9 @@ function setupLiveReload() {
     ws.onopen = () => {
       setConnected(true);
       if (connectedOnce) {
-        location.reload();
+        if (currentContentPath()) {
+          location.reload();
+        }
         return;
       }
       connectedOnce = true;

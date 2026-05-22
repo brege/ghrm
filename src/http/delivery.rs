@@ -223,8 +223,9 @@ fn raw_source_html(text: &str) -> String {
 
 pub(crate) fn file_view_attrs(rel: &str, view: FileView) -> String {
     format!(
-        "data-ghrm-view-kind=\"{kind}\" data-ghrm-raw-url=\"{raw}\" data-ghrm-download-url=\"{download}\"",
+        "data-ghrm-view-kind=\"{kind}\" data-current-path=\"{current}\" data-ghrm-raw-url=\"{raw}\" data-ghrm-download-url=\"{download}\"",
         kind = view.kind,
+        current = html_escape::encode_double_quoted_attribute(rel.trim_matches('/')),
         raw = html_escape::encode_double_quoted_attribute(&internal_file_href("raw", rel)),
         download =
             html_escape::encode_double_quoted_attribute(&internal_file_href("download", rel)),
