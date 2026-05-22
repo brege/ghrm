@@ -11,7 +11,9 @@ fn main() {
 
     let mut files: Vec<std::path::PathBuf> = Vec::new();
     for dir in THEME_DIRS {
-        collect(&assets.join(dir), &mut files);
+        let path = assets.join(dir);
+        println!("cargo:rerun-if-changed={}", path.display());
+        collect(&path, &mut files);
     }
     files.sort();
 

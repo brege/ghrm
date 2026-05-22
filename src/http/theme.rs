@@ -23,11 +23,36 @@ pub fn ensure() -> Result<()> {
         return Ok(());
     }
     let d = dir()?;
-    if fs::read_to_string(d.join("VERSION")).ok().as_deref() == Some(THEME_VERSION) {
+    if current(&d) {
         return Ok(());
     }
     install(&d)?;
     Ok(())
+}
+
+fn current(dest: &Path) -> bool {
+    fs::read_to_string(dest.join("VERSION")).ok().as_deref() == Some(THEME_VERSION)
+        && dir_matches(&CSS, dest.join("css").as_path())
+        && dir_matches(&IMG, dest.join("img").as_path())
+        && dir_matches(&JS, dest.join("js").as_path())
+}
+
+fn dir_matches(dir: &Dir<'_>, dest: &Path) -> bool {
+    for entry in dir.entries() {
+        match entry {
+            DirEntry::Dir(dir) => {
+                if !dest.join(dir.path()).is_dir() || !dir_matches(dir, dest) {
+                    return false;
+                }
+            }
+            DirEntry::File(file) => {
+                if fs::read(dest.join(file.path())).ok().as_deref() != Some(file.contents()) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
 }
 
 fn install(dest: &std::path::Path) -> Result<()> {
@@ -84,11 +109,24 @@ mod tests {
 
         assert!(td.path().join("css/theme.css").is_file());
         assert!(td.path().join("css/explorer.css").is_file());
+        assert!(td.path().join("css/gist.css").is_file());
         assert!(td.path().join("js/main.js").is_file());
+        assert!(td.path().join("js/gist.js").is_file());
         assert!(td.path().join("img/favicon.svg").is_file());
         assert!(td.path().join("VERSION").is_file());
         assert!(!td.path().join("vendor").exists());
         assert!(!td.path().join("templates").exists());
         assert!(!td.path().join("config.json").exists());
+    }
+
+    #[test]
+    fn current_rejects_missing_asset() {
+        let td = TempDir::new("ghrm-theme-current");
+
+        install(td.path()).unwrap();
+        assert!(current(td.path()));
+
+        fs::remove_file(td.path().join("js/gist.js")).unwrap();
+        assert!(!current(td.path()));
     }
 }
