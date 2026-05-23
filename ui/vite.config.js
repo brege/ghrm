@@ -38,7 +38,7 @@ export default defineConfig({
     emptyOutDir: true,
     lib: {
       entry: {
-        preview: resolve(srcRoot, 'preview.js'),
+        preview: resolve(srcRoot, 'preview.ts'),
         main: resolve(srcRoot, 'main.js'),
         gist: resolve(srcRoot, 'gist.js'),
       },

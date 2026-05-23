@@ -1,6 +1,7 @@
 import { hasFeature } from '../vendor';
 
-function restoreGitHubInlineMath(container) {
+// GitHub's $`...`$ form becomes $<code>...</code>$ after Markdown parsing.
+function restoreGitHubInlineMath(container: Element): void {
   for (const code of container.querySelectorAll('code')) {
     if (code.closest('pre')) {
       continue;
@@ -32,7 +33,7 @@ function restoreGitHubInlineMath(container) {
   }
 }
 
-export async function renderMath() {
+export async function renderMath(): Promise<void> {
   if (!hasFeature('math')) return;
 
   const containers = document.querySelectorAll('.markdown-body');
@@ -41,7 +42,6 @@ export async function renderMath() {
   if (typeof window.renderMathInElement !== 'function') return;
 
   for (const container of containers) {
-    // GitHub's $`...`$ form becomes $<code>...</code>$ after Markdown parsing.
     restoreGitHubInlineMath(container);
     window.renderMathInElement(container, {
       delimiters: [

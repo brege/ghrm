@@ -1,19 +1,19 @@
 /**
  * Ambient declarations for ghrm first-party browser modules.
  *
- * Vendor globals are loaded dynamically by ui/src/vendor.js based on
+ * Vendor globals are loaded dynamically by ui/src/vendor.ts based on
  * feature detection from data-ghrm-features. These declarations allow
  * TypeScript to check code that references vendor APIs without requiring
  * full type definitions for each library.
  */
 
 // highlight.js
-interface HighlightJS {
+export interface HighlightJS {
   highlightElement(element: Element): void;
 }
 
 // mermaid
-interface MermaidAPI {
+export interface MermaidAPI {
   initialize(config: Record<string, unknown>): void;
   render(
     id: string,
@@ -23,11 +23,11 @@ interface MermaidAPI {
 }
 
 // svg-pan-zoom
-type SvgPanZoom = (
+export type SvgPanZoom = (
   svg: SVGElement,
   options?: Record<string, unknown>,
 ) => SvgPanZoomInstance;
-interface SvgPanZoomInstance {
+export interface SvgPanZoomInstance {
   zoomIn(): void;
   zoomOut(): void;
   resetZoom(): void;
@@ -40,13 +40,13 @@ interface SvgPanZoomInstance {
 }
 
 // KaTeX auto-render
-type RenderMathInElement = (
+export type RenderMathInElement = (
   element: Element,
   options?: Record<string, unknown>,
 ) => void;
 
 // Leaflet
-interface LeafletMap {
+export interface LeafletMap {
   setView(center: [number, number], zoom: number): this;
   fitBounds(
     bounds: LeafletLatLngBounds,
@@ -54,15 +54,15 @@ interface LeafletMap {
   ): this;
   remove(): void;
 }
-interface LeafletLatLngBounds {
+export interface LeafletLatLngBounds {
   isValid(): boolean;
   pad(bufferRatio: number): this;
 }
-interface LeafletLayer {
+export interface LeafletLayer {
   addTo(map: LeafletMap): this;
   getBounds(): LeafletLatLngBounds;
 }
-interface LeafletStatic {
+export interface LeafletStatic {
   map(element: Element, options?: Record<string, unknown>): LeafletMap;
   tileLayer(
     urlTemplate: string,
@@ -73,7 +73,7 @@ interface LeafletStatic {
 }
 
 // topojson
-interface TopoJSONStatic {
+export interface TopoJSONStatic {
   feature(
     topology: unknown,
     object: unknown,
@@ -81,7 +81,7 @@ interface TopoJSONStatic {
 }
 
 // htmx event detail
-interface HtmxEventDetail {
+export interface HtmxEventDetail {
   elt?: Element;
   target?: Element;
   xhr?: XMLHttpRequest;
@@ -107,5 +107,3 @@ declare global {
     'htmx:afterSettle': CustomEvent<HtmxEventDetail>;
   }
 }
-
-export {};

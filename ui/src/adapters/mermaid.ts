@@ -1,16 +1,25 @@
+import type { MermaidAPI, SvgPanZoomInstance } from '../../types/ghrm';
 import { icon, qselFrom } from '../dom';
 import { assetPlan, hasFeature } from '../vendor';
 import { clearError, getSource, isDarkTheme, setError } from './common';
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './copy';
 
-let mermaidId = 0;
-let mermaidVersionPromise;
+interface MermaidBlock extends Element {
+  _ghrmPanZoom?: SvgPanZoomInstance | null;
+}
 
-function fullscreenIcon() {
+interface CopyButton extends HTMLButtonElement {
+  _ghrmCopyReset?: ReturnType<typeof setTimeout> | null;
+}
+
+let mermaidId = 0;
+let mermaidVersionPromise: Promise<string> | undefined;
+
+function fullscreenIcon(): string {
   return icon('fullscreen', 'ghrm-action-icon');
 }
 
-function mermaidTheme() {
+function mermaidTheme(): Record<string, unknown> {
   if (isDarkTheme()) {
     return {
       theme: 'base',
@@ -44,7 +53,7 @@ function mermaidTheme() {
   };
 }
 
-function mermaidControls() {
+function mermaidControls(): string {
   return `<div class="ghrm-mermaid-controls">
     <button type="button" data-action="up" aria-label="Pan up">${icon('chevron-up', 'ghrm-action-icon')}</button>
     <button type="button" data-action="zoom-in" aria-label="Zoom in">${icon('zoom-in', 'ghrm-action-icon')}</button>
@@ -56,9 +65,9 @@ function mermaidControls() {
   </div>`;
 }
 
-function setupMermaidControls(block, target) {
+function setupMermaidControls(block: MermaidBlock, target: HTMLElement): void {
   const svg = target.querySelector('svg');
-  if (!svg || typeof window.svgPanZoom !== 'function') {
+  if (!(svg instanceof SVGElement) || typeof window.svgPanZoom !== 'function') {
     return;
   }
 
@@ -102,6 +111,7 @@ function setupMermaidControls(block, target) {
 
   const step = 50;
   for (const btn of target.querySelectorAll('.ghrm-mermaid-controls button')) {
+    if (!(btn instanceof HTMLButtonElement)) continue;
     btn.addEventListener('click', () => {
       const action = btn.dataset.action;
       if (action === 'zoom-in') panZoom.zoomIn();
@@ -122,11 +132,7 @@ function setupMermaidControls(block, target) {
   block._ghrmPanZoom = panZoom;
 }
 
-/**
- * @param {Element} block
- * @returns {HTMLElement}
- */
-function ensureMermaidActions(block) {
+function ensureMermaidActions(block: Element): HTMLElement {
   const existing = qselFrom(block, ':scope > .ghrm-render-actions');
   if (existing) {
     return existing;
@@ -151,7 +157,7 @@ function ensureMermaidActions(block) {
     }
   });
 
-  const copy = document.createElement('button');
+  const copy = document.createElement('button') as CopyButton;
   copy.type = 'button';
   copy.className = 'ghrm-action-button ghrm-action-copy';
   copy.setAttribute('aria-label', 'Copy mermaid code');
@@ -168,7 +174,7 @@ function ensureMermaidActions(block) {
   return actions;
 }
 
-async function getMermaidVersion(api) {
+async function getMermaidVersion(api: MermaidAPI): Promise<string> {
   if (typeof api.version === 'function') {
     return api.version();
   }
@@ -189,7 +195,7 @@ async function getMermaidVersion(api) {
   return mermaidVersionPromise;
 }
 
-export async function renderMermaid() {
+export async function renderMermaid(): Promise<void> {
   if (!hasFeature('mermaid')) return;
 
   const blocks = document.querySelectorAll('.ghrm-mermaid');
@@ -206,7 +212,7 @@ export async function renderMermaid() {
   for (const block of blocks) {
     const source = getSource(block);
     const target = block.querySelector('.ghrm-mermaid-diagram');
-    if (!source || !target) {
+    if (!source || !(target instanceof HTMLElement)) {
       continue;
     }
 
@@ -230,9 +236,9 @@ export async function renderMermaid() {
         result.bindFunctions(target);
       }
       ensureMermaidActions(block).hidden = false;
-      setupMermaidControls(block, target);
+      setupMermaidControls(block as MermaidBlock, target);
     } catch (error) {
-      setError(block, error.message);
+      setError(block, (error as Error).message);
     }
   }
 }

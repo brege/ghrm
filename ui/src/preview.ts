@@ -5,7 +5,7 @@ import { renderMath } from './adapters/math';
 import { renderMermaid } from './adapters/mermaid';
 import { loadAssets } from './vendor';
 
-async function runAll() {
+async function runAll(): Promise<void> {
   await loadAssets();
   renderCode();
   renderBlobs();
