@@ -25,7 +25,10 @@ function tocButton() {
 
 function syncTocButtons(show) {
   const btn = tocButton();
-  for (const current of document.querySelectorAll('[data-ghrm-toc-btn]')) {
+  const buttons = [...document.querySelectorAll('[data-ghrm-toc-btn]')].filter(
+    (el) => el instanceof HTMLButtonElement,
+  );
+  for (const current of buttons) {
     current.hidden = current !== btn;
     current.disabled = current === btn ? !show : true;
   }
@@ -115,22 +118,25 @@ export function setupToc() {
   if (!panel) return;
 
   panel.addEventListener('click', (e) => {
-    if (e.target.tagName === 'A') panel.hidden = true;
+    const target = e.target instanceof Element ? e.target : null;
+    if (target?.tagName === 'A') panel.hidden = true;
   });
 
   document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-ghrm-toc-btn]');
-    if (btn) {
-      if (btn.hidden || btn.disabled) return;
+    const target = e.target instanceof Element ? e.target : null;
+    if (!target) return;
+    const btnEl = target.closest('[data-ghrm-toc-btn]');
+    if (btnEl instanceof HTMLButtonElement) {
+      if (btnEl.hidden || btnEl.disabled) return;
       buildToc();
       const nextHidden = !panel.hidden;
       panel.hidden = nextHidden;
       if (!nextHidden && panel.childElementCount > 0) {
-        positionToc(panel, btn);
+        positionToc(panel, btnEl);
       }
       return;
     }
-    if (!panel.contains(e.target)) {
+    if (!panel.contains(target)) {
       panel.hidden = true;
     }
   });

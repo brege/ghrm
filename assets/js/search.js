@@ -1,3 +1,4 @@
+import { qsel, qselFrom } from './dom.js';
 import { beginActivity, endActivity } from './status.js';
 
 let searchMode = 'path';
@@ -92,9 +93,10 @@ export function setupPathSearch({
   setupNavExternalLinks,
   syncColumnControls,
 }) {
-  const article = document.querySelector('article[data-explorer]');
-  const search = document.getElementById('ghrm-path-search');
-  const input = document.getElementById('ghrm-path-search-input');
+  const article = qsel('article[data-explorer]');
+  const search = qsel('#ghrm-path-search');
+  const inputEl = document.querySelector('#ghrm-path-search-input');
+  const input = inputEl instanceof HTMLInputElement ? inputEl : null;
   const button = document.getElementById('ghrm-path-search-toggle');
   const modeBtn = document.getElementById('ghrm-search-mode');
   const status = document.getElementById('ghrm-path-search-status');
@@ -119,7 +121,7 @@ export function setupPathSearch({
   refreshSearch = null;
   if (!article || !table || !tbody) return;
 
-  const empty = article.querySelector('.ghrm-nav-empty');
+  const empty = qselFrom(article, '.ghrm-nav-empty');
   const originalRows = tbody.innerHTML;
   const currentPath = article.dataset.currentPath ?? '';
   let searchSeq = 0;

@@ -1,3 +1,12 @@
+> [!NOTE]
+> This smoke file checks markdown adapter renders.
+>
+> From the project root:
+>
+> ```bash
+> ghrm smoke/basics.md
+> ```
+
 # Basic GitHub Flavored Markdown 
 
 Some paragraph text with **bold** and *italic* and `inline code`.

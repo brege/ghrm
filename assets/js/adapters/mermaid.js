@@ -1,4 +1,4 @@
-import { icon } from '../dom.js';
+import { icon, qselFrom } from '../dom.js';
 import { assetPlan, hasFeature } from '../vendor.js';
 import { clearError, getSource, isDarkTheme, setError } from './common.js';
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './copy.js';
@@ -122,13 +122,17 @@ function setupMermaidControls(block, target) {
   block._ghrmPanZoom = panZoom;
 }
 
+/**
+ * @param {Element} block
+ * @returns {HTMLElement}
+ */
 function ensureMermaidActions(block) {
-  let actions = block.querySelector(':scope > .ghrm-render-actions');
-  if (actions) {
-    return actions;
+  const existing = qselFrom(block, ':scope > .ghrm-render-actions');
+  if (existing) {
+    return existing;
   }
 
-  actions = document.createElement('div');
+  const actions = document.createElement('div');
   actions.className = 'ghrm-render-actions';
 
   const fullscreen = document.createElement('button');
@@ -213,7 +217,7 @@ export async function renderMermaid() {
       if (source.trim() === 'info') {
         const version = await getMermaidVersion(api);
         target.innerHTML = `<pre class="ghrm-mermaid-info">mermaid ${version}</pre>`;
-        const actions = block.querySelector(':scope > .ghrm-render-actions');
+        const actions = qselFrom(block, ':scope > .ghrm-render-actions');
         if (actions) {
           actions.hidden = true;
         }

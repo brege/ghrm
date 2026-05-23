@@ -1,18 +1,25 @@
-import { formatAbsolute } from './dom.js';
+import { formatAbsolute, qsel, qselAllFrom, qselFrom } from './dom.js';
 
 let active = 0;
 let connected = false;
 let peekOpen = false;
 let detailsOpen = false;
 
+/**
+ * @param {Document | Element} root
+ */
 function populateAboutTitles(root = document) {
-  for (const el of root.querySelectorAll('[data-ghrm-title-ts]')) {
+  for (const el of qselAllFrom(root, '[data-ghrm-title-ts]')) {
     const ts = parseInt(el.dataset.ghrmTitleTs, 10);
     if (!ts) continue;
     el.title = formatAbsolute(ts);
   }
 }
 
+/**
+ * @param {HTMLElement} peek
+ * @param {string} path
+ */
 function holdPeekHeight(peek, path) {
   if (!peekOpen || peek.hidden) {
     return 0;
@@ -26,6 +33,10 @@ function holdPeekHeight(peek, path) {
   return height;
 }
 
+/**
+ * @param {HTMLElement} peek
+ * @param {string} path
+ */
 function releasePeekHeight(peek, path) {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
@@ -39,7 +50,7 @@ function releasePeekHeight(peek, path) {
 }
 
 async function loadAboutPeek() {
-  const peek = document.getElementById('ghrm-about-peek');
+  const peek = qsel('#ghrm-about-peek');
   const path = window.location.pathname || '/';
   const statsPath = `${path}${window.location.search || ''}`;
   if (
@@ -65,10 +76,11 @@ async function loadAboutPeek() {
     }
     const template = document.createElement('template');
     template.innerHTML = (await response.text()).trim();
-    const next = template.content.firstElementChild;
-    if (next?.id !== 'ghrm-about-peek') {
+    const nextEl = template.content.firstElementChild;
+    if (!(nextEl instanceof HTMLElement) || nextEl.id !== 'ghrm-about-peek') {
       return;
     }
+    const next = nextEl;
     if (
       `${window.location.pathname || '/'}${window.location.search || ''}` !==
       statsPath
@@ -84,7 +96,7 @@ async function loadAboutPeek() {
     populateAboutTitles(next);
     peek.replaceWith(next);
   } finally {
-    const current = document.getElementById('ghrm-about-peek');
+    const current = qsel('#ghrm-about-peek');
     if (current?.dataset.statsLoading === statsPath) {
       delete current.dataset.statsLoading;
     }
@@ -99,8 +111,10 @@ async function loadAboutPeek() {
 function sync() {
   const source = document.getElementById('ghrm-source-slot');
   const button = source?.querySelector('.ghrm-source-badge');
-  const peek = document.getElementById('ghrm-about-peek');
-  const detailsButton = peek?.querySelector('.ghrm-about-stamp-button');
+  const peek = qsel('#ghrm-about-peek');
+  const detailsButton = peek
+    ? qselFrom(peek, '.ghrm-about-stamp-button')
+    : null;
 
   if (source) {
     source.classList.toggle('is-active', active > 0);
@@ -148,14 +162,16 @@ export function syncServerStatus() {
 
 export function setupStatusPeek() {
   document.addEventListener('click', (event) => {
-    if (event.target.closest('.ghrm-about-stamp-button')) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    if (target.closest('.ghrm-about-stamp-button')) {
       event.preventDefault();
       detailsOpen = !detailsOpen;
       sync();
       return;
     }
 
-    if (!event.target.closest('.ghrm-source-badge')) return;
+    if (!target.closest('.ghrm-source-badge')) return;
     event.preventDefault();
     peekOpen = !peekOpen;
     if (peekOpen) {

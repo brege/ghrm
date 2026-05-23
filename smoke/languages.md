@@ -1,3 +1,12 @@
+> [!NOTE]
+> This smoke file checks markdown adapter renders.
+>
+> From the project root:
+>
+> ```bash
+> ghrm smoke/languages.md
+> ```
+
 # Language Highlighting
 
 These fixtures exercise code-block cases that should stay plain text unless a

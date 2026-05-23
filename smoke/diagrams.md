@@ -1,3 +1,12 @@
+> [!NOTE]
+> This smoke file checks markdown adapter renders.
+>
+> From the project root:
+>
+> ```bash
+> ghrm smoke/diagrams.md
+> ```
+
 # Creating diagrams
 
 Create diagrams to convey information through charts and graphs.

@@ -1,4 +1,4 @@
-import { escapeHtml } from '../dom.js';
+import { escapeHtml, qselAll } from '../dom.js';
 
 const SHELL_BUILTINS = new Set([
   '.',
@@ -68,7 +68,7 @@ export function renderCode() {
     return;
   }
 
-  for (const code of document.querySelectorAll('.markdown-body pre code')) {
+  for (const code of qselAll('.markdown-body pre code')) {
     const hasLanguage = [...code.classList].some((name) =>
       name.startsWith('language-'),
     );
