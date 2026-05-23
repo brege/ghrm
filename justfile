@@ -50,6 +50,10 @@ fmt-check: biome-check
     cargo fmt --manifest-path ghrm-stat/Cargo.toml --check
     uv run --project bench ruff format --check
 
+# typecheck frontend JavaScript with TypeScript
+typecheck:
+    tsc --noEmit --project tsconfig.json
+
 # check UI assets with Biome
 biome-check:
     pre-commit run biome-check --all-files
