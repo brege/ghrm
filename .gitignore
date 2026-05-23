@@ -1,9 +1,19 @@
+# rust
 /target/
 ghrm-stat/target/
-bench/data/snapshots/
+
+# mutants
+mutants.out/
+
+# js cdn libs
 assets/vendor/
+
+# benchmarks
+bench/data/snapshots/
 bench/.asv/
 bench/.home/
+
+# python
 bench/.uv-cache/
 bench/.venv/
 __pycache__/
