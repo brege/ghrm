@@ -3,10 +3,10 @@ import {
   copyIcon,
   showCopied,
   writeClipboard,
-} from './adapters/copy.js';
-import { icon, isHtmlFile } from './dom.js';
-import { applyWrapState, getWrapPref, setWrapPref } from './prefs.js';
-import { buildToc } from './toc.js';
+} from './adapters/copy';
+import { icon, isHtmlFile } from './dom';
+import { applyWrapState, getWrapPref, setWrapPref } from './prefs';
+import { buildToc } from './toc';
 
 function rawText(container) {
   return (

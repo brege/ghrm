@@ -1,9 +1,9 @@
-import { renderBlobs, renderCode } from './adapters/code.js';
-import { addCopyButtons } from './adapters/copy.js';
-import { renderMaps } from './adapters/map.js';
-import { renderMath } from './adapters/math.js';
-import { renderMermaid } from './adapters/mermaid.js';
-import { loadAssets } from './vendor.js';
+import { renderBlobs, renderCode } from './adapters/code';
+import { addCopyButtons } from './adapters/copy';
+import { renderMaps } from './adapters/map';
+import { renderMath } from './adapters/math';
+import { renderMermaid } from './adapters/mermaid';
+import { loadAssets } from './vendor';
 
 async function runAll() {
   await loadAssets();

@@ -8,7 +8,7 @@ import {
   qselAll,
   qselAllFrom,
   qselFrom,
-} from './dom.js';
+} from './dom';
 
 let explorerMenusBound = false;
 let archiveProgressTimer = null;

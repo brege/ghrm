@@ -1,6 +1,6 @@
-import { qsel } from './dom.js';
-import { refreshActiveSearch } from './search.js';
-import { setConnected } from './status.js';
+import { qsel } from './dom';
+import { refreshActiveSearch } from './search';
+import { setConnected } from './status';
 
 export function setupLiveReload() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';

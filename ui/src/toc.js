@@ -3,7 +3,7 @@ import {
   scrollOffset,
   scrollToHash,
   visiblePane,
-} from './dom.js';
+} from './dom';
 
 function fileViewRoot() {
   return visiblePane('.ghrm-page-content [data-ghrm-preview-pane]');

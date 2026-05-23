@@ -1,4 +1,4 @@
-import { escapeHtml, qselAll } from '../dom.js';
+import { escapeHtml, qselAll } from '../dom';
 
 const SHELL_BUILTINS = new Set([
   '.',

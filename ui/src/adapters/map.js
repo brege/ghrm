@@ -1,6 +1,6 @@
-import { icon } from '../dom.js';
-import { hasFeature } from '../vendor.js';
-import { clearError, getSource, setError, themeColors } from './common.js';
+import { icon } from '../dom';
+import { hasFeature } from '../vendor';
+import { clearError, getSource, setError, themeColors } from './common';
 
 function topojsonToGeojson(data) {
   const objects = Object.values(data.objects || {});

@@ -1,5 +1,5 @@
-import { qsel, qselFrom } from './dom.js';
-import { beginActivity, endActivity } from './status.js';
+import { qsel, qselFrom } from './dom';
+import { beginActivity, endActivity } from './status';
 
 let searchMode = 'path';
 let searchOpen = false;

@@ -1,4 +1,4 @@
-import { formatAbsolute, qsel, qselAllFrom, qselFrom } from './dom.js';
+import { formatAbsolute, qsel, qselAllFrom, qselFrom } from './dom';
 
 let active = 0;
 let connected = false;

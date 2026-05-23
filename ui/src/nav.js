@@ -1,15 +1,15 @@
-import { scrollToHash } from './dom.js';
+import { scrollToHash } from './dom';
 import {
   populateDates,
   setupNavExternalLinks,
   setupViewMenu,
   syncColumnControls,
-} from './explorer.js';
-import { setupFileViews } from './file.js';
-import { applyDocChromePref, setupDocChromeToggle } from './prefs.js';
-import { setSearchCloseHandler, setupPathSearch } from './search.js';
-import { beginActivity, endActivity, syncServerStatus } from './status.js';
-import { buildToc, setupToc } from './toc.js';
+} from './explorer';
+import { setupFileViews } from './file';
+import { applyDocChromePref, setupDocChromeToggle } from './prefs';
+import { setSearchCloseHandler, setupPathSearch } from './search';
+import { beginActivity, endActivity, syncServerStatus } from './status';
+import { buildToc, setupToc } from './toc';
 
 let pendingSamePathSwap = false;
 

@@ -1,7 +1,7 @@
-import { renderBlobs } from './adapters/code.js';
-import { showCopied, writeClipboard } from './adapters/copy.js';
-import { populateDates } from './explorer.js';
-import { applyWrapState, getWrapPref, setWrapPref } from './prefs.js';
+import { renderBlobs } from './adapters/code';
+import { showCopied, writeClipboard } from './adapters/copy';
+import { populateDates } from './explorer';
+import { applyWrapState, getWrapPref, setWrapPref } from './prefs';
 
 const gistPath = '/_ghrm/gist';
 const stashPath = '/_ghrm/gist/stash';

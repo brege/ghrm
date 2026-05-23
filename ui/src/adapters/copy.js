@@ -1,4 +1,4 @@
-import { icon } from '../dom.js';
+import { icon } from '../dom';
 
 // ghrm is often opened over plain HTTP from another LAN device. Browsers treat
 // localhost as a secure context, but not http://192.168.x.x, so the Clipboard

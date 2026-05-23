@@ -1,7 +1,7 @@
-import { icon, qselFrom } from '../dom.js';
-import { assetPlan, hasFeature } from '../vendor.js';
-import { clearError, getSource, isDarkTheme, setError } from './common.js';
-import { checkIcon, copyIcon, showCopied, writeClipboard } from './copy.js';
+import { icon, qselFrom } from '../dom';
+import { assetPlan, hasFeature } from '../vendor';
+import { clearError, getSource, isDarkTheme, setError } from './common';
+import { checkIcon, copyIcon, showCopied, writeClipboard } from './copy';
 
 let mermaidId = 0;
 let mermaidVersionPromise;

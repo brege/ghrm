@@ -1,4 +1,4 @@
-import { hasFeature } from '../vendor.js';
+import { hasFeature } from '../vendor';
 
 function restoreGitHubInlineMath(container) {
   for (const code of container.querySelectorAll('code')) {

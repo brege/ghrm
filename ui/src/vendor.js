@@ -1,4 +1,4 @@
-import { qsel } from './dom.js';
+import { qsel } from './dom';
 
 const vendorLoading = new Map();
 let assetConfig;

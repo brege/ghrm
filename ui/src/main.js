@@ -1,8 +1,8 @@
-import { scrollToHash } from './dom.js';
-import { setupLiveReload } from './live.js';
-import { setupHtmxNav, setupInitialContent } from './nav.js';
-import { setupThemeToggle } from './prefs.js';
-import { setupStatusPeek } from './status.js';
+import { scrollToHash } from './dom';
+import { setupLiveReload } from './live';
+import { setupHtmxNav, setupInitialContent } from './nav';
+import { setupThemeToggle } from './prefs';
+import { setupStatusPeek } from './status';
 
 document.addEventListener('DOMContentLoaded', () => {
   setupInitialContent();
