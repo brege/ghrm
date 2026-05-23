@@ -13,7 +13,7 @@ import { buildToc, setupToc } from './toc';
 
 let pendingSamePathSwap = false;
 
-export function setupInitialContent() {
+export function setupInitialContent(): void {
   setupFileViews();
   setupSearch();
   setupViewMenu();
@@ -23,17 +23,17 @@ export function setupInitialContent() {
   setupNavExternalLinks();
 }
 
-export function setupHtmxNav() {
+export function setupHtmxNav(): void {
   document.body.addEventListener('htmx:beforeBoost', (e) => {
     const link = e.detail.elt?.closest?.('a');
-    if (link && !shouldBoostLink(link)) {
+    if (link && !shouldBoostLink(link as HTMLAnchorElement)) {
       e.preventDefault();
     }
   });
 
   document.body.addEventListener('htmx:afterSwap', (e) => {
     if (e.detail.target?.matches('article.markdown-body')) {
-      afterContentSwap(e.detail.xhr);
+      afterContentSwap(e.detail.xhr as XMLHttpRequest);
     }
   });
 
@@ -45,7 +45,8 @@ export function setupHtmxNav() {
     if (e.detail.target?.matches('article.markdown-body')) {
       const link = e.detail.elt?.closest?.('a');
       pendingSamePathSwap = link
-        ? new URL(link.href, location.origin).pathname === location.pathname
+        ? new URL((link as HTMLAnchorElement).href, location.origin)
+            .pathname === location.pathname
         : false;
       beginActivity();
     }
@@ -62,7 +63,7 @@ export function setupHtmxNav() {
   });
 }
 
-function setupSearch() {
+function setupSearch(): void {
   setSearchCloseHandler(() => {
     const target = `${location.pathname}${location.search}${location.hash}`;
     location.assign(target);
@@ -70,7 +71,7 @@ function setupSearch() {
   setupPathSearch({ populateDates, setupNavExternalLinks, syncColumnControls });
 }
 
-function refreshContent({ resetScroll }) {
+function refreshContent({ resetScroll }: { resetScroll: boolean }): void {
   syncServerStatus();
   setupFileViews();
   setupSearch();
@@ -92,7 +93,7 @@ function refreshContent({ resetScroll }) {
   document.dispatchEvent(new CustomEvent('ghrm:contentready'));
 }
 
-function afterContentSwap(xhr) {
+function afterContentSwap(xhr: XMLHttpRequest): void {
   const title = xhr.getResponseHeader('HX-Title');
   if (title !== null) {
     document.title = decodeURIComponent(title);
@@ -100,7 +101,7 @@ function afterContentSwap(xhr) {
   refreshContent({ resetScroll: true });
 }
 
-function shouldBoostLink(a) {
+function shouldBoostLink(a: HTMLAnchorElement): boolean {
   if (!a.href) return false;
   if (a.dataset.ghrmNative === '1') return false;
   if (a.target && a.target !== '_self') return false;

@@ -5,11 +5,11 @@ import {
   visiblePane,
 } from './dom';
 
-function fileViewRoot() {
+function fileViewRoot(): Element | null {
   return visiblePane('.ghrm-page-content [data-ghrm-preview-pane]');
 }
 
-function tocRoot() {
+function tocRoot(): Element | null {
   const viewRoot = fileViewRoot();
   if (viewRoot) return viewRoot;
   if (document.querySelector('[data-ghrm-view-kind]')) return null;
@@ -19,14 +19,15 @@ function tocRoot() {
   );
 }
 
-function tocButton() {
-  return document.querySelector('[data-ghrm-toc-btn]');
+function tocButton(): HTMLButtonElement | null {
+  const el = document.querySelector('[data-ghrm-toc-btn]');
+  return el instanceof HTMLButtonElement ? el : null;
 }
 
-function syncTocButtons(show) {
+function syncTocButtons(show: boolean): HTMLButtonElement | null {
   const btn = tocButton();
   const buttons = [...document.querySelectorAll('[data-ghrm-toc-btn]')].filter(
-    (el) => el instanceof HTMLButtonElement,
+    (el): el is HTMLButtonElement => el instanceof HTMLButtonElement,
   );
   for (const current of buttons) {
     current.hidden = current !== btn;
@@ -35,15 +36,15 @@ function syncTocButtons(show) {
   return btn;
 }
 
-function headingText(heading) {
-  const copy = heading.cloneNode(true);
+function headingText(heading: Element): string {
+  const copy = heading.cloneNode(true) as Element;
   for (const anchor of copy.querySelectorAll('.ghrm-anchor')) {
     anchor.remove();
   }
-  return copy.textContent.replace(/\s+/g, ' ').trim();
+  return (copy.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
-function currentHeadingId() {
+function currentHeadingId(): string {
   const root = tocRoot();
   if (!root) return '';
   const headings = [
@@ -63,7 +64,7 @@ function currentHeadingId() {
   return current.id;
 }
 
-function syncTocActive() {
+function syncTocActive(): void {
   const panel = document.getElementById('ghrm-toc-panel');
   if (!panel) return;
   const activeId = currentHeadingId();
@@ -79,7 +80,7 @@ function syncTocActive() {
   }
 }
 
-export function buildToc() {
+export function buildToc(): void {
   const panel = document.getElementById('ghrm-toc-panel');
   if (!panel) return;
 
@@ -109,11 +110,11 @@ export function buildToc() {
   syncTocActive();
 }
 
-function positionToc(panel, btn) {
+function positionToc(panel: HTMLElement, btn: Element): void {
   positionFloatingPanel(panel, btn, 248);
 }
 
-export function setupToc() {
+export function setupToc(): void {
   const panel = document.getElementById('ghrm-toc-panel');
   if (!panel) return;
 

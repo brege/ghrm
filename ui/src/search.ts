@@ -1,31 +1,48 @@
 import { qsel, qselFrom } from './dom';
 import { beginActivity, endActivity } from './status';
 
-let searchMode = 'path';
+export interface SearchSetupOptions {
+  populateDates: () => void;
+  setupNavExternalLinks: () => void;
+  syncColumnControls: () => void;
+}
+
+interface SearchFragmentResponse {
+  html: string;
+  count: number;
+  truncated: boolean;
+  pending: boolean;
+  maxRows: number;
+}
+
+type SearchMode = 'path' | 'content';
+
+let searchMode: SearchMode = 'path';
 let searchOpen = false;
 let searchQuery = '';
-let refreshSearch = null;
-let closeDirtySearch = null;
+let refreshSearch: (() => void) | null = null;
+let closeDirtySearch: (() => void) | null = null;
 let searchDirty = false;
 
-export function hasActiveSearch() {
+export function hasActiveSearch(): boolean {
   return searchOpen && searchQuery.trim().length > 0 && Boolean(refreshSearch);
 }
 
-export function refreshActiveSearch() {
-  if (!hasActiveSearch()) return false;
+export function refreshActiveSearch(): boolean {
+  const refresh = refreshSearch;
+  if (!hasActiveSearch() || !refresh) return false;
   searchDirty = true;
-  refreshSearch();
+  refresh();
   return true;
 }
 
-export function setSearchCloseHandler(handler) {
+export function setSearchCloseHandler(handler: () => void): void {
   closeDirtySearch = handler;
 }
 
-function ensureNavTable(article) {
+function ensureNavTable(article: Element): HTMLTableElement | null {
   const table = article.querySelector('.ghrm-nav-table');
-  if (table) return table;
+  if (table instanceof HTMLTableElement) return table;
 
   const empty = article.querySelector('.ghrm-nav-empty');
   if (!empty) return null;
@@ -36,7 +53,10 @@ function ensureNavTable(article) {
   return next;
 }
 
-function buildSearchParams(query, extraParams = {}) {
+function buildSearchParams(
+  query: string,
+  extraParams: Record<string, string | undefined> = {},
+): URLSearchParams {
   const params = new URLSearchParams(location.search);
   params.set('q', query);
   for (const [key, value] of Object.entries(extraParams)) {
@@ -49,7 +69,10 @@ function buildSearchParams(query, extraParams = {}) {
   return params;
 }
 
-async function searchFragment(endpoint, params) {
+async function searchFragment(
+  endpoint: string,
+  params: URLSearchParams,
+): Promise<SearchFragmentResponse> {
   const res = await fetch(`${endpoint}?${params}`, {
     headers: {
       Accept: 'text/html',
@@ -74,25 +97,28 @@ async function searchFragment(endpoint, params) {
   };
 }
 
-function fetchPathResults(query, currentPath) {
+function fetchPathResults(
+  query: string,
+  currentPath: string,
+): Promise<SearchFragmentResponse> {
   const params = buildSearchParams(query, { path: currentPath });
   return searchFragment('/_ghrm/path-search', params);
 }
 
-function fetchContentResults(query) {
+function fetchContentResults(query: string): Promise<SearchFragmentResponse> {
   const params = buildSearchParams(query);
   return searchFragment('/_ghrm/search', params);
 }
 
-function setRows(tbody, resp) {
+function setRows(
+  tbody: HTMLTableSectionElement,
+  resp: SearchFragmentResponse,
+): void {
   tbody.innerHTML = resp.html;
 }
 
-export function setupPathSearch({
-  populateDates,
-  setupNavExternalLinks,
-  syncColumnControls,
-}) {
+export function setupPathSearch(options: SearchSetupOptions): void {
+  const { populateDates, setupNavExternalLinks, syncColumnControls } = options;
   const article = qsel('article[data-explorer]');
   const search = qsel('#ghrm-path-search');
   const inputEl = document.querySelector('#ghrm-path-search-input');
@@ -101,7 +127,7 @@ export function setupPathSearch({
   const modeBtn = document.getElementById('ghrm-search-mode');
   const status = document.getElementById('ghrm-path-search-status');
   const table = article ? ensureNavTable(article) : null;
-  const tbody = table?.querySelector('tbody');
+  const tbody = table?.querySelector('tbody') as HTMLTableSectionElement | null;
   if (!search || !input || !button || !status) return;
 
   const restoredOpen = searchOpen && Boolean(article);
@@ -123,13 +149,16 @@ export function setupPathSearch({
 
   const empty = qselFrom(article, '.ghrm-nav-empty');
   const originalRows = tbody.innerHTML;
-  const currentPath = article.dataset.currentPath ?? '';
+  const currentPath =
+    (article instanceof HTMLElement
+      ? article.dataset.currentPath
+      : undefined) ?? '';
   let searchSeq = 0;
   if (!originalRows.trim()) {
     table.hidden = true;
   }
 
-  const resetSearch = () => {
+  const resetSearch = (): void => {
     tbody.innerHTML = originalRows;
     syncColumnControls();
     table.hidden = !originalRows.trim();
@@ -139,7 +168,7 @@ export function setupPathSearch({
     setupNavExternalLinks();
   };
 
-  const updateMode = () => {
+  const updateMode = (): void => {
     search.dataset.mode = searchMode;
     input.placeholder =
       searchMode === 'content' ? 'Search content' : 'Search paths';
@@ -153,7 +182,7 @@ export function setupPathSearch({
     }
   };
 
-  const closeSearch = () => {
+  const closeSearch = (): void => {
     search.classList.remove('is-open');
     searchOpen = false;
     button.setAttribute('aria-expanded', 'false');
@@ -170,7 +199,7 @@ export function setupPathSearch({
   };
 
   if (modeBtn) {
-    modeBtn.onclick = () => {
+    modeBtn.onclick = (): void => {
       searchQuery = input.value;
       const query = searchQuery.trim();
       searchMode = searchMode === 'path' ? 'content' : 'path';
@@ -186,7 +215,7 @@ export function setupPathSearch({
   }
   updateMode();
 
-  button.onclick = () => {
+  button.onclick = (): void => {
     const open = !search.classList.contains('is-open');
     searchOpen = open;
     search.classList.toggle('is-open', open);
@@ -199,7 +228,7 @@ export function setupPathSearch({
     }
   };
 
-  const doSearch = async () => {
+  const doSearch = async (): Promise<void> => {
     searchSeq += 1;
     const seq = searchSeq;
     searchQuery = input.value;
@@ -249,7 +278,7 @@ export function setupPathSearch({
 
   input.oninput = doSearch;
 
-  input.onkeydown = (e) => {
+  input.onkeydown = (e): void => {
     if (e.key !== 'Escape') return;
     closeSearch();
     button.focus();

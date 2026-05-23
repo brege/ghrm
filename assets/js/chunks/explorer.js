@@ -52,7 +52,7 @@ function syncColumnControls() {
 }
 function populateDates() {
   for (const el of qselAll(".ghrm-nav-meta-time[data-ts]")) {
-    const ts = parseInt(el.dataset.ts, 10);
+    const ts = parseInt(el.dataset.ts || "", 10);
     if (!ts) continue;
     el.textContent = formatRelative(ts);
     el.title = formatAbsolute(ts);
@@ -69,7 +69,7 @@ function currentExplorerMenus() {
     ...menu,
     toggle: document.getElementById(menu.toggleId),
     panel: document.getElementById(menu.panelId)
-  })).filter(({ toggle, panel }) => toggle && panel);
+  })).filter((m) => m.toggle !== null && m.panel !== null);
 }
 function currentExplorerMenu(name) {
   return currentExplorerMenus().find((menu) => menu.name === name) || null;
@@ -296,7 +296,7 @@ function setupNavExternalLinks() {
     const nameCell = nameLink == null ? void 0 : nameLink.closest(".ghrm-nav-name");
     if (!nameLink || !nameCell) continue;
     const href = nameLink.getAttribute("href");
-    if (!isHtmlFile(href)) continue;
+    if (!href || !isHtmlFile(href)) continue;
     if (nameCell.querySelector(".ghrm-nav-external")) continue;
     const htmlHref = href.replace(/^\//, "/_ghrm/html/");
     const link = document.createElement("a");

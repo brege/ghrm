@@ -39,7 +39,7 @@ export default defineConfig({
     lib: {
       entry: {
         preview: resolve(srcRoot, 'preview.ts'),
-        main: resolve(srcRoot, 'main.js'),
+        main: resolve(srcRoot, 'main.ts'),
         gist: resolve(srcRoot, 'gist.js'),
       },
       formats: ['es'],

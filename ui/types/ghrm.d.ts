@@ -105,5 +105,7 @@ declare global {
     'htmx:beforeRequest': CustomEvent<HtmxEventDetail>;
     'htmx:afterRequest': CustomEvent<HtmxEventDetail>;
     'htmx:afterSettle': CustomEvent<HtmxEventDetail>;
+    'ghrm:contentready': CustomEvent<void>;
+    'ghrm:themechange': CustomEvent<{ theme: string }>;
   }
 }
