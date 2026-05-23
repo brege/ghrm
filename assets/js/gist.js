@@ -86,9 +86,7 @@ function syncSaveAction(article, saving = false) {
   }
 }
 function syncEditor(article) {
-  const editor = article.querySelector(
-    "[data-ghrm-gist-editor]"
-  );
+  const editor = article.querySelector("[data-ghrm-gist-editor]");
   const input = article.querySelector(
     "[data-ghrm-gist-form] textarea"
   );
@@ -113,9 +111,7 @@ function syncBlob(article) {
     "[data-ghrm-gist-form] textarea"
   );
   const source = article.querySelector(".ghrm-blob-source code");
-  const data = article.querySelector(
-    "template.ghrm-data"
-  );
+  const data = article.querySelector("template.ghrm-data");
   if (!input || !source) return;
   const text = input.value;
   if (source.textContent !== text) {
@@ -234,9 +230,7 @@ function handleIndentKey(event, article) {
   syncBlob(article);
 }
 function setStatus(article, message) {
-  const status = article == null ? void 0 : article.querySelector(
-    "[data-ghrm-gist-status]"
-  );
+  const status = article == null ? void 0 : article.querySelector("[data-ghrm-gist-status]");
   if (status) {
     status.textContent = message;
   }
@@ -515,9 +509,7 @@ function beginRowRename(row) {
 function setupGistStash(stash) {
   if (stash.dataset.ghrmGistReady === "1") return;
   stash.dataset.ghrmGistReady = "1";
-  for (const row of stash.querySelectorAll(
-    "[data-ghrm-gist-row]"
-  )) {
+  for (const row of stash.querySelectorAll("[data-ghrm-gist-row]")) {
     const button = row.querySelector(
       "[data-ghrm-gist-rename-start]"
     );

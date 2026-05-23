@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const buildDir = join(__dirname, '../.vite-check');
 const trackedDir = join(__dirname, '../../assets/js');
+const srcDir = join(__dirname, '../src');
 const expectedEntries = ['preview.js', 'main.js', 'gist.js'];
 const expectedChunks = ['adapters.js', 'explorer.js', 'shared.js'];
 
@@ -54,6 +55,14 @@ function checkExpectedFiles() {
   const missingChunks = expectedChunks.filter((c) => !chunkFiles.includes(c));
   if (missingChunks.length > 0) {
     console.error('Missing expected chunk files:', missingChunks.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkNoSourceJs() {
+  const sourceJs = collectFiles(srcDir).filter((file) => file.endsWith('.js'));
+  if (sourceJs.length > 0) {
+    console.error('JavaScript files remain under ui/src:', sourceJs.join(', '));
     process.exit(1);
   }
 }
@@ -120,6 +129,7 @@ function formatBytes(bytes) {
 }
 
 function checkBuild() {
+  checkNoSourceJs();
   checkExpectedFiles();
   compareDirectories();
 
