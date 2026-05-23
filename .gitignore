@@ -17,3 +17,7 @@ bench/.home/
 bench/.uv-cache/
 bench/.venv/
 __pycache__/
+
+# ui workspace
+ui/node_modules/
+ui/.vite-check/

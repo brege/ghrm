@@ -196,6 +196,7 @@ mod tests {
         assert!(td.path().join("css/theme.css").is_file());
         assert!(td.path().join("css/explorer.css").is_file());
         assert!(td.path().join("css/gist.css").is_file());
+        assert!(td.path().join("js/preview.js").is_file());
         assert!(td.path().join("js/main.js").is_file());
         assert!(td.path().join("js/gist.js").is_file());
         assert!(td.path().join("img/favicon.svg").is_file());
@@ -203,6 +204,22 @@ mod tests {
         assert!(!td.path().join("vendor").exists());
         assert!(!td.path().join("templates").exists());
         assert!(!td.path().join("config.json").exists());
+    }
+
+    #[test]
+    fn install_includes_nested_js_chunks() {
+        let td = TempDir::new("ghrm-theme-chunks");
+
+        install(td.path()).unwrap();
+
+        assert!(
+            td.path().join("js/chunks").is_dir(),
+            "theme install must include js/chunks directory"
+        );
+        assert!(
+            first_installed_chunk(td.path()).is_file(),
+            "js/chunks must contain generated JavaScript files"
+        );
     }
 
     #[test]
@@ -214,5 +231,55 @@ mod tests {
 
         fs::remove_file(td.path().join("js/gist.js")).unwrap();
         assert!(!current(td.path()));
+    }
+
+    #[test]
+    fn current_rejects_missing_entry_script() {
+        let td = TempDir::new("ghrm-theme-entry");
+
+        install(td.path()).unwrap();
+        assert!(current(td.path()));
+
+        fs::remove_file(td.path().join("js/preview.js")).unwrap();
+        assert!(
+            !current(td.path()),
+            "theme should be stale when preview.js is missing"
+        );
+    }
+
+    #[test]
+    fn current_rejects_missing_chunk() {
+        let td = TempDir::new("ghrm-theme-chunk");
+
+        install(td.path()).unwrap();
+        assert!(current(td.path()));
+
+        fs::remove_file(first_installed_chunk(td.path())).unwrap();
+        assert!(
+            !current(td.path()),
+            "theme should be stale when a js/chunks file is missing"
+        );
+    }
+
+    #[test]
+    fn current_rejects_stale_chunk_content() {
+        let td = TempDir::new("ghrm-theme-chunk-stale");
+
+        install(td.path()).unwrap();
+        assert!(current(td.path()));
+
+        fs::write(first_installed_chunk(td.path()), b"stale content").unwrap();
+        assert!(
+            !current(td.path()),
+            "theme should be stale when a js/chunks file has wrong content"
+        );
+    }
+
+    fn first_installed_chunk(root: &Path) -> PathBuf {
+        fs::read_dir(root.join("js/chunks"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| path.extension().is_some_and(|ext| ext == "js"))
+            .expect("js/chunks must contain generated JavaScript files")
     }
 }

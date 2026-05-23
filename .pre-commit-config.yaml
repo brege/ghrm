@@ -5,7 +5,7 @@ repos:
     rev: v2.4.6
     hooks:
       - id: biome-check
-        files: ^assets/(js|css)/
+        files: ^(assets/css/|ui/)
         args: []
 
   - repo: local

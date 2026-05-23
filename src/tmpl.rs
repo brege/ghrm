@@ -384,6 +384,40 @@ mod tests {
         use super::*;
 
         #[test]
+        fn entry_script_urls() {
+            let html = base(empty_shell()).unwrap();
+            assert!(
+                html.contains("src=\"/_ghrm/assets/js/preview.js\""),
+                "shell missing preview.js entry script"
+            );
+            assert!(
+                html.contains("src=\"/_ghrm/assets/js/main.js\""),
+                "shell missing main.js entry script"
+            );
+            assert!(
+                html.contains("src=\"/_ghrm/assets/js/gist.js\""),
+                "shell missing gist.js entry script"
+            );
+        }
+
+        #[test]
+        fn entry_scripts_are_modules() {
+            let html = base(empty_shell()).unwrap();
+            assert!(
+                html.contains("type=\"module\" src=\"/_ghrm/assets/js/preview.js\""),
+                "preview.js must be loaded as module"
+            );
+            assert!(
+                html.contains("type=\"module\" src=\"/_ghrm/assets/js/main.js\""),
+                "main.js must be loaded as module"
+            );
+            assert!(
+                html.contains("type=\"module\" src=\"/_ghrm/assets/js/gist.js\""),
+                "gist.js must be loaded as module"
+            );
+        }
+
+        #[test]
         fn htmx_body_attributes() {
             let html = base(empty_shell()).unwrap();
             assert!(html.contains("hx-boost=\"true\""), "body missing hx-boost");
