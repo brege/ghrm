@@ -1,3 +1,51 @@
+/**
+ * @param {string} selector
+ * @returns {HTMLElement | null}
+ */
+export function qsel(selector) {
+  const el = document.querySelector(selector);
+  return el instanceof HTMLElement ? el : null;
+}
+
+/**
+ * @param {ParentNode} root
+ * @param {string} selector
+ * @returns {HTMLElement | null}
+ */
+export function qselFrom(root, selector) {
+  const el = root.querySelector(selector);
+  return el instanceof HTMLElement ? el : null;
+}
+
+/**
+ * @param {string} selector
+ * @returns {HTMLElement[]}
+ */
+export function qselAll(selector) {
+  return [...document.querySelectorAll(selector)].filter(
+    (el) => el instanceof HTMLElement,
+  );
+}
+
+/**
+ * @param {ParentNode} root
+ * @param {string} selector
+ * @returns {HTMLElement[]}
+ */
+export function qselAllFrom(root, selector) {
+  return [...root.querySelectorAll(selector)].filter(
+    (el) => el instanceof HTMLElement,
+  );
+}
+
+/**
+ * @param {EventTarget | null} target
+ * @returns {Element | null}
+ */
+export function asElement(target) {
+  return target instanceof Element ? target : null;
+}
+
 export function icon(name, cls = 'ghrm-file-icon') {
   return `<svg aria-hidden="true" height="16" width="16" class="${cls}"><use href="#ghrm-icon-${name}"></use></svg>`;
 }

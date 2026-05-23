@@ -1,3 +1,5 @@
+import { qsel } from './dom.js';
+
 const vendorLoading = new Map();
 let assetConfig;
 
@@ -24,7 +26,7 @@ function loadStylesheet(href) {
 }
 
 function currentArticle() {
-  return document.querySelector('article.markdown-body');
+  return qsel('article.markdown-body');
 }
 
 export function assetPlan() {
@@ -37,7 +39,8 @@ export function assetPlan() {
 }
 
 function currentFeatures() {
-  return (currentArticle()?.dataset.ghrmFeatures || '')
+  const article = currentArticle();
+  return (article?.dataset.ghrmFeatures || '')
     .split(/\s+/)
     .filter((value) => value);
 }

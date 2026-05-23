@@ -4,6 +4,10 @@ import {
   icon,
   isHtmlFile,
   positionFloatingPanel,
+  qsel,
+  qselAll,
+  qselAllFrom,
+  qselFrom,
 } from './dom.js';
 
 let explorerMenusBound = false;
@@ -34,9 +38,7 @@ const EXPLORER_MENUS = [
 
 export function syncColumnControls() {
   const article = document.querySelector('article[data-explorer]');
-  const controls = [
-    ...document.querySelectorAll('[data-column-toggle].ghrm-view-option'),
-  ];
+  const controls = qselAll('[data-column-toggle].ghrm-view-option');
   const columns = new Set(
     controls
       .filter((control) => {
@@ -56,10 +58,11 @@ export function syncColumnControls() {
       );
     });
     article.classList.toggle('ghrm-has-edge-meta', hasEdge);
-    for (const cell of article.querySelectorAll('[data-column-key]')) {
+    const cells = qselAllFrom(article, '[data-column-key]');
+    for (const cell of cells) {
       cell.hidden = !columns.has(cell.dataset.columnKey);
     }
-    const headers = article.querySelector('.ghrm-column-headers');
+    const headers = qselFrom(article, '.ghrm-column-headers');
     const headerControl = controls.find((control) => {
       return control.dataset.columnToggle === 'headers';
     });
@@ -70,7 +73,7 @@ export function syncColumnControls() {
 }
 
 export function populateDates() {
-  for (const el of document.querySelectorAll('.ghrm-nav-meta-time[data-ts]')) {
+  for (const el of qselAll('.ghrm-nav-meta-time[data-ts]')) {
     const ts = parseInt(el.dataset.ts, 10);
     if (!ts) continue;
     el.textContent = formatRelative(ts);
@@ -128,7 +131,7 @@ export function setupViewMenu() {
         closeExplorerMenus();
       }
     };
-    for (const option of menu.panel.querySelectorAll('.ghrm-view-option')) {
+    for (const option of qselAllFrom(menu.panel, '.ghrm-view-option')) {
       option.onclick = (event) => {
         closeExplorerMenus();
         if (option.dataset.ghrmArchiveUrl) {
@@ -146,10 +149,12 @@ export function setupViewMenu() {
   document.addEventListener('click', (e) => {
     const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
     if (!hasExplorerMenus()) return;
+    const target = e.target instanceof Node ? e.target : null;
+    if (!target) return;
     const insideMenu = currentExplorerMenus().some(({ toggle, panel }) => {
-      return toggle.contains(e.target) || panel.contains(e.target);
+      return toggle.contains(target) || panel.contains(target);
     });
-    if (insideMenu || dirToggle?.contains(e.target)) return;
+    if (insideMenu || dirToggle?.contains(target)) return;
     closeExplorerMenus();
   });
 
@@ -237,11 +242,11 @@ async function pollArchiveJob(statusUrl, downloadUrl) {
 }
 
 function updateArchiveProgress(status) {
-  const progress = document.getElementById('ghrm-archive-progress');
+  const progress = qsel('#ghrm-archive-progress');
   if (!progress) return;
   const label = progress.querySelector('.ghrm-archive-progress-label');
   const count = progress.querySelector('.ghrm-archive-progress-count');
-  const fill = progress.querySelector('.ghrm-archive-progress-fill');
+  const fill = qselFrom(progress, '.ghrm-archive-progress-fill');
   const percent = Math.max(0, Math.min(100, status.percent || 0));
 
   progress.hidden = false;

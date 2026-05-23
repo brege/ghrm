@@ -1,3 +1,4 @@
+import { qsel } from './dom.js';
 import { refreshActiveSearch } from './search.js';
 import { setConnected } from './status.js';
 
@@ -57,7 +58,7 @@ export function shouldReloadForChange(current, path) {
 }
 
 function currentContentPath() {
-  const explorer = document.querySelector('article[data-explorer]');
+  const explorer = qsel('article[data-explorer]');
   if (explorer) {
     return {
       kind: 'dir',
@@ -65,7 +66,7 @@ function currentContentPath() {
     };
   }
 
-  const file = document.querySelector('.ghrm-page-shell[data-ghrm-view-kind]');
+  const file = qsel('.ghrm-page-shell[data-ghrm-view-kind]');
   if (file) {
     return {
       kind: 'file',
