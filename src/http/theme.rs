@@ -1,17 +1,18 @@
 use anyhow::Result;
 use include_dir::{Dir, DirEntry, include_dir};
-use notify::RecursiveMode;
-use notify_debouncer_full::{DebouncedEvent, new_debouncer};
 use std::{
+    collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
-    time::Duration,
+    thread,
+    time::{Duration, SystemTime},
 };
 use tokio::sync::broadcast;
 use tracing::info;
 
 const THEME_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/theme_version.txt"));
 const THEME_DIRS: &[&str] = &["css", "img", "js"];
+const DEV_WATCH_INTERVAL: Duration = Duration::from_millis(300);
 
 static CSS: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/css");
 static IMG: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/img");
@@ -109,28 +110,63 @@ pub fn spawn_dev_watch(reload_tx: broadcast::Sender<String>) -> Result<()> {
     let Some(root) = dev_dir() else {
         return Ok(());
     };
-    let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
-    let mut debouncer = new_debouncer(Duration::from_millis(120), None, tx)?;
-    for dir in THEME_DIRS {
-        debouncer.watch(root.join(dir), RecursiveMode::Recursive)?;
-    }
+    let mut snapshot = dev_snapshot(&root)?;
 
-    std::thread::spawn(move || {
-        let _debouncer = debouncer;
-        for res in rx {
-            let Ok(events) = res else {
+    thread::spawn(move || {
+        loop {
+            thread::sleep(DEV_WATCH_INTERVAL);
+            let Ok(next) = dev_snapshot(&root) else {
                 continue;
             };
-            if events
-                .iter()
-                .all(|event| matches!(event.event.kind, notify::event::EventKind::Access(_)))
-            {
-                continue;
+            if next != snapshot {
+                snapshot = next;
+                info!("theme asset change");
+                let _ = reload_tx.send("reload".to_string());
             }
-            info!("theme asset change");
-            let _ = reload_tx.send("reload".to_string());
         }
     });
+    Ok(())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct AssetStamp {
+    len: u64,
+    modified: Option<SystemTime>,
+}
+
+fn dev_snapshot(root: &Path) -> Result<BTreeMap<PathBuf, AssetStamp>> {
+    let mut snapshot = BTreeMap::new();
+    for dir in THEME_DIRS {
+        collect_dev_snapshot(root, &root.join(dir), &mut snapshot)?;
+    }
+    Ok(snapshot)
+}
+
+fn collect_dev_snapshot(
+    root: &Path,
+    dir: &Path,
+    snapshot: &mut BTreeMap<PathBuf, AssetStamp>,
+) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let path = entry.path();
+        if file_type.is_dir() {
+            collect_dev_snapshot(root, &path, snapshot)?;
+            continue;
+        }
+        if !file_type.is_file() {
+            continue;
+        }
+        let meta = entry.metadata()?;
+        snapshot.insert(
+            path.strip_prefix(root).unwrap().to_path_buf(),
+            AssetStamp {
+                len: meta.len(),
+                modified: meta.modified().ok(),
+            },
+        );
+    }
     Ok(())
 }
 

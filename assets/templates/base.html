@@ -15,6 +15,12 @@
     document.documentElement.setAttribute('data-theme', stored || system);
   })();
   </script>
+  <style>
+  svg[aria-hidden="true"] {
+    width: 1em;
+    height: 1em;
+  }
+  </style>
 {% for href in vendor_styles %}  <link rel="stylesheet" href="{{ href }}">
 {% endfor %}
   <script type="application/json" id="ghrm-assets">{{ asset_json|safe }}</script>
