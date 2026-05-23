@@ -5,22 +5,15 @@ let connected = false;
 let peekOpen = false;
 let detailsOpen = false;
 
-/**
- * @param {Document | Element} root
- */
-function populateAboutTitles(root = document) {
+function populateAboutTitles(root: Document | Element = document): void {
   for (const el of qselAllFrom(root, '[data-ghrm-title-ts]')) {
-    const ts = parseInt(el.dataset.ghrmTitleTs, 10);
+    const ts = parseInt(el.dataset.ghrmTitleTs!, 10);
     if (!ts) continue;
     el.title = formatAbsolute(ts);
   }
 }
 
-/**
- * @param {HTMLElement} peek
- * @param {string} path
- */
-function holdPeekHeight(peek, path) {
+function holdPeekHeight(peek: HTMLElement, path: string): number {
   if (!peekOpen || peek.hidden) {
     return 0;
   }
@@ -33,11 +26,7 @@ function holdPeekHeight(peek, path) {
   return height;
 }
 
-/**
- * @param {HTMLElement} peek
- * @param {string} path
- */
-function releasePeekHeight(peek, path) {
+function releasePeekHeight(peek: HTMLElement, path: string): void {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       if (peek.dataset.heightHold !== path) {
@@ -49,7 +38,7 @@ function releasePeekHeight(peek, path) {
   });
 }
 
-async function loadAboutPeek() {
+async function loadAboutPeek(): Promise<void> {
   const peek = qsel('#ghrm-about-peek');
   const path = window.location.pathname || '/';
   const statsPath = `${path}${window.location.search || ''}`;
@@ -108,7 +97,7 @@ async function loadAboutPeek() {
   }
 }
 
-function sync() {
+function sync(): void {
   const source = document.getElementById('ghrm-source-slot');
   const button = source?.querySelector('.ghrm-source-badge');
   const peek = qsel('#ghrm-about-peek');
@@ -138,29 +127,29 @@ function sync() {
   document.body?.classList.toggle('ghrm-about-open', peekOpen);
 }
 
-export function beginActivity() {
+export function beginActivity(): void {
   active += 1;
   sync();
 }
 
-export function endActivity() {
+export function endActivity(): void {
   active = Math.max(0, active - 1);
   sync();
 }
 
-export function setConnected(value) {
+export function setConnected(value: boolean): void {
   connected = value;
   sync();
 }
 
-export function syncServerStatus() {
+export function syncServerStatus(): void {
   if (peekOpen) {
     void loadAboutPeek();
   }
   sync();
 }
 
-export function setupStatusPeek() {
+export function setupStatusPeek(): void {
   document.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;

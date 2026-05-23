@@ -89,12 +89,13 @@ function scrollToHash(hash) {
 const vendorLoading = /* @__PURE__ */ new Map();
 let assetConfig;
 function loadScript(src) {
-  if (vendorLoading.has(src)) return vendorLoading.get(src);
+  const cached = vendorLoading.get(src);
+  if (cached) return cached;
   if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
   const promise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = src;
-    script.onload = resolve;
+    script.onload = () => resolve();
     script.onerror = reject;
     document.head.appendChild(script);
   });
