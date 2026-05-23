@@ -40,7 +40,7 @@ export default defineConfig({
       entry: {
         preview: resolve(srcRoot, 'preview.ts'),
         main: resolve(srcRoot, 'main.ts'),
-        gist: resolve(srcRoot, 'gist.js'),
+        gist: resolve(srcRoot, 'gist.ts'),
       },
       formats: ['es'],
       fileName: (_, name) => `${name}.js`,

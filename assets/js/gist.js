@@ -13,17 +13,21 @@ function currentArticle() {
   return document.querySelector("article[data-ghrm-gist]");
 }
 function currentStash() {
-  return document.querySelector("article[data-ghrm-gist-stash]");
+  return document.querySelector(
+    "article[data-ghrm-gist-stash]"
+  );
 }
 function currentGistPath(article) {
   return (article == null ? void 0 : article.dataset.ghrmGistPage) || gistPath;
 }
 function currentText(article) {
   var _a;
-  return ((_a = article == null ? void 0 : article.querySelector("[data-ghrm-gist-form] textarea")) == null ? void 0 : _a.value) || "";
+  return ((_a = article.querySelector("[data-ghrm-gist-form] textarea")) == null ? void 0 : _a.value) || "";
 }
 function hasUnsavedChanges(article) {
-  const input = article == null ? void 0 : article.querySelector("[data-ghrm-gist-form] textarea");
+  const input = article == null ? void 0 : article.querySelector(
+    "[data-ghrm-gist-form] textarea"
+  );
   if (!input) return false;
   const name = nameInput(article);
   const normalized = name ? normalizeName(name.value) : "";
@@ -58,10 +62,16 @@ function nameInput(article) {
   return article.querySelector("[data-ghrm-gist-name]");
 }
 function syncSaveAction(article, saving = false) {
-  const input = article.querySelector("[data-ghrm-gist-form] textarea");
+  const input = article.querySelector(
+    "[data-ghrm-gist-form] textarea"
+  );
   const name = nameInput(article);
-  const control = article.querySelector("[data-ghrm-gist-save-control]");
-  const button = article.querySelector("[data-ghrm-gist-save]");
+  const control = article.querySelector(
+    "[data-ghrm-gist-save-control]"
+  );
+  const button = article.querySelector(
+    "[data-ghrm-gist-save]"
+  );
   if (!input || !button) return;
   const normalized = name ? normalizeName(name.value) : "";
   const valid = !name || validName(normalized);
@@ -76,8 +86,12 @@ function syncSaveAction(article, saving = false) {
   }
 }
 function syncEditor(article) {
-  const editor = article.querySelector("[data-ghrm-gist-editor]");
-  const input = article.querySelector("[data-ghrm-gist-form] textarea");
+  const editor = article.querySelector(
+    "[data-ghrm-gist-editor]"
+  );
+  const input = article.querySelector(
+    "[data-ghrm-gist-form] textarea"
+  );
   const blob = article.querySelector(".ghrm-blob");
   if (!editor || !input || !blob) return;
   input.style.height = "auto";
@@ -95,9 +109,13 @@ function syncEditorSoon(article) {
   });
 }
 function syncBlob(article) {
-  const input = article.querySelector("[data-ghrm-gist-form] textarea");
+  const input = article.querySelector(
+    "[data-ghrm-gist-form] textarea"
+  );
   const source = article.querySelector(".ghrm-blob-source code");
-  const data = article.querySelector("template.ghrm-data");
+  const data = article.querySelector(
+    "template.ghrm-data"
+  );
   if (!input || !source) return;
   const text = input.value;
   if (source.textContent !== text) {
@@ -112,7 +130,9 @@ function syncBlob(article) {
   syncEditorSoon(article);
 }
 function syncBlobScroll(article) {
-  const input = article.querySelector("[data-ghrm-gist-form] textarea");
+  const input = article.querySelector(
+    "[data-ghrm-gist-form] textarea"
+  );
   const blob = article.querySelector(".ghrm-blob");
   if (!input || !blob) return;
   blob.scrollLeft = input.scrollLeft;
@@ -214,7 +234,9 @@ function handleIndentKey(event, article) {
   syncBlob(article);
 }
 function setStatus(article, message) {
-  const status = article == null ? void 0 : article.querySelector("[data-ghrm-gist-status]");
+  const status = article == null ? void 0 : article.querySelector(
+    "[data-ghrm-gist-status]"
+  );
   if (status) {
     status.textContent = message;
   }
@@ -225,7 +247,9 @@ function replaceGistUrl() {
   }
 }
 async function save(article) {
-  const input = article.querySelector("[data-ghrm-gist-form] textarea");
+  const input = article.querySelector(
+    "[data-ghrm-gist-form] textarea"
+  );
   if (!input) return;
   const name = nameInput(article);
   const normalized = name ? normalizeName(name.value) : "";
@@ -271,7 +295,7 @@ async function save(article) {
   }
 }
 async function refreshArticle(article, path, selector) {
-  if (!article) return;
+  if (!article) return null;
   const response = await fetch(path, {
     headers: {
       Accept: "text/html",
@@ -280,14 +304,14 @@ async function refreshArticle(article, path, selector) {
   });
   if (!response.ok) {
     setStatus(article, "Refresh failed");
-    return;
+    return null;
   }
   const html = await response.text();
   const doc = new DOMParser().parseFromString(html, "text/html");
   const next = doc.querySelector(selector);
   if (!next) {
     setStatus(article, "Refresh failed");
-    return;
+    return null;
   }
   article.replaceWith(next);
   populateDates();
@@ -315,7 +339,9 @@ async function refreshStash() {
 }
 function syncWrapToggle(article) {
   const toggle = article.querySelector("[data-ghrm-gist-wrap]");
-  const input = article.querySelector("[data-ghrm-gist-form] textarea");
+  const input = article.querySelector(
+    "[data-ghrm-gist-form] textarea"
+  );
   if (!toggle || !input) return;
   const wrap = getWrapPref();
   toggle.classList.toggle("is-active", wrap);
@@ -335,11 +361,15 @@ function setupGistEditor(article) {
     event.preventDefault();
     save(article);
   });
-  const saveButton = article.querySelector("[data-ghrm-gist-save]");
+  const saveButton = article.querySelector(
+    "[data-ghrm-gist-save]"
+  );
   saveButton == null ? void 0 : saveButton.addEventListener("click", () => {
     save(article);
   });
-  const input = article.querySelector("[data-ghrm-gist-form] textarea");
+  const input = article.querySelector(
+    "[data-ghrm-gist-form] textarea"
+  );
   if (input) {
     input.dataset.ghrmGistSaved = input.value;
   }
@@ -384,7 +414,9 @@ function rowRenameUrl(row) {
 }
 function restoreRowRename(cell, input) {
   const link = cell.querySelector("[data-ghrm-gist-row-link]");
-  const button = cell.querySelector("[data-ghrm-gist-rename-start]");
+  const button = cell.querySelector(
+    "[data-ghrm-gist-rename-start]"
+  );
   input.remove();
   if (link) {
     link.hidden = false;
@@ -393,9 +425,17 @@ function restoreRowRename(cell, input) {
     button.hidden = false;
   }
 }
+function renameResponse(value) {
+  if (typeof value !== "object" || value === null || typeof value.id !== "string" || typeof value.href !== "string" || typeof value.name !== "string") {
+    throw new Error("invalid gist rename response");
+  }
+  return value;
+}
 async function saveRowRename(row, cell, input) {
   if (input.dataset.ghrmSaving === "1") return;
-  const link = cell.querySelector("[data-ghrm-gist-row-link]");
+  const link = cell.querySelector(
+    "[data-ghrm-gist-row-link]"
+  );
   const next = normalizeName(input.value);
   const current = normalizeName((link == null ? void 0 : link.textContent) || "");
   if (!validName(next)) {
@@ -424,7 +464,7 @@ async function saveRowRename(row, cell, input) {
     input.focus();
     return;
   }
-  const renamed = await response.json();
+  const renamed = renameResponse(await response.json());
   row.dataset.ghrmGistId = renamed.id;
   if (link) {
     link.href = renamed.href;
@@ -434,15 +474,19 @@ async function saveRowRename(row, cell, input) {
 }
 function beginRowRename(row) {
   const cell = row.querySelector(".ghrm-gist-name-cell");
-  const link = cell == null ? void 0 : cell.querySelector("[data-ghrm-gist-row-link]");
-  const button = cell == null ? void 0 : cell.querySelector("[data-ghrm-gist-rename-start]");
+  const link = cell == null ? void 0 : cell.querySelector(
+    "[data-ghrm-gist-row-link]"
+  );
+  const button = cell == null ? void 0 : cell.querySelector(
+    "[data-ghrm-gist-rename-start]"
+  );
   if (!cell || !link || cell.querySelector("[data-ghrm-gist-row-input]"))
     return;
   const input = document.createElement("input");
   input.type = "text";
   input.className = "ghrm-gist-row-input";
   input.dataset.ghrmGistRowInput = "1";
-  input.value = link.textContent;
+  input.value = link.textContent || "";
   input.setAttribute("aria-label", "Paste filename");
   input.autocomplete = "off";
   input.spellcheck = false;
@@ -471,8 +515,12 @@ function beginRowRename(row) {
 function setupGistStash(stash) {
   if (stash.dataset.ghrmGistReady === "1") return;
   stash.dataset.ghrmGistReady = "1";
-  for (const row of stash.querySelectorAll("[data-ghrm-gist-row]")) {
-    const button = row.querySelector("[data-ghrm-gist-rename-start]");
+  for (const row of stash.querySelectorAll(
+    "[data-ghrm-gist-row]"
+  )) {
+    const button = row.querySelector(
+      "[data-ghrm-gist-rename-start]"
+    );
     button == null ? void 0 : button.addEventListener("click", () => {
       beginRowRename(row);
     });
