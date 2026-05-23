@@ -270,3 +270,776 @@ pub fn path_search(ctx: PathSearchCtx<'_>) -> Result<String> {
 pub fn content_search(ctx: ContentSearchCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::explorer::column;
+
+    fn columns_all_visible() -> column::Set {
+        column::Set::from_defaults(|_| true)
+    }
+
+    fn empty_shell() -> PageShell<'static> {
+        PageShell {
+            title: "Test",
+            body: "<article class=\"markdown-body\">content</article>",
+            source: "",
+            about: "",
+            show_logout: false,
+            gist_nav: "",
+            asset_json: "{}",
+            vendor_styles: &[],
+            vendor_scripts: &[],
+        }
+    }
+
+    struct ExplorerFixture {
+        sort_dir_control: SortDirControl,
+        headers_control: ColumnControl,
+    }
+
+    impl ExplorerFixture {
+        fn new() -> Self {
+            Self {
+                sort_dir_control: SortDirControl {
+                    href: "?sort_dir=desc".to_string(),
+                    label: "Sort ascending",
+                    icon: "ghrm-icon-chevron-up",
+                    active: false,
+                },
+                headers_control: ColumnControl {
+                    href: "?headers=1".to_string(),
+                    key: "headers",
+                    label: "Show column headers",
+                    title: "Show column headers",
+                    active: false,
+                    edge: false,
+                },
+            }
+        }
+
+        fn ctx(&self) -> ExplorerCtx<'_> {
+            static EMPTY_FILTER: &[FilterControl] = &[];
+            static EMPTY_SORT: &[SortControl] = &[];
+            static EMPTY_COLUMN: &[ColumnControl] = &[];
+            static EMPTY_CELLS: &[column::Cell] = &[];
+
+            ExplorerCtx {
+                article_class: "markdown-body",
+                features: "",
+                crumbs: "<span>root</span>",
+                current_path: "/test",
+                archive_zip_href: "/_ghrm/archive?fmt=zip",
+                archive_tar_zst_href: "/_ghrm/archive?fmt=tar.zst",
+                has_parent: false,
+                parent_href: "",
+                filter_menu_active: false,
+                filter_controls: EMPTY_FILTER,
+                sort_menu_active: false,
+                sort_controls: EMPTY_SORT,
+                sort_dir_control: &self.sort_dir_control,
+                column_menu_active: false,
+                column_controls: EMPTY_COLUMN,
+                headers_control: &self.headers_control,
+                column_defs: column::DEFS,
+                show_headers: true,
+                empty_cells: EMPTY_CELLS,
+                entries: &[],
+                readme: None,
+            }
+        }
+    }
+
+    fn minimal_page_ctx() -> PageCtx<'static> {
+        PageCtx {
+            features: "code",
+            crumbs: "<span>file.rs</span>",
+            preview_html: "<pre>code</pre>",
+            raw_html: "<pre>raw</pre>",
+            view_attrs: "data-ghrm-view-kind=\"source\"",
+            preview_hidden: false,
+            raw_hidden: true,
+        }
+    }
+
+    fn minimal_gist_ctx() -> GistCtx<'static> {
+        GistCtx {
+            has_paste: true,
+            paste_id: "test-paste",
+            page_href: "/_ghrm/gist",
+            raw_href: "/_ghrm/gist/raw",
+            stash_href: "/_ghrm/gist/stash",
+            paste_body: "hello world",
+            raw_html: "<pre>hello world</pre>",
+        }
+    }
+
+    fn minimal_gist_stash_ctx() -> GistStashCtx<'static> {
+        static ENTRIES: &[GistStashEntry] = &[];
+        GistStashCtx { entries: ENTRIES }
+    }
+
+    mod base_shell {
+        use super::*;
+
+        #[test]
+        fn htmx_body_attributes() {
+            let html = base(empty_shell()).unwrap();
+            assert!(html.contains("hx-boost=\"true\""), "body missing hx-boost");
+            assert!(
+                html.contains("hx-target=\"article.markdown-body\""),
+                "body missing hx-target for article swap"
+            );
+            assert!(
+                html.contains("hx-swap=\"outerHTML show:none\""),
+                "body missing hx-swap"
+            );
+            assert!(
+                html.contains("hx-push-url=\"true\""),
+                "body missing hx-push-url"
+            );
+        }
+
+        #[test]
+        fn ghrm_assets_script() {
+            let html = base(empty_shell()).unwrap();
+            assert!(
+                html.contains("id=\"ghrm-assets\""),
+                "missing #ghrm-assets script for asset manifest"
+            );
+            assert!(
+                html.contains("type=\"application/json\""),
+                "#ghrm-assets must be application/json"
+            );
+        }
+
+        #[test]
+        fn path_search_elements() {
+            let html = base(empty_shell()).unwrap();
+            assert!(
+                html.contains("id=\"ghrm-path-search\""),
+                "missing #ghrm-path-search container"
+            );
+            assert!(
+                html.contains("id=\"ghrm-path-search-input\""),
+                "missing #ghrm-path-search-input"
+            );
+            assert!(
+                html.contains("id=\"ghrm-path-search-toggle\""),
+                "missing #ghrm-path-search-toggle"
+            );
+            assert!(
+                html.contains("id=\"ghrm-search-mode\""),
+                "missing #ghrm-search-mode button"
+            );
+            assert!(
+                html.contains("id=\"ghrm-path-search-status\""),
+                "missing #ghrm-path-search-status"
+            );
+        }
+
+        #[test]
+        fn theme_toggle() {
+            let html = base(empty_shell()).unwrap();
+            assert!(
+                html.contains("id=\"theme-toggle\""),
+                "missing #theme-toggle button"
+            );
+        }
+
+        #[test]
+        fn doc_chrome_toggle() {
+            let html = base(empty_shell()).unwrap();
+            assert!(
+                html.contains("id=\"doc-chrome-toggle\""),
+                "missing #doc-chrome-toggle button"
+            );
+        }
+
+        #[test]
+        fn toc_panel() {
+            let html = base(empty_shell()).unwrap();
+            assert!(
+                html.contains("id=\"ghrm-toc-panel\""),
+                "missing #ghrm-toc-panel nav"
+            );
+        }
+    }
+
+    mod explorer_contracts {
+        use super::*;
+
+        #[test]
+        fn article_explorer_attrs() {
+            let fix = ExplorerFixture::new();
+            let html = explorer(fix.ctx()).unwrap();
+            assert!(
+                html.contains("data-explorer=\"true\""),
+                "explorer article missing data-explorer"
+            );
+            assert!(
+                html.contains("data-current-path=\"/test\""),
+                "explorer article missing data-current-path"
+            );
+            assert!(
+                html.contains("hx-history-elt"),
+                "explorer article missing hx-history-elt"
+            );
+            assert!(
+                html.contains("data-ghrm-features"),
+                "explorer article missing data-ghrm-features"
+            );
+        }
+
+        #[test]
+        fn archive_progress_elements() {
+            let fix = ExplorerFixture::new();
+            let html = explorer(fix.ctx()).unwrap();
+            assert!(
+                html.contains("id=\"ghrm-archive-progress\""),
+                "missing #ghrm-archive-progress"
+            );
+            assert!(
+                html.contains("class=\"ghrm-archive-progress-label\""),
+                "missing .ghrm-archive-progress-label"
+            );
+            assert!(
+                html.contains("class=\"ghrm-archive-progress-count\""),
+                "missing .ghrm-archive-progress-count"
+            );
+            assert!(
+                html.contains("class=\"ghrm-archive-progress-fill\""),
+                "missing .ghrm-archive-progress-fill"
+            );
+        }
+
+        #[test]
+        fn view_menu_elements() {
+            let fix = ExplorerFixture::new();
+            let html = explorer(fix.ctx()).unwrap();
+            assert!(
+                html.contains("id=\"ghrm-view-menu-toggle\""),
+                "missing #ghrm-view-menu-toggle"
+            );
+            assert!(
+                html.contains("id=\"ghrm-view-menu\""),
+                "missing #ghrm-view-menu"
+            );
+        }
+
+        #[test]
+        fn sort_menu_elements() {
+            let fix = ExplorerFixture::new();
+            let html = explorer(fix.ctx()).unwrap();
+            assert!(
+                html.contains("id=\"ghrm-sort-menu-toggle\""),
+                "missing #ghrm-sort-menu-toggle"
+            );
+            assert!(
+                html.contains("id=\"ghrm-sort-menu\""),
+                "missing #ghrm-sort-menu"
+            );
+            assert!(
+                html.contains("id=\"ghrm-sort-dir-toggle\""),
+                "missing #ghrm-sort-dir-toggle"
+            );
+        }
+
+        #[test]
+        fn archive_menu_elements() {
+            let fix = ExplorerFixture::new();
+            let html = explorer(fix.ctx()).unwrap();
+            assert!(
+                html.contains("id=\"ghrm-archive-menu-toggle\""),
+                "missing #ghrm-archive-menu-toggle"
+            );
+            assert!(
+                html.contains("id=\"ghrm-archive-menu\""),
+                "missing #ghrm-archive-menu"
+            );
+            assert!(
+                html.contains("data-ghrm-archive-url"),
+                "missing data-ghrm-archive-url on archive buttons"
+            );
+        }
+
+        #[test]
+        fn column_menu_elements() {
+            let fix = ExplorerFixture::new();
+            let html = explorer(fix.ctx()).unwrap();
+            assert!(
+                html.contains("id=\"ghrm-column-menu-toggle\""),
+                "missing #ghrm-column-menu-toggle"
+            );
+            assert!(
+                html.contains("id=\"ghrm-column-menu\""),
+                "missing #ghrm-column-menu"
+            );
+        }
+
+        #[test]
+        fn column_toggle_attrs() {
+            let fix = ExplorerFixture::new();
+            let col_control = ColumnControl {
+                href: "?col=date".to_string(),
+                key: "date",
+                label: "Modified date",
+                title: "Show file dates",
+                active: true,
+                edge: true,
+            };
+            let ctx = ExplorerCtx {
+                column_controls: std::slice::from_ref(&col_control),
+                ..fix.ctx()
+            };
+            let html = explorer(ctx).unwrap();
+            assert!(
+                html.contains("data-column-toggle=\"date\""),
+                "column control missing data-column-toggle"
+            );
+            assert!(
+                html.contains("data-column-edge=\"1\""),
+                "edge column missing data-column-edge"
+            );
+        }
+
+        #[test]
+        fn table_column_key_attrs() {
+            let fix = ExplorerFixture::new();
+            let cells = columns_all_visible().empty_cells();
+            let ctx = ExplorerCtx {
+                empty_cells: &cells,
+                has_parent: true,
+                ..fix.ctx()
+            };
+            let html = explorer(ctx).unwrap();
+            assert!(
+                html.contains("data-column-key=\"date\""),
+                "table cells missing data-column-key"
+            );
+        }
+
+        #[test]
+        fn column_headers_element() {
+            let fix = ExplorerFixture::new();
+            let ctx = ExplorerCtx {
+                has_parent: true,
+                ..fix.ctx()
+            };
+            let html = explorer(ctx).unwrap();
+            assert!(
+                html.contains("class=\"ghrm-column-headers\""),
+                "missing .ghrm-column-headers"
+            );
+        }
+
+        #[test]
+        fn entry_with_timestamp() {
+            let fix = ExplorerFixture::new();
+            let cells = vec![column::Cell {
+                key: "date",
+                class: "ghrm-nav-meta ghrm-nav-meta-time",
+                text_class: None,
+                text: None,
+                timestamp: Some(1700000000),
+                hidden: false,
+            }];
+            let entries = [ExplorerEntry {
+                name: "test.txt".to_string(),
+                href: "/test.txt".to_string(),
+                is_dir: false,
+                cells,
+            }];
+            let ctx = ExplorerCtx {
+                entries: &entries,
+                ..fix.ctx()
+            };
+            let html = explorer(ctx).unwrap();
+            assert!(
+                html.contains("data-ts=\"1700000000\""),
+                "timestamp cell missing data-ts"
+            );
+        }
+    }
+
+    mod file_view_contracts {
+        use super::*;
+
+        #[test]
+        fn page_shell_view_kind() {
+            let html = page(minimal_page_ctx()).unwrap();
+            assert!(
+                html.contains("class=\"ghrm-page-shell\""),
+                "missing .ghrm-page-shell"
+            );
+            assert!(
+                html.contains("data-ghrm-view-kind"),
+                "page shell missing data-ghrm-view-kind"
+            );
+        }
+
+        #[test]
+        fn preview_and_raw_panes() {
+            let html = page(minimal_page_ctx()).unwrap();
+            assert!(
+                html.contains("data-ghrm-preview-pane"),
+                "missing [data-ghrm-preview-pane]"
+            );
+            assert!(
+                html.contains("data-ghrm-raw-pane"),
+                "missing [data-ghrm-raw-pane]"
+            );
+        }
+
+        #[test]
+        fn toc_button() {
+            let html = page(minimal_page_ctx()).unwrap();
+            assert!(
+                html.contains("data-ghrm-toc-btn"),
+                "missing [data-ghrm-toc-btn]"
+            );
+        }
+
+        #[test]
+        fn article_history_elt() {
+            let html = page(minimal_page_ctx()).unwrap();
+            assert!(
+                html.contains("hx-history-elt"),
+                "page article missing hx-history-elt"
+            );
+        }
+
+        #[test]
+        fn features_attr() {
+            let html = page(minimal_page_ctx()).unwrap();
+            assert!(
+                html.contains("data-ghrm-features"),
+                "page article missing data-ghrm-features"
+            );
+        }
+    }
+
+    mod gist_contracts {
+        use super::*;
+
+        #[test]
+        fn gist_article_attrs() {
+            let html = gist(minimal_gist_ctx()).unwrap();
+            assert!(
+                html.contains("data-ghrm-gist"),
+                "gist article missing data-ghrm-gist"
+            );
+            assert!(
+                html.contains("data-ghrm-gist-page"),
+                "gist article missing data-ghrm-gist-page"
+            );
+            assert!(
+                html.contains("data-ghrm-gist-id"),
+                "gist article missing data-ghrm-gist-id"
+            );
+        }
+
+        #[test]
+        fn gist_form_elements() {
+            let html = gist(minimal_gist_ctx()).unwrap();
+            assert!(
+                html.contains("data-ghrm-gist-form"),
+                "missing [data-ghrm-gist-form]"
+            );
+            assert!(
+                html.contains("data-ghrm-gist-editor"),
+                "missing [data-ghrm-gist-editor]"
+            );
+        }
+
+        #[test]
+        fn gist_controls() {
+            let html = gist(minimal_gist_ctx()).unwrap();
+            assert!(
+                html.contains("data-ghrm-gist-wrap"),
+                "missing [data-ghrm-gist-wrap] toggle"
+            );
+            assert!(
+                html.contains("data-ghrm-gist-copy"),
+                "missing [data-ghrm-gist-copy] button"
+            );
+            assert!(
+                html.contains("data-ghrm-gist-save-control"),
+                "missing [data-ghrm-gist-save-control]"
+            );
+            assert!(
+                html.contains("data-ghrm-gist-save"),
+                "missing [data-ghrm-gist-save] button"
+            );
+        }
+
+        #[test]
+        fn gist_name_input() {
+            let html = gist(minimal_gist_ctx()).unwrap();
+            assert!(
+                html.contains("data-ghrm-gist-name"),
+                "missing [data-ghrm-gist-name] input"
+            );
+        }
+
+        #[test]
+        fn gist_status() {
+            let html = gist(minimal_gist_ctx()).unwrap();
+            assert!(
+                html.contains("data-ghrm-gist-status"),
+                "missing [data-ghrm-gist-status]"
+            );
+        }
+
+        #[test]
+        fn gist_stash_article() {
+            let html = gist_stash(minimal_gist_stash_ctx()).unwrap();
+            assert!(
+                html.contains("data-ghrm-gist-stash"),
+                "stash article missing data-ghrm-gist-stash"
+            );
+        }
+
+        #[test]
+        fn gist_stash_row_attrs() {
+            let ctx = GistStashCtx {
+                entries: &[GistStashEntry {
+                    id: "abc123".to_string(),
+                    name: "test".to_string(),
+                    href: "/_ghrm/gist?id=abc123".to_string(),
+                    modified: Some(1700000000),
+                    size: "100 B".to_string(),
+                    lines: "10".to_string(),
+                    current: false,
+                }],
+            };
+            let html = gist_stash(ctx).unwrap();
+            assert!(
+                html.contains("data-ghrm-gist-row"),
+                "stash row missing data-ghrm-gist-row"
+            );
+            assert!(
+                html.contains("data-ghrm-gist-id=\"abc123\""),
+                "stash row missing data-ghrm-gist-id"
+            );
+            assert!(
+                html.contains("data-ghrm-gist-row-link"),
+                "stash row missing data-ghrm-gist-row-link"
+            );
+            assert!(
+                html.contains("data-ghrm-gist-rename-start"),
+                "stash row missing data-ghrm-gist-rename-start"
+            );
+        }
+    }
+
+    mod search_fragment_contracts {
+        use super::*;
+
+        fn path_ctx_with_row() -> PathSearchCtx<'static> {
+            static CELLS: [column::Cell; 1] = [column::Cell {
+                key: "date",
+                class: "ghrm-nav-meta ghrm-nav-meta-time",
+                text_class: None,
+                text: None,
+                timestamp: Some(1700000000),
+                hidden: false,
+            }];
+            static ROWS: [PathSearchRow<'static>; 1] = [PathSearchRow {
+                href: String::new(),
+                html: String::new(),
+                is_dir: false,
+                cells: &CELLS,
+            }];
+            PathSearchCtx {
+                pending: false,
+                rows: &ROWS,
+                empty_colspan: 5,
+            }
+        }
+
+        #[test]
+        fn path_search_row_structure() {
+            let html = path_search(path_ctx_with_row()).unwrap();
+            assert!(
+                html.contains("class=\"ghrm-nav-icon\""),
+                "path row missing .ghrm-nav-icon cell"
+            );
+            assert!(
+                html.contains("class=\"ghrm-nav-name\""),
+                "path row missing .ghrm-nav-name cell"
+            );
+            assert!(
+                html.contains("class=\"ghrm-search-path\""),
+                "path row missing .ghrm-search-path link"
+            );
+        }
+
+        #[test]
+        fn path_search_column_attrs() {
+            let html = path_search(path_ctx_with_row()).unwrap();
+            assert!(
+                html.contains("data-column-key=\"date\""),
+                "path row cells missing data-column-key"
+            );
+            assert!(
+                html.contains("data-ts=\"1700000000\""),
+                "path row cells missing data-ts"
+            );
+        }
+
+        #[test]
+        fn path_search_empty_state() {
+            let ctx = PathSearchCtx {
+                pending: false,
+                rows: &[],
+                empty_colspan: 5,
+            };
+            let html = path_search(ctx).unwrap();
+            assert!(
+                html.contains("class=\"ghrm-search-empty\""),
+                "empty path search missing .ghrm-search-empty"
+            );
+        }
+
+        #[test]
+        fn path_search_pending_state() {
+            let ctx = PathSearchCtx {
+                pending: true,
+                rows: &[],
+                empty_colspan: 5,
+            };
+            let html = path_search(ctx).unwrap();
+            assert!(
+                html.contains("Indexing paths"),
+                "pending path search should show indexing message"
+            );
+        }
+
+        #[test]
+        fn content_search_row_structure() {
+            let ctx = ContentSearchCtx {
+                rows: &[ContentSearchRow {
+                    href: "/file.rs#L10".to_string(),
+                    path: "file.rs".to_string(),
+                    line: 10,
+                    html: "match".to_string(),
+                    modified: Some(1700000000),
+                }],
+                truncated: false,
+                max_rows: 100,
+                empty_colspan: 5,
+                content_colspan: 3,
+                summary_colspan: 4,
+            };
+            let html = content_search(ctx).unwrap();
+            assert!(
+                html.contains("class=\"ghrm-content-result\""),
+                "content row missing .ghrm-content-result"
+            );
+            assert!(
+                html.contains("class=\"ghrm-content-path\""),
+                "content row missing .ghrm-content-path"
+            );
+            assert!(
+                html.contains("class=\"ghrm-content-line\""),
+                "content row missing .ghrm-content-line"
+            );
+            assert!(
+                html.contains("class=\"ghrm-content-text\""),
+                "content row missing .ghrm-content-text"
+            );
+        }
+
+        #[test]
+        fn content_search_timestamp() {
+            let ctx = ContentSearchCtx {
+                rows: &[ContentSearchRow {
+                    href: "/file.rs".to_string(),
+                    path: "file.rs".to_string(),
+                    line: 1,
+                    html: "match".to_string(),
+                    modified: Some(1700000000),
+                }],
+                truncated: false,
+                max_rows: 100,
+                empty_colspan: 5,
+                content_colspan: 3,
+                summary_colspan: 4,
+            };
+            let html = content_search(ctx).unwrap();
+            assert!(
+                html.contains("data-ts=\"1700000000\""),
+                "content row missing data-ts"
+            );
+        }
+
+        #[test]
+        fn content_search_empty_state() {
+            let ctx = ContentSearchCtx {
+                rows: &[],
+                truncated: false,
+                max_rows: 100,
+                empty_colspan: 5,
+                content_colspan: 3,
+                summary_colspan: 4,
+            };
+            let html = content_search(ctx).unwrap();
+            assert!(
+                html.contains("class=\"ghrm-search-empty\""),
+                "empty content search missing .ghrm-search-empty"
+            );
+        }
+
+        #[test]
+        fn content_search_truncated_state() {
+            let ctx = ContentSearchCtx {
+                rows: &[ContentSearchRow {
+                    href: "/file.rs".to_string(),
+                    path: "file.rs".to_string(),
+                    line: 1,
+                    html: "match".to_string(),
+                    modified: None,
+                }],
+                truncated: true,
+                max_rows: 100,
+                empty_colspan: 5,
+                content_colspan: 3,
+                summary_colspan: 4,
+            };
+            let html = content_search(ctx).unwrap();
+            assert!(
+                html.contains("class=\"ghrm-search-truncated\""),
+                "truncated content search missing .ghrm-search-truncated"
+            );
+        }
+
+        #[test]
+        fn content_search_summary() {
+            let ctx = ContentSearchCtx {
+                rows: &[ContentSearchRow {
+                    href: "/file.rs".to_string(),
+                    path: "file.rs".to_string(),
+                    line: 1,
+                    html: "match".to_string(),
+                    modified: None,
+                }],
+                truncated: false,
+                max_rows: 100,
+                empty_colspan: 5,
+                content_colspan: 3,
+                summary_colspan: 4,
+            };
+            let html = content_search(ctx).unwrap();
+            assert!(
+                html.contains("class=\"ghrm-search-summary\""),
+                "content search missing .ghrm-search-summary"
+            );
+            assert!(
+                html.contains("class=\"ghrm-search-summary-count\""),
+                "content search missing .ghrm-search-summary-count"
+            );
+        }
+    }
+}
