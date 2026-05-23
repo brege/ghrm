@@ -103,15 +103,15 @@ function openTag(node) {
 }
 function pushHighlightedNode(node, lines, stack) {
   if (node.nodeType === Node.TEXT_NODE) {
-    const parts = node.textContent.split("\n");
+    const parts = (node.textContent || "").split("\n");
     for (let idx = 0; idx < parts.length; idx += 1) {
       if (idx > 0) {
         for (let rev = stack.length - 1; rev >= 0; rev -= 1) {
           lines[lines.length - 1] += `</${stack[rev].tagName.toLowerCase()}>`;
         }
         lines.push("");
-        for (const el of stack) {
-          lines[lines.length - 1] += openTag(el);
+        for (const el2 of stack) {
+          lines[lines.length - 1] += openTag(el2);
         }
       }
       lines[lines.length - 1] += escapeHtml(parts[idx]);
@@ -121,18 +121,19 @@ function pushHighlightedNode(node, lines, stack) {
   if (node.nodeType !== Node.ELEMENT_NODE) {
     return;
   }
-  lines[lines.length - 1] += openTag(node);
-  stack.push(node);
-  for (const child of node.childNodes) {
+  const el = node;
+  lines[lines.length - 1] += openTag(el);
+  stack.push(el);
+  for (const child of el.childNodes) {
     pushHighlightedNode(child, lines, stack);
   }
   stack.pop();
-  lines[lines.length - 1] += `</${node.tagName.toLowerCase()}>`;
+  lines[lines.length - 1] += `</${el.tagName.toLowerCase()}>`;
 }
 function renderBlob(block) {
   const code = block.querySelector(".ghrm-blob-source code");
   const body = block.querySelector(".ghrm-blob-table tbody");
-  if (!code || !body) {
+  if (!(code instanceof HTMLElement) || !body) {
     return;
   }
   highlightBlobCode(code);
@@ -157,14 +158,15 @@ function isShellCode(code) {
   );
 }
 function normalizeShellHighlight(code) {
+  var _a;
   if (!isShellCode(code)) {
     return;
   }
   for (const node of code.querySelectorAll(".hljs-built_in")) {
-    if (SHELL_BUILTINS.has(node.textContent.trim())) {
+    if (SHELL_BUILTINS.has(((_a = node.textContent) == null ? void 0 : _a.trim()) || "")) {
       continue;
     }
-    node.replaceWith(document.createTextNode(node.textContent));
+    node.replaceWith(document.createTextNode(node.textContent || ""));
   }
 }
 const copyResetDelay = 1e3;
@@ -234,6 +236,7 @@ function showCopied(button) {
 }
 function addCopyButtons() {
   for (const pre of document.querySelectorAll(".markdown-body pre")) {
+    if (!(pre instanceof HTMLPreElement)) continue;
     if (pre.closest("[data-ghrm-raw-pane]")) {
       continue;
     }
@@ -259,8 +262,12 @@ function addCopyButtons() {
   }
 }
 function getSource(block) {
-  var _a, _b, _c;
-  return ((_c = (_b = (_a = block.querySelector(".ghrm-data")) == null ? void 0 : _a.content) == null ? void 0 : _b.textContent) == null ? void 0 : _c.trim()) || "";
+  var _a, _b;
+  const data = block.querySelector(".ghrm-data");
+  if (data instanceof HTMLTemplateElement) {
+    return ((_b = (_a = data.content) == null ? void 0 : _a.textContent) == null ? void 0 : _b.trim()) || "";
+  }
+  return "";
 }
 function isDarkTheme() {
   return document.documentElement.getAttribute("data-theme") === "dark";
@@ -277,7 +284,7 @@ function setError(block, message) {
 }
 function clearError(block) {
   const node = block.querySelector(".ghrm-error");
-  if (node) {
+  if (node instanceof HTMLElement) {
     node.hidden = true;
     node.textContent = "";
   }
@@ -490,7 +497,7 @@ function mermaidControls() {
 }
 function setupMermaidControls(block, target) {
   const svg = target.querySelector("svg");
-  if (!svg || typeof window.svgPanZoom !== "function") {
+  if (!(svg instanceof SVGElement) || typeof window.svgPanZoom !== "function") {
     return;
   }
   if (block._ghrmPanZoom) {
@@ -526,6 +533,7 @@ function setupMermaidControls(block, target) {
   panZoom.center();
   const step = 50;
   for (const btn of target.querySelectorAll(".ghrm-mermaid-controls button")) {
+    if (!(btn instanceof HTMLButtonElement)) continue;
     btn.addEventListener("click", () => {
       const action = btn.dataset.action;
       if (action === "zoom-in") panZoom.zoomIn();
@@ -607,7 +615,7 @@ async function renderMermaid() {
   for (const block of blocks) {
     const source = getSource(block);
     const target = block.querySelector(".ghrm-mermaid-diagram");
-    if (!source || !target) {
+    if (!source || !(target instanceof HTMLElement)) {
       continue;
     }
     clearError(block);

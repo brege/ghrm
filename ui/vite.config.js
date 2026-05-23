@@ -20,6 +20,17 @@ function generatedBanner() {
   };
 }
 
+const sharedModules = ['dom', 'prefs', 'vendor', 'status', 'live'];
+
+function isSharedModule(id) {
+  for (const name of sharedModules) {
+    if (id.endsWith(`/${name}.js`) || id.endsWith(`/${name}.ts`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export default defineConfig({
   plugins: [generatedBanner()],
   build: {
@@ -27,9 +38,9 @@ export default defineConfig({
     emptyOutDir: true,
     lib: {
       entry: {
-        preview: resolve(srcRoot, 'preview.js'),
-        main: resolve(srcRoot, 'main.js'),
-        gist: resolve(srcRoot, 'gist.js'),
+        preview: resolve(srcRoot, 'preview.ts'),
+        main: resolve(srcRoot, 'main.ts'),
+        gist: resolve(srcRoot, 'gist.ts'),
       },
       formats: ['es'],
       fileName: (_, name) => `${name}.js`,
@@ -43,13 +54,7 @@ export default defineConfig({
           if (id.includes('/adapters/')) {
             return 'adapters';
           }
-          if (
-            id.includes('/dom.js') ||
-            id.includes('/prefs.js') ||
-            id.includes('/vendor.js') ||
-            id.includes('/status.js') ||
-            id.includes('/live.js')
-          ) {
+          if (isSharedModule(id)) {
             return 'shared';
           }
           return undefined;

@@ -12,7 +12,8 @@ function tocRoot() {
   return document.querySelector("article[data-explorer] .ghrm-readme-content") || document.querySelector("article.markdown-body");
 }
 function tocButton() {
-  return document.querySelector("[data-ghrm-toc-btn]");
+  const el = document.querySelector("[data-ghrm-toc-btn]");
+  return el instanceof HTMLButtonElement ? el : null;
 }
 function syncTocButtons(show) {
   const btn = tocButton();
@@ -30,7 +31,7 @@ function headingText(heading) {
   for (const anchor of copy.querySelectorAll(".ghrm-anchor")) {
     anchor.remove();
   }
-  return copy.textContent.replace(/\s+/g, " ").trim();
+  return (copy.textContent || "").replace(/\s+/g, " ").trim();
 }
 function currentHeadingId() {
   const root = tocRoot();
@@ -131,7 +132,9 @@ function setupToc() {
 }
 function rawText(container) {
   var _a, _b, _c;
-  return ((_b = (_a = container.querySelector("[data-ghrm-raw-pane] .ghrm-data")) == null ? void 0 : _a.content) == null ? void 0 : _b.textContent) || ((_c = container.querySelector("[data-ghrm-raw-pane] code")) == null ? void 0 : _c.textContent) || "";
+  return ((_b = (_a = container.querySelector(
+    "[data-ghrm-raw-pane] .ghrm-data"
+  )) == null ? void 0 : _a.content) == null ? void 0 : _b.textContent) || ((_c = container.querySelector("[data-ghrm-raw-pane] code")) == null ? void 0 : _c.textContent) || "";
 }
 function syncFileView(container, raw) {
   const preview = container.querySelector("[data-ghrm-preview-pane]");
@@ -149,12 +152,16 @@ function syncFileView(container, raw) {
 }
 function wrapApplies(container) {
   const kind = container.dataset.ghrmViewKind;
-  const rawPane = container.querySelector("[data-ghrm-raw-pane]");
+  const rawPane = container.querySelector(
+    "[data-ghrm-raw-pane]"
+  );
   const raw = rawPane && !rawPane.hidden;
   return raw || kind === "markdown";
 }
 function syncWrapToggle(container) {
-  const wrapToggle = container.querySelector("[data-ghrm-wrap-toggle]");
+  const wrapToggle = container.querySelector(
+    "[data-ghrm-wrap-toggle]"
+  );
   if (!wrapToggle) return;
   const disabled = !wrapApplies(container);
   wrapToggle.disabled = disabled;
@@ -271,7 +278,9 @@ function setupFileViews() {
   for (const container of document.querySelectorAll(
     ".ghrm-page-shell[data-ghrm-view-kind]"
   )) {
-    setupFileView(container);
+    if (container instanceof HTMLElement) {
+      setupFileView(container);
+    }
   }
 }
 let pendingSamePathSwap = false;

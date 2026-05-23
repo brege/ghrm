@@ -3,47 +3,62 @@ import {
   copyIcon,
   showCopied,
   writeClipboard,
-} from './adapters/copy.js';
-import { icon, isHtmlFile } from './dom.js';
-import { applyWrapState, getWrapPref, setWrapPref } from './prefs.js';
-import { buildToc } from './toc.js';
+} from './adapters/copy';
+import { icon, isHtmlFile } from './dom';
+import { applyWrapState, getWrapPref, setWrapPref } from './prefs';
+import { buildToc } from './toc';
 
-function rawText(container) {
+interface FileViewContainer extends HTMLElement {
+  dataset: DOMStringMap & {
+    ghrmViewKind?: string;
+    ghrmRawUrl?: string;
+    ghrmDownloadUrl?: string;
+  };
+}
+
+function rawText(container: FileViewContainer): string {
   return (
-    container.querySelector('[data-ghrm-raw-pane] .ghrm-data')?.content
-      ?.textContent ||
+    (
+      container.querySelector(
+        '[data-ghrm-raw-pane] .ghrm-data',
+      ) as HTMLTemplateElement | null
+    )?.content?.textContent ||
     container.querySelector('[data-ghrm-raw-pane] code')?.textContent ||
     ''
   );
 }
 
-function syncFileView(container, raw) {
+function syncFileView(container: FileViewContainer, raw: boolean): void {
   const preview = container.querySelector('[data-ghrm-preview-pane]');
   const rawPane = container.querySelector('[data-ghrm-raw-pane]');
   const toggle = container.querySelector('[data-ghrm-raw-toggle]');
   if (!preview || !rawPane || !toggle) return;
 
-  preview.hidden = raw;
-  rawPane.hidden = !raw;
+  (preview as HTMLElement).hidden = raw;
+  (rawPane as HTMLElement).hidden = !raw;
   toggle.classList.toggle('is-active', raw);
   toggle.setAttribute('aria-pressed', raw ? 'true' : 'false');
 
   const label = raw ? 'Show preview' : 'Show raw';
   toggle.setAttribute('aria-label', label);
-  toggle.title = label;
+  (toggle as HTMLElement).title = label;
 
   syncWrapToggle(container);
 }
 
-function wrapApplies(container) {
+function wrapApplies(container: FileViewContainer): boolean {
   const kind = container.dataset.ghrmViewKind;
-  const rawPane = container.querySelector('[data-ghrm-raw-pane]');
+  const rawPane = container.querySelector(
+    '[data-ghrm-raw-pane]',
+  ) as HTMLElement | null;
   const raw = rawPane && !rawPane.hidden;
   return raw || kind === 'markdown';
 }
 
-function syncWrapToggle(container) {
-  const wrapToggle = container.querySelector('[data-ghrm-wrap-toggle]');
+function syncWrapToggle(container: FileViewContainer): void {
+  const wrapToggle = container.querySelector(
+    '[data-ghrm-wrap-toggle]',
+  ) as HTMLButtonElement | null;
   if (!wrapToggle) return;
 
   const disabled = !wrapApplies(container);
@@ -67,11 +82,11 @@ function syncWrapToggle(container) {
   }
 }
 
-function fileActionsHost(container) {
+function fileActionsHost(container: FileViewContainer): Element | null {
   return container.querySelector('.ghrm-explorer-header .ghrm-header-actions');
 }
 
-function setupFileView(container) {
+function setupFileView(container: FileViewContainer): void {
   const kind = container.dataset.ghrmViewKind;
   const rawUrl = container.dataset.ghrmRawUrl;
   const downloadUrl = container.dataset.ghrmDownloadUrl;
@@ -174,10 +189,12 @@ function setupFileView(container) {
   syncFileView(container, kind === 'source');
 }
 
-export function setupFileViews() {
+export function setupFileViews(): void {
   for (const container of document.querySelectorAll(
     '.ghrm-page-shell[data-ghrm-view-kind]',
   )) {
-    setupFileView(container);
+    if (container instanceof HTMLElement) {
+      setupFileView(container as FileViewContainer);
+    }
   }
 }

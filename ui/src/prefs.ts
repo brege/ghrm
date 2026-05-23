@@ -1,4 +1,4 @@
-export function setupThemeToggle() {
+export function setupThemeToggle(): void {
   const btn = document.getElementById('theme-toggle');
   if (!btn) return;
   btn.addEventListener('click', () => {
@@ -12,11 +12,11 @@ export function setupThemeToggle() {
   });
 }
 
-function hasDocChrome() {
+function hasDocChrome(): boolean {
   return !!document.querySelector('.ghrm-page-shell[data-ghrm-view-kind]');
 }
 
-function syncDocChromeToggle() {
+function syncDocChromeToggle(): void {
   const btn = document.getElementById('doc-chrome-toggle');
   if (!btn) return;
   const show = hasDocChrome();
@@ -32,13 +32,13 @@ function syncDocChromeToggle() {
   btn.setAttribute('aria-label', label);
 }
 
-export function applyDocChromePref() {
+export function applyDocChromePref(): void {
   const flat = localStorage.getItem('ghrm-doc-flat') === '1';
   document.body.classList.toggle('ghrm-doc-flat', flat && hasDocChrome());
   syncDocChromeToggle();
 }
 
-export function setupDocChromeToggle() {
+export function setupDocChromeToggle(): void {
   const btn = document.getElementById('doc-chrome-toggle');
   if (!btn) return;
   btn.addEventListener('click', () => {
@@ -50,14 +50,14 @@ export function setupDocChromeToggle() {
   applyDocChromePref();
 }
 
-export function getWrapPref() {
+export function getWrapPref(): boolean {
   return localStorage.getItem('ghrm-wrap') === '1';
 }
 
-export function setWrapPref(wrap) {
+export function setWrapPref(wrap: boolean): void {
   localStorage.setItem('ghrm-wrap', wrap ? '1' : '0');
 }
 
-export function applyWrapState(wrap) {
+export function applyWrapState(wrap: boolean): void {
   document.body.classList.toggle('ghrm-wrap', wrap);
 }

@@ -1,8 +1,18 @@
-import { qsel } from './dom.js';
-import { refreshActiveSearch } from './search.js';
-import { setConnected } from './status.js';
+import { qsel } from './dom';
+import { refreshActiveSearch } from './search';
+import { setConnected } from './status';
 
-export function setupLiveReload() {
+export interface LiveEvent {
+  name: string;
+  path: string | null;
+}
+
+export interface ContentPath {
+  kind: 'dir' | 'file';
+  path: string;
+}
+
+export function setupLiveReload(): void {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${proto}//${location.host}/_ghrm/ws`;
   let connectedOnce = false;
@@ -32,7 +42,7 @@ export function setupLiveReload() {
   connect();
 }
 
-export function parseLiveMessage(message) {
+export function parseLiveMessage(message: string): LiveEvent {
   const reloadPrefix = 'reload:';
   if (message.startsWith(reloadPrefix)) {
     return {
@@ -43,11 +53,14 @@ export function parseLiveMessage(message) {
   return { name: message, path: null };
 }
 
-export function cleanRelPath(path) {
+export function cleanRelPath(path: string): string {
   return stripTrailingSlashes(stripLeadingSlashes(path));
 }
 
-export function shouldReloadForChange(current, path) {
+export function shouldReloadForChange(
+  current: ContentPath | null,
+  path: string | null,
+): boolean {
   if (!current) return path === null;
   if (path === null) return true;
 
@@ -57,7 +70,7 @@ export function shouldReloadForChange(current, path) {
   return parentPath(changed) === current.path;
 }
 
-function currentContentPath() {
+function currentContentPath(): ContentPath | null {
   const explorer = qsel('article[data-explorer]');
   if (explorer) {
     return {
@@ -77,7 +90,7 @@ function currentContentPath() {
   return null;
 }
 
-function dispatchLiveEvent(event) {
+function dispatchLiveEvent(event: LiveEvent): void {
   const detail = { name: event.name, path: event.path };
   document.dispatchEvent(new CustomEvent('ghrm:live', { detail }));
   document.dispatchEvent(
@@ -85,7 +98,7 @@ function dispatchLiveEvent(event) {
   );
 }
 
-function handleLiveEvent(message) {
+function handleLiveEvent(message: string): void {
   const event = parseLiveMessage(message);
   if (
     event.name === 'reload' &&
@@ -102,7 +115,7 @@ function handleLiveEvent(message) {
   }
 }
 
-function stripLeadingSlashes(path) {
+function stripLeadingSlashes(path: string): string {
   let start = 0;
   while (path[start] === '/') {
     start += 1;
@@ -110,7 +123,7 @@ function stripLeadingSlashes(path) {
   return path.slice(start);
 }
 
-function stripTrailingSlashes(path) {
+function stripTrailingSlashes(path: string): string {
   let end = path.length;
   while (end > 0 && path[end - 1] === '/') {
     end -= 1;
@@ -118,7 +131,7 @@ function stripTrailingSlashes(path) {
   return path.slice(0, end);
 }
 
-function parentPath(path) {
+function parentPath(path: string): string {
   const clean = cleanRelPath(path);
   const slash = clean.lastIndexOf('/');
   return slash === -1 ? '' : clean.slice(0, slash);

@@ -1,7 +1,79 @@
-import { renderBlobs } from './adapters/code.js';
-import { showCopied, writeClipboard } from './adapters/copy.js';
-import { populateDates } from './explorer.js';
-import { applyWrapState, getWrapPref, setWrapPref } from './prefs.js';
+import { renderBlobs } from './adapters/code';
+import { showCopied, writeClipboard } from './adapters/copy';
+import { populateDates } from './explorer';
+import { applyWrapState, getWrapPref, setWrapPref } from './prefs';
+
+interface GistArticle extends HTMLElement {
+  dataset: DOMStringMap & {
+    ghrmGistId?: string;
+    ghrmGistPage?: string;
+    ghrmGistReady?: string;
+  };
+}
+
+interface GistStashArticle extends HTMLElement {
+  dataset: DOMStringMap & {
+    ghrmGistReady?: string;
+  };
+}
+
+interface GistRow extends HTMLElement {
+  dataset: DOMStringMap & {
+    ghrmGistId: string;
+  };
+}
+
+interface GistNameInput extends HTMLInputElement {
+  dataset: DOMStringMap & {
+    ghrmGistSaved?: string;
+  };
+}
+
+interface GistTextarea extends HTMLTextAreaElement {
+  dataset: DOMStringMap & {
+    ghrmGistSaved?: string;
+  };
+}
+
+interface GistCopyButton extends HTMLButtonElement {
+  _ghrmCopyReset?: ReturnType<typeof setTimeout> | null;
+}
+
+interface GistRowInput extends HTMLInputElement {
+  dataset: DOMStringMap & {
+    ghrmGistRowInput?: string;
+    ghrmSaving?: string;
+  };
+}
+
+interface LineRange {
+  lineStart: number;
+  lineEnd: number;
+}
+
+interface Removal {
+  position: number;
+  size: number;
+}
+
+interface UndentBlock {
+  text: string;
+  removals: Removal[];
+}
+
+interface IndentEdit {
+  start: number;
+  end: number;
+  text: string;
+  selectionStart: number;
+  selectionEnd: number;
+}
+
+interface RenameResponse {
+  id: string;
+  href: string;
+  name: string;
+}
 
 const gistPath = '/_ghrm/gist';
 const stashPath = '/_ghrm/gist/stash';
@@ -12,24 +84,31 @@ let liveBound = false;
 let resizeBound = false;
 let pendingGistRefresh = false;
 
-function currentArticle() {
-  return document.querySelector('article[data-ghrm-gist]');
+function currentArticle(): GistArticle | null {
+  return document.querySelector<GistArticle>('article[data-ghrm-gist]');
 }
 
-function currentStash() {
-  return document.querySelector('article[data-ghrm-gist-stash]');
+function currentStash(): GistStashArticle | null {
+  return document.querySelector<GistStashArticle>(
+    'article[data-ghrm-gist-stash]',
+  );
 }
 
-function currentGistPath(article) {
+function currentGistPath(article: GistArticle | null): string {
   return article?.dataset.ghrmGistPage || gistPath;
 }
 
-function currentText(article) {
-  return article?.querySelector('[data-ghrm-gist-form] textarea')?.value || '';
+function currentText(article: GistArticle): string {
+  return (
+    article.querySelector<GistTextarea>('[data-ghrm-gist-form] textarea')
+      ?.value || ''
+  );
 }
 
-function hasUnsavedChanges(article) {
-  const input = article?.querySelector('[data-ghrm-gist-form] textarea');
+function hasUnsavedChanges(article: GistArticle | null): boolean {
+  const input = article?.querySelector<GistTextarea>(
+    '[data-ghrm-gist-form] textarea',
+  );
   if (!input) return false;
   const name = nameInput(article);
   const normalized = name ? normalizeName(name.value) : '';
@@ -39,12 +118,12 @@ function hasUnsavedChanges(article) {
   );
 }
 
-function refreshPendingGist(article) {
+function refreshPendingGist(article: GistArticle): void {
   if (!pendingGistRefresh || hasUnsavedChanges(article)) return;
   refreshGist();
 }
 
-function requestGistRefresh(article) {
+function requestGistRefresh(article: GistArticle): void {
   if (hasUnsavedChanges(article)) {
     pendingGistRefresh = true;
     return;
@@ -52,21 +131,21 @@ function requestGistRefresh(article) {
   refreshGist();
 }
 
-function pad(value, width) {
+function pad(value: number, width: number): string {
   return String(value).padStart(width, '0');
 }
 
-function defaultGistName() {
+function defaultGistName(): string {
   const now = new Date();
   return `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1, 2)}${pad(now.getUTCDate(), 2)}T${pad(now.getUTCHours(), 2)}${pad(now.getUTCMinutes(), 2)}${pad(now.getUTCSeconds(), 2)}.${pad(now.getUTCMilliseconds(), 3)}000000Z`;
 }
 
-function normalizeName(value) {
+function normalizeName(value: string): string {
   const name = value.trim();
   return name.endsWith('.txt') ? name.slice(0, -4) : name;
 }
 
-function validName(name) {
+function validName(name: string): boolean {
   return (
     name.length <= nameMax &&
     (name === '' ||
@@ -78,15 +157,21 @@ function validName(name) {
   );
 }
 
-function nameInput(article) {
-  return article.querySelector('[data-ghrm-gist-name]');
+function nameInput(article: GistArticle): GistNameInput | null {
+  return article.querySelector<GistNameInput>('[data-ghrm-gist-name]');
 }
 
-function syncSaveAction(article, saving = false) {
-  const input = article.querySelector('[data-ghrm-gist-form] textarea');
+function syncSaveAction(article: GistArticle, saving = false): void {
+  const input = article.querySelector<GistTextarea>(
+    '[data-ghrm-gist-form] textarea',
+  );
   const name = nameInput(article);
-  const control = article.querySelector('[data-ghrm-gist-save-control]');
-  const button = article.querySelector('[data-ghrm-gist-save]');
+  const control = article.querySelector<HTMLElement>(
+    '[data-ghrm-gist-save-control]',
+  );
+  const button = article.querySelector<HTMLButtonElement>(
+    '[data-ghrm-gist-save]',
+  );
   if (!input || !button) return;
 
   const normalized = name ? normalizeName(name.value) : '';
@@ -110,10 +195,12 @@ function syncSaveAction(article, saving = false) {
   }
 }
 
-function syncEditor(article) {
-  const editor = article.querySelector('[data-ghrm-gist-editor]');
-  const input = article.querySelector('[data-ghrm-gist-form] textarea');
-  const blob = article.querySelector('.ghrm-blob');
+function syncEditor(article: GistArticle): void {
+  const editor = article.querySelector<HTMLElement>('[data-ghrm-gist-editor]');
+  const input = article.querySelector<GistTextarea>(
+    '[data-ghrm-gist-form] textarea',
+  );
+  const blob = article.querySelector<HTMLElement>('.ghrm-blob');
   if (!editor || !input || !blob) return;
 
   input.style.height = 'auto';
@@ -126,16 +213,18 @@ function syncEditor(article) {
   blob.scrollLeft = input.scrollLeft;
 }
 
-function syncEditorSoon(article) {
+function syncEditorSoon(article: GistArticle): void {
   requestAnimationFrame(() => {
     syncEditor(article);
   });
 }
 
-function syncBlob(article) {
-  const input = article.querySelector('[data-ghrm-gist-form] textarea');
-  const source = article.querySelector('.ghrm-blob-source code');
-  const data = article.querySelector('template.ghrm-data');
+function syncBlob(article: GistArticle): void {
+  const input = article.querySelector<GistTextarea>(
+    '[data-ghrm-gist-form] textarea',
+  );
+  const source = article.querySelector<HTMLElement>('.ghrm-blob-source code');
+  const data = article.querySelector<HTMLTemplateElement>('template.ghrm-data');
   if (!input || !source) return;
 
   const text = input.value;
@@ -152,16 +241,22 @@ function syncBlob(article) {
   syncEditorSoon(article);
 }
 
-function syncBlobScroll(article) {
-  const input = article.querySelector('[data-ghrm-gist-form] textarea');
-  const blob = article.querySelector('.ghrm-blob');
+function syncBlobScroll(article: GistArticle): void {
+  const input = article.querySelector<GistTextarea>(
+    '[data-ghrm-gist-form] textarea',
+  );
+  const blob = article.querySelector<HTMLElement>('.ghrm-blob');
   if (!input || !blob) return;
 
   blob.scrollLeft = input.scrollLeft;
 }
 
 // Indent edits operate on whole lines, while selection offsets follow the original caret range.
-function selectedLineRange(text, start, end) {
+function selectedLineRange(
+  text: string,
+  start: number,
+  end: number,
+): LineRange {
   const lineStart = start === 0 ? 0 : text.lastIndexOf('\n', start - 1) + 1;
   const endRef = end > start && text[end - 1] === '\n' ? end - 1 : end;
   const nextBreak = text.indexOf('\n', endRef);
@@ -169,7 +264,7 @@ function selectedLineRange(text, start, end) {
   return { lineStart, lineEnd };
 }
 
-function lineStarts(text, start, end) {
+function lineStarts(text: string, start: number, end: number): number[] {
   const starts = [start];
   for (let i = start; i < end; i += 1) {
     if (text[i] === '\n' && i + 1 < end) {
@@ -179,20 +274,20 @@ function lineStarts(text, start, end) {
   return starts;
 }
 
-function shiftAfterInsert(offset, positions) {
+function shiftAfterInsert(offset: number, positions: number[]): number {
   return (
     offset +
     positions.filter((position) => position < offset).length * indentText.length
   );
 }
 
-function linePrefixLen(line) {
+function linePrefixLen(line: string): number {
   if (line.startsWith(indentText)) return indentText.length;
   if (line.startsWith('\t') || line.startsWith(' ')) return 1;
   return 0;
 }
 
-function shiftAfterRemoval(offset, removals) {
+function shiftAfterRemoval(offset: number, removals: Removal[]): number {
   let next = offset;
   for (const removal of removals) {
     if (offset >= removal.position + removal.size) {
@@ -204,10 +299,10 @@ function shiftAfterRemoval(offset, removals) {
   return next;
 }
 
-function undentBlock(text, start, end) {
+function undentBlock(text: string, start: number, end: number): UndentBlock {
   const lines = text.slice(start, end).split('\n');
-  const removals = [];
-  const out = [];
+  const removals: Removal[] = [];
+  const out: string[] = [];
   let position = start;
 
   for (const line of lines) {
@@ -222,7 +317,12 @@ function undentBlock(text, start, end) {
   return { text: out.join('\n'), removals };
 }
 
-function indentEdit(text, start, end, outdent) {
+function indentEdit(
+  text: string,
+  start: number,
+  end: number,
+  outdent: boolean,
+): IndentEdit {
   if (!outdent && start === end) {
     return {
       start,
@@ -259,7 +359,7 @@ function indentEdit(text, start, end, outdent) {
   };
 }
 
-function handleIndentKey(event, article) {
+function handleIndentKey(event: KeyboardEvent, article: GistArticle): void {
   if (
     event.key !== 'Tab' ||
     event.altKey ||
@@ -271,7 +371,7 @@ function handleIndentKey(event, article) {
   }
 
   event.preventDefault();
-  const input = event.currentTarget;
+  const input = event.currentTarget as GistTextarea;
   const edit = indentEdit(
     input.value,
     input.selectionStart,
@@ -283,21 +383,23 @@ function handleIndentKey(event, article) {
   syncBlob(article);
 }
 
-function setStatus(article, message) {
-  const status = article?.querySelector('[data-ghrm-gist-status]');
+function setStatus(article: GistArticle | null, message: string): void {
+  const status = article?.querySelector<HTMLElement>('[data-ghrm-gist-status]');
   if (status) {
     status.textContent = message;
   }
 }
 
-function replaceGistUrl() {
+function replaceGistUrl(): void {
   if (window.location.pathname !== gistPath) {
     window.history.replaceState(window.history.state, '', gistPath);
   }
 }
 
-async function save(article) {
-  const input = article.querySelector('[data-ghrm-gist-form] textarea');
+async function save(article: GistArticle): Promise<void> {
+  const input = article.querySelector<GistTextarea>(
+    '[data-ghrm-gist-form] textarea',
+  );
   if (!input) return;
   const name = nameInput(article);
   const normalized = name ? normalizeName(name.value) : '';
@@ -314,7 +416,7 @@ async function save(article) {
   }
   syncSaveAction(article, true);
   setStatus(article, 'Saving');
-  const headers = {
+  const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'text/plain; charset=utf-8',
   };
@@ -346,8 +448,12 @@ async function save(article) {
   }
 }
 
-async function refreshArticle(article, path, selector) {
-  if (!article) return;
+async function refreshArticle<T extends GistArticle | GistStashArticle>(
+  article: T | null,
+  path: string,
+  selector: string,
+): Promise<T | null> {
+  if (!article) return null;
   const response = await fetch(path, {
     headers: {
       Accept: 'text/html',
@@ -356,15 +462,15 @@ async function refreshArticle(article, path, selector) {
   });
   if (!response.ok) {
     setStatus(article, 'Refresh failed');
-    return;
+    return null;
   }
 
   const html = await response.text();
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  const next = doc.querySelector(selector);
+  const next = doc.querySelector<T>(selector);
   if (!next) {
     setStatus(article, 'Refresh failed');
-    return;
+    return null;
   }
 
   article.replaceWith(next);
@@ -373,7 +479,9 @@ async function refreshArticle(article, path, selector) {
   return next;
 }
 
-async function refreshGist(path = currentGistPath(currentArticle())) {
+async function refreshGist(
+  path = currentGistPath(currentArticle()),
+): Promise<GistArticle | null> {
   const next = await refreshArticle(
     currentArticle(),
     path,
@@ -386,7 +494,7 @@ async function refreshGist(path = currentGistPath(currentArticle())) {
   return next;
 }
 
-async function refreshStash() {
+async function refreshStash(): Promise<GistStashArticle | null> {
   return refreshArticle(
     currentStash(),
     stashPath,
@@ -394,9 +502,11 @@ async function refreshStash() {
   );
 }
 
-function syncWrapToggle(article) {
-  const toggle = article.querySelector('[data-ghrm-gist-wrap]');
-  const input = article.querySelector('[data-ghrm-gist-form] textarea');
+function syncWrapToggle(article: GistArticle): void {
+  const toggle = article.querySelector<HTMLElement>('[data-ghrm-gist-wrap]');
+  const input = article.querySelector<GistTextarea>(
+    '[data-ghrm-gist-form] textarea',
+  );
   if (!toggle || !input) return;
 
   const wrap = getWrapPref();
@@ -410,22 +520,26 @@ function syncWrapToggle(article) {
   syncEditorSoon(article);
 }
 
-function setupGistEditor(article) {
+function setupGistEditor(article: GistArticle): void {
   if (article.dataset.ghrmGistReady === '1') return;
   article.dataset.ghrmGistReady = '1';
 
-  const form = article.querySelector('[data-ghrm-gist-form]');
+  const form = article.querySelector<HTMLFormElement>('[data-ghrm-gist-form]');
   form?.addEventListener('submit', (event) => {
     event.preventDefault();
     save(article);
   });
 
-  const saveButton = article.querySelector('[data-ghrm-gist-save]');
+  const saveButton = article.querySelector<HTMLButtonElement>(
+    '[data-ghrm-gist-save]',
+  );
   saveButton?.addEventListener('click', () => {
     save(article);
   });
 
-  const input = article.querySelector('[data-ghrm-gist-form] textarea');
+  const input = article.querySelector<GistTextarea>(
+    '[data-ghrm-gist-form] textarea',
+  );
   if (input) {
     input.dataset.ghrmGistSaved = input.value;
   }
@@ -452,13 +566,13 @@ function setupGistEditor(article) {
     syncBlobScroll(article);
   });
 
-  const copy = article.querySelector('[data-ghrm-gist-copy]');
+  const copy = article.querySelector<GistCopyButton>('[data-ghrm-gist-copy]');
   copy?.addEventListener('click', async () => {
     await writeClipboard(currentText(article));
     showCopied(copy);
   });
 
-  const wrap = article.querySelector('[data-ghrm-gist-wrap]');
+  const wrap = article.querySelector<HTMLElement>('[data-ghrm-gist-wrap]');
   wrap?.addEventListener('click', () => {
     setWrapPref(!getWrapPref());
     syncWrapToggle(article);
@@ -469,13 +583,15 @@ function setupGistEditor(article) {
   syncEditorSoon(article);
 }
 
-function rowRenameUrl(row) {
+function rowRenameUrl(row: GistRow): string {
   return `/_ghrm/gist/rename/${encodeURIComponent(row.dataset.ghrmGistId)}`;
 }
 
-function restoreRowRename(cell, input) {
-  const link = cell.querySelector('[data-ghrm-gist-row-link]');
-  const button = cell.querySelector('[data-ghrm-gist-rename-start]');
+function restoreRowRename(cell: Element, input: GistRowInput): void {
+  const link = cell.querySelector<HTMLElement>('[data-ghrm-gist-row-link]');
+  const button = cell.querySelector<HTMLElement>(
+    '[data-ghrm-gist-rename-start]',
+  );
   input.remove();
   if (link) {
     link.hidden = false;
@@ -485,9 +601,28 @@ function restoreRowRename(cell, input) {
   }
 }
 
-async function saveRowRename(row, cell, input) {
+function renameResponse(value: unknown): RenameResponse {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    typeof (value as RenameResponse).id !== 'string' ||
+    typeof (value as RenameResponse).href !== 'string' ||
+    typeof (value as RenameResponse).name !== 'string'
+  ) {
+    throw new Error('invalid gist rename response');
+  }
+  return value as RenameResponse;
+}
+
+async function saveRowRename(
+  row: GistRow,
+  cell: Element,
+  input: GistRowInput,
+): Promise<void> {
   if (input.dataset.ghrmSaving === '1') return;
-  const link = cell.querySelector('[data-ghrm-gist-row-link]');
+  const link = cell.querySelector<HTMLAnchorElement>(
+    '[data-ghrm-gist-row-link]',
+  );
   const next = normalizeName(input.value);
   const current = normalizeName(link?.textContent || '');
   if (!validName(next)) {
@@ -518,7 +653,7 @@ async function saveRowRename(row, cell, input) {
     return;
   }
 
-  const renamed = await response.json();
+  const renamed = renameResponse(await response.json());
   row.dataset.ghrmGistId = renamed.id;
   if (link) {
     link.href = renamed.href;
@@ -527,18 +662,22 @@ async function saveRowRename(row, cell, input) {
   restoreRowRename(cell, input);
 }
 
-function beginRowRename(row) {
+function beginRowRename(row: GistRow): void {
   const cell = row.querySelector('.ghrm-gist-name-cell');
-  const link = cell?.querySelector('[data-ghrm-gist-row-link]');
-  const button = cell?.querySelector('[data-ghrm-gist-rename-start]');
+  const link = cell?.querySelector<HTMLAnchorElement>(
+    '[data-ghrm-gist-row-link]',
+  );
+  const button = cell?.querySelector<HTMLElement>(
+    '[data-ghrm-gist-rename-start]',
+  );
   if (!cell || !link || cell.querySelector('[data-ghrm-gist-row-input]'))
     return;
 
-  const input = document.createElement('input');
+  const input = document.createElement('input') as GistRowInput;
   input.type = 'text';
   input.className = 'ghrm-gist-row-input';
   input.dataset.ghrmGistRowInput = '1';
-  input.value = link.textContent;
+  input.value = link.textContent || '';
   input.setAttribute('aria-label', 'Paste filename');
   input.autocomplete = 'off';
   input.spellcheck = false;
@@ -567,18 +706,20 @@ function beginRowRename(row) {
   });
 }
 
-function setupGistStash(stash) {
+function setupGistStash(stash: GistStashArticle): void {
   if (stash.dataset.ghrmGistReady === '1') return;
   stash.dataset.ghrmGistReady = '1';
-  for (const row of stash.querySelectorAll('[data-ghrm-gist-row]')) {
-    const button = row.querySelector('[data-ghrm-gist-rename-start]');
+  for (const row of stash.querySelectorAll<GistRow>('[data-ghrm-gist-row]')) {
+    const button = row.querySelector<HTMLElement>(
+      '[data-ghrm-gist-rename-start]',
+    );
     button?.addEventListener('click', () => {
       beginRowRename(row);
     });
   }
 }
 
-export function setupGist() {
+export function setupGist(): void {
   const article = currentArticle();
   if (article) {
     setupGistEditor(article);
@@ -590,7 +731,7 @@ export function setupGist() {
   }
 }
 
-function setupLiveGist() {
+function setupLiveGist(): void {
   if (liveBound) return;
   liveBound = true;
   document.addEventListener('ghrm:live:gist', () => {
@@ -603,7 +744,7 @@ function setupLiveGist() {
   });
 }
 
-function setupResizeGist() {
+function setupResizeGist(): void {
   if (resizeBound) return;
   resizeBound = true;
   window.addEventListener('resize', () => {

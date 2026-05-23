@@ -8,12 +8,43 @@ import {
   qselAll,
   qselAllFrom,
   qselFrom,
-} from './dom.js';
+} from './dom';
+
+interface ExplorerMenuConfig {
+  name: string;
+  toggleId: string;
+  panelId: string;
+}
+
+interface ExplorerMenu extends ExplorerMenuConfig {
+  toggle: HTMLElement;
+  panel: HTMLElement;
+}
+
+interface ArchiveStatus {
+  state: 'pending' | 'running' | 'complete' | 'failed';
+  filename?: string;
+  error?: string;
+  done_files?: number;
+  total_files?: number;
+  done_bytes?: number;
+  total_bytes?: number;
+  doneFiles?: number;
+  totalFiles?: number;
+  doneBytes?: number;
+  totalBytes?: number;
+  percent?: number;
+}
+
+interface ArchiveJobResponse {
+  download_url: string;
+  status_url: string;
+}
 
 let explorerMenusBound = false;
-let archiveProgressTimer = null;
+let archiveProgressTimer: number | null = null;
 
-const EXPLORER_MENUS = [
+const EXPLORER_MENUS: ExplorerMenuConfig[] = [
   {
     name: 'filter',
     toggleId: 'ghrm-view-menu-toggle',
@@ -36,7 +67,7 @@ const EXPLORER_MENUS = [
   },
 ];
 
-export function syncColumnControls() {
+export function syncColumnControls(): void {
   const article = document.querySelector('article[data-explorer]');
   const controls = qselAll('[data-column-toggle].ghrm-view-option');
   const columns = new Set(
@@ -72,39 +103,39 @@ export function syncColumnControls() {
   }
 }
 
-export function populateDates() {
+export function populateDates(): void {
   for (const el of qselAll('.ghrm-nav-meta-time[data-ts]')) {
-    const ts = parseInt(el.dataset.ts, 10);
+    const ts = parseInt(el.dataset.ts || '', 10);
     if (!ts) continue;
     el.textContent = formatRelative(ts);
     el.title = formatAbsolute(ts);
   }
 }
 
-function closeExplorerMenus() {
+function closeExplorerMenus(): void {
   for (const { toggle, panel } of currentExplorerMenus()) {
     panel.hidden = true;
     toggle.setAttribute('aria-expanded', 'false');
   }
 }
 
-function currentExplorerMenus() {
+function currentExplorerMenus(): ExplorerMenu[] {
   return EXPLORER_MENUS.map((menu) => ({
     ...menu,
     toggle: document.getElementById(menu.toggleId),
     panel: document.getElementById(menu.panelId),
-  })).filter(({ toggle, panel }) => toggle && panel);
+  })).filter((m): m is ExplorerMenu => m.toggle !== null && m.panel !== null);
 }
 
-function currentExplorerMenu(name) {
+function currentExplorerMenu(name: string): ExplorerMenu | null {
   return currentExplorerMenus().find((menu) => menu.name === name) || null;
 }
 
-function hasExplorerMenus() {
+function hasExplorerMenus(): boolean {
   return currentExplorerMenus().length === EXPLORER_MENUS.length;
 }
 
-function openExplorerMenu(name) {
+function openExplorerMenu(name: string): void {
   const menu = currentExplorerMenu(name);
   if (!menu) return;
   closeExplorerMenus();
@@ -113,7 +144,7 @@ function openExplorerMenu(name) {
   positionFloatingPanel(menu.panel, menu.toggle);
 }
 
-export function setupViewMenu() {
+export function setupViewMenu(): void {
   const filter = currentExplorerMenu('filter');
   const sort = currentExplorerMenu('sort');
   const archive = currentExplorerMenu('archive');
@@ -178,7 +209,7 @@ export function setupViewMenu() {
   });
 }
 
-async function startArchiveJob(event, url) {
+async function startArchiveJob(event: Event, url: string): Promise<void> {
   event.preventDefault();
   clearArchiveProgressTimer();
   updateArchiveProgress({
@@ -198,7 +229,7 @@ async function startArchiveJob(event, url) {
     if (!response.ok) {
       throw new Error(`archive request failed: ${response.status}`);
     }
-    const job = await response.json();
+    const job = (await response.json()) as ArchiveJobResponse;
     triggerArchiveDownload(job.download_url);
     pollArchiveJob(job.status_url, job.download_url);
   } catch {
@@ -211,7 +242,10 @@ async function startArchiveJob(event, url) {
   }
 }
 
-async function pollArchiveJob(statusUrl, downloadUrl) {
+async function pollArchiveJob(
+  statusUrl: string,
+  downloadUrl: string,
+): Promise<void> {
   try {
     const response = await fetch(statusUrl, {
       headers: { Accept: 'application/json' },
@@ -219,7 +253,7 @@ async function pollArchiveJob(statusUrl, downloadUrl) {
     if (!response.ok) {
       throw new Error(`archive status failed: ${response.status}`);
     }
-    const status = await response.json();
+    const status = (await response.json()) as ArchiveStatus;
     updateArchiveProgress(status);
     if (status.state === 'complete') {
       archiveProgressTimer = window.setTimeout(hideArchiveProgress, 1800);
@@ -241,7 +275,7 @@ async function pollArchiveJob(statusUrl, downloadUrl) {
   }
 }
 
-function updateArchiveProgress(status) {
+function updateArchiveProgress(status: ArchiveStatus): void {
   const progress = qsel('#ghrm-archive-progress');
   if (!progress) return;
   const label = progress.querySelector('.ghrm-archive-progress-label');
@@ -262,7 +296,7 @@ function updateArchiveProgress(status) {
   }
 }
 
-function archiveProgressLabel(status) {
+function archiveProgressLabel(status: ArchiveStatus): string {
   if (status.state === 'pending') {
     return `Starting ${status.filename || 'archive'}`;
   }
@@ -275,7 +309,7 @@ function archiveProgressLabel(status) {
   return `Downloading ${status.filename || 'archive'}`;
 }
 
-function archiveProgressCount(status, percent) {
+function archiveProgressCount(status: ArchiveStatus, percent: number): string {
   const files = archiveFileCount(status);
   const bytes = archiveByteCount(status);
   const parts = [`${percent}%`];
@@ -284,21 +318,21 @@ function archiveProgressCount(status, percent) {
   return parts.join(' · ');
 }
 
-function archiveFileCount(status) {
+function archiveFileCount(status: ArchiveStatus): string {
   const done = Number(status.done_files ?? status.doneFiles ?? 0);
   const total = Number(status.total_files ?? status.totalFiles ?? 0);
   if (!total) return '';
   return `${done} / ${total} files`;
 }
 
-function archiveByteCount(status) {
+function archiveByteCount(status: ArchiveStatus): string {
   const done = Number(status.done_bytes ?? status.doneBytes ?? 0);
   const total = Number(status.total_bytes ?? status.totalBytes ?? 0);
   if (!total) return '';
   return `${formatBytes(done)} / ${formatBytes(total)}`;
 }
 
-function formatBytes(value) {
+function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   const units = ['KB', 'MB', 'GB', 'TB'];
   let size = value / 1024;
@@ -311,7 +345,7 @@ function formatBytes(value) {
   return `${size.toFixed(0)} PB`;
 }
 
-function triggerArchiveDownload(url) {
+function triggerArchiveDownload(url: string): void {
   const link = document.createElement('a');
   link.href = url;
   link.download = '';
@@ -322,7 +356,7 @@ function triggerArchiveDownload(url) {
   link.remove();
 }
 
-function hideArchiveProgress() {
+function hideArchiveProgress(): void {
   const progress = document.getElementById('ghrm-archive-progress');
   if (progress) {
     progress.hidden = true;
@@ -330,21 +364,21 @@ function hideArchiveProgress() {
   clearArchiveProgressTimer();
 }
 
-function clearArchiveProgressTimer() {
+function clearArchiveProgressTimer(): void {
   if (archiveProgressTimer !== null) {
     window.clearTimeout(archiveProgressTimer);
     archiveProgressTimer = null;
   }
 }
 
-export function setupNavExternalLinks() {
+export function setupNavExternalLinks(): void {
   for (const row of document.querySelectorAll('.ghrm-nav-table tr')) {
     const nameLink = row.querySelector('.ghrm-nav-name a');
     const nameCell = nameLink?.closest('.ghrm-nav-name');
     if (!nameLink || !nameCell) continue;
 
     const href = nameLink.getAttribute('href');
-    if (!isHtmlFile(href)) continue;
+    if (!href || !isHtmlFile(href)) continue;
     if (nameCell.querySelector('.ghrm-nav-external')) continue;
 
     const htmlHref = href.replace(/^\//, '/_ghrm/html/');

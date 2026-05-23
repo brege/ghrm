@@ -89,12 +89,13 @@ function scrollToHash(hash) {
 const vendorLoading = /* @__PURE__ */ new Map();
 let assetConfig;
 function loadScript(src) {
-  if (vendorLoading.has(src)) return vendorLoading.get(src);
+  const cached = vendorLoading.get(src);
+  if (cached) return cached;
   if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
   const promise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = src;
-    script.onload = resolve;
+    script.onload = () => resolve();
     script.onerror = reject;
     document.head.appendChild(script);
   });
@@ -294,9 +295,10 @@ function hasActiveSearch() {
   return searchOpen && searchQuery.trim().length > 0 && Boolean(refreshSearch);
 }
 function refreshActiveSearch() {
-  if (!hasActiveSearch()) return false;
+  const refresh = refreshSearch;
+  if (!hasActiveSearch() || !refresh) return false;
   searchDirty = true;
-  refreshSearch();
+  refresh();
   return true;
 }
 function setSearchCloseHandler(handler) {
@@ -304,7 +306,7 @@ function setSearchCloseHandler(handler) {
 }
 function ensureNavTable(article) {
   const table = article.querySelector(".ghrm-nav-table");
-  if (table) return table;
+  if (table instanceof HTMLTableElement) return table;
   const empty = article.querySelector(".ghrm-nav-empty");
   if (!empty) return null;
   const next = document.createElement("table");
@@ -360,11 +362,8 @@ function fetchContentResults(query) {
 function setRows(tbody, resp) {
   tbody.innerHTML = resp.html;
 }
-function setupPathSearch({
-  populateDates,
-  setupNavExternalLinks,
-  syncColumnControls
-}) {
+function setupPathSearch(options) {
+  const { populateDates, setupNavExternalLinks, syncColumnControls } = options;
   const article = qsel("article[data-explorer]");
   const search = qsel("#ghrm-path-search");
   const inputEl = document.querySelector("#ghrm-path-search-input");
@@ -392,7 +391,7 @@ function setupPathSearch({
   if (!article || !table || !tbody) return;
   const empty = qselFrom(article, ".ghrm-nav-empty");
   const originalRows = tbody.innerHTML;
-  const currentPath = article.dataset.currentPath ?? "";
+  const currentPath = (article instanceof HTMLElement ? article.dataset.currentPath : void 0) ?? "";
   let searchSeq = 0;
   if (!originalRows.trim()) {
     table.hidden = true;

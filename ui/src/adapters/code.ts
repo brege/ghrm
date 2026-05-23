@@ -1,4 +1,4 @@
-import { escapeHtml, qselAll } from '../dom.js';
+import { escapeHtml, qselAll } from '../dom';
 
 const SHELL_BUILTINS = new Set([
   '.',
@@ -63,7 +63,7 @@ const SHELL_BUILTINS = new Set([
   'wait',
 ]);
 
-export function renderCode() {
+export function renderCode(): void {
   if (typeof window.hljs?.highlightElement !== 'function') {
     return;
   }
@@ -84,7 +84,7 @@ export function renderCode() {
   }
 }
 
-function highlightBlobCode(code) {
+function highlightBlobCode(code: HTMLElement): void {
   if (code.dataset.ghrmHighlighted === '1') {
     return;
   }
@@ -101,7 +101,7 @@ function highlightBlobCode(code) {
   code.dataset.ghrmHighlighted = '1';
 }
 
-function openTag(node) {
+function openTag(node: Element): string {
   const attrs = [...node.attributes]
     .map((attr) => `${attr.name}="${escapeHtml(attr.value)}"`)
     .join(' ');
@@ -110,9 +110,13 @@ function openTag(node) {
     : `<${node.tagName.toLowerCase()}>`;
 }
 
-function pushHighlightedNode(node, lines, stack) {
+function pushHighlightedNode(
+  node: Node,
+  lines: string[],
+  stack: Element[],
+): void {
   if (node.nodeType === Node.TEXT_NODE) {
-    const parts = node.textContent.split('\n');
+    const parts = (node.textContent || '').split('\n');
     for (let idx = 0; idx < parts.length; idx += 1) {
       if (idx > 0) {
         for (let rev = stack.length - 1; rev >= 0; rev -= 1) {
@@ -132,19 +136,20 @@ function pushHighlightedNode(node, lines, stack) {
     return;
   }
 
-  lines[lines.length - 1] += openTag(node);
-  stack.push(node);
-  for (const child of node.childNodes) {
+  const el = node as Element;
+  lines[lines.length - 1] += openTag(el);
+  stack.push(el);
+  for (const child of el.childNodes) {
     pushHighlightedNode(child, lines, stack);
   }
   stack.pop();
-  lines[lines.length - 1] += `</${node.tagName.toLowerCase()}>`;
+  lines[lines.length - 1] += `</${el.tagName.toLowerCase()}>`;
 }
 
-function renderBlob(block) {
+function renderBlob(block: Element): void {
   const code = block.querySelector('.ghrm-blob-source code');
   const body = block.querySelector('.ghrm-blob-table tbody');
-  if (!code || !body) {
+  if (!(code instanceof HTMLElement) || !body) {
     return;
   }
 
@@ -164,27 +169,27 @@ function renderBlob(block) {
     .join('');
 }
 
-export function renderBlobs() {
+export function renderBlobs(): void {
   for (const block of document.querySelectorAll('.ghrm-blob')) {
     renderBlob(block);
   }
 }
 
-function isShellCode(code) {
+function isShellCode(code: Element): boolean {
   return [...code.classList].some((name) =>
     ['language-bash', 'language-sh', 'language-shell'].includes(name),
   );
 }
 
-function normalizeShellHighlight(code) {
+function normalizeShellHighlight(code: Element): void {
   if (!isShellCode(code)) {
     return;
   }
 
   for (const node of code.querySelectorAll('.hljs-built_in')) {
-    if (SHELL_BUILTINS.has(node.textContent.trim())) {
+    if (SHELL_BUILTINS.has(node.textContent?.trim() || '')) {
       continue;
     }
-    node.replaceWith(document.createTextNode(node.textContent));
+    node.replaceWith(document.createTextNode(node.textContent || ''));
   }
 }

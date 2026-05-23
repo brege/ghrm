@@ -1,4 +1,8 @@
-import { icon } from '../dom.js';
+import { icon } from '../dom';
+
+interface CopyButton extends HTMLButtonElement {
+  _ghrmCopyReset?: ReturnType<typeof setTimeout> | null;
+}
 
 // ghrm is often opened over plain HTTP from another LAN device. Browsers treat
 // localhost as a secure context, but not http://192.168.x.x, so the Clipboard
@@ -6,28 +10,27 @@ import { icon } from '../dom.js';
 // Use the platform API first, then fall back to user-initiated textarea copy.
 const copyResetDelay = 1000;
 
-export function copyIcon() {
+export function copyIcon(): string {
   return icon('copy', 'ghrm-copy-icon ghrm-copy-icon-copy');
 }
 
-export function checkIcon() {
+export function checkIcon(): string {
   return icon('check', 'ghrm-copy-icon ghrm-copy-icon-check');
 }
 
-function getCopyHost(pre) {
+function getCopyHost(pre: HTMLPreElement): Element | null {
   const wrapper = pre.parentElement;
   if (wrapper?.classList.contains('highlight')) {
     return wrapper;
   }
-
   return pre;
 }
 
-function getCopyText(pre) {
+function getCopyText(pre: HTMLPreElement): string {
   return pre.querySelector('code')?.textContent || pre.textContent || '';
 }
 
-export async function writeClipboard(text) {
+export async function writeClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text);
@@ -37,11 +40,10 @@ export async function writeClipboard(text) {
       return;
     }
   }
-
   fallbackCopy(text);
 }
 
-function fallbackCopy(text) {
+function fallbackCopy(text: string): void {
   const area = document.createElement('textarea');
   area.value = text;
   area.setAttribute('readonly', '');
@@ -60,7 +62,7 @@ function fallbackCopy(text) {
   }
 }
 
-export function showCopied(button) {
+export function showCopied(button: CopyButton): void {
   if (button._ghrmCopyReset) {
     window.clearTimeout(button._ghrmCopyReset);
   }
@@ -79,8 +81,9 @@ export function showCopied(button) {
   }, copyResetDelay);
 }
 
-export function addCopyButtons() {
+export function addCopyButtons(): void {
   for (const pre of document.querySelectorAll('.markdown-body pre')) {
+    if (!(pre instanceof HTMLPreElement)) continue;
     if (pre.closest('[data-ghrm-raw-pane]')) {
       continue;
     }
@@ -93,7 +96,7 @@ export function addCopyButtons() {
     host.classList.add('ghrm-copy-host');
     pre.classList.add('ghrm-copy-target');
 
-    const button = document.createElement('button');
+    const button = document.createElement('button') as CopyButton;
     button.type = 'button';
     button.className = 'ghrm-copy-button';
     button.setAttribute('aria-label', 'Copy');
