@@ -53,13 +53,28 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     let stats_source = source.clone();
     let stats_input_for_repo = stats_input.clone();
     let stats = if stats_cfg.enabled && source != SourceState::NoRepo {
-        tokio::task::spawn_blocking(move || {
+        match tokio::task::spawn_blocking(move || {
             ghrm_stat::resolve_with_config(&stats_input_for_repo, stats_cfg)
                 .map(|report| stats_model(report, &stats_source, &served_root))
         })
         .await
-        .context("join repository stats task")?
-        .context("load repository stats")?
+        {
+            Ok(Ok(stats)) => stats,
+            Ok(Err(e)) => {
+                warn!(
+                    "repository stats failed for {}: {e:#}",
+                    stats_input.display()
+                );
+                AboutStats::default()
+            }
+            Err(e) => {
+                warn!(
+                    "repository stats task failed for {}: {e}",
+                    stats_input.display()
+                );
+                AboutStats::default()
+            }
+        }
     } else {
         AboutStats::default()
     };

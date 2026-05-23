@@ -3,7 +3,7 @@ use crate::explorer::view::{ViewConfig, ViewQuery, ViewState};
 use crate::explorer::walk::{NavSet, ViewOpts};
 use crate::explorer::{column, crumbs, filter, view, walk, watch};
 use crate::gist;
-use crate::http::{about, api, archive, auth, delivery, gist as http_gist, shell, vendor};
+use crate::http::{about, api, archive, auth, delivery, gist as http_gist, shell, theme, vendor};
 use crate::render::{self, Rendered};
 use crate::repo::RepoSet;
 use crate::runtime;
@@ -147,6 +147,9 @@ pub async fn run(options: Options) -> Result<()> {
     let mode = if meta.is_dir() { Mode::Dir } else { Mode::File };
 
     let (reload_tx, _) = broadcast::channel::<String>(32);
+    if let Err(e) = theme::spawn_dev_watch(reload_tx.clone()) {
+        warn!("theme asset watcher disabled: {e}");
+    }
     let nav = Arc::new(RwLock::new(NavSet::default()));
     let alternate_nav = Arc::new(RwLock::new(None));
     let auth = auth

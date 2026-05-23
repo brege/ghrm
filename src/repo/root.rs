@@ -37,7 +37,8 @@ pub(super) fn discover(root: &Path, exclude_names: &[String]) -> Vec<RepoEntry> 
 
 pub(super) fn git_config_path(dot_git: &Path) -> Option<PathBuf> {
     if dot_git.is_dir() {
-        return Some(dot_git.join("config"));
+        let config = dot_git.join("config");
+        return config.is_file().then_some(config);
     }
     if !dot_git.is_file() {
         return None;
@@ -54,7 +55,8 @@ pub(super) fn git_config_path(dot_git: &Path) -> Option<PathBuf> {
         } else {
             dot_git.parent()?.join(path)
         };
-        return Some(gitdir.join("config"));
+        let config = gitdir.join("config");
+        return config.is_file().then_some(config);
     }
     None
 }
@@ -102,7 +104,9 @@ fn collect_repo_roots(
         let name = name.to_string_lossy();
 
         if name == ".git" {
-            if file_type.is_dir() || file_type.is_file() {
+            if (file_type.is_dir() || file_type.is_file())
+                && git_config_path(&entry.path()).is_some()
+            {
                 push_root(roots, seen, dir.to_path_buf());
             }
             continue;
@@ -116,5 +120,54 @@ fn collect_repo_roots(
         }
 
         collect_repo_roots(&entry.path(), exclude_names, roots, seen);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_root(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("ghrm-repo-root-{name}-{nanos}"))
+    }
+
+    fn write_git_config(root: &Path) {
+        fs::create_dir_all(root.join(".git")).unwrap();
+        fs::write(
+            root.join(".git/config"),
+            "[core]\nrepositoryformatversion = 0\n",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn git_config_path_ignores_empty_git_dir() {
+        let root = temp_root("empty");
+        fs::create_dir_all(root.join(".git")).unwrap();
+
+        assert_eq!(git_config_path(&root.join(".git")), None);
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn discover_ignores_empty_git_dirs() {
+        let root = temp_root("discover");
+        let child = root.join("child");
+        fs::create_dir_all(root.join(".git")).unwrap();
+        write_git_config(&child);
+
+        let entries = discover(&root, &[]);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].root, child);
+
+        fs::remove_dir_all(root).ok();
     }
 }

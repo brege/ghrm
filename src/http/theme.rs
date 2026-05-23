@@ -1,11 +1,17 @@
 use anyhow::Result;
 use include_dir::{Dir, DirEntry, include_dir};
+use notify::RecursiveMode;
+use notify_debouncer_full::{DebouncedEvent, new_debouncer};
 use std::{
     env, fs,
     path::{Path, PathBuf},
+    time::Duration,
 };
+use tokio::sync::broadcast;
+use tracing::info;
 
 const THEME_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/theme_version.txt"));
+const THEME_DIRS: &[&str] = &["css", "img", "js"];
 
 static CSS: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/css");
 static IMG: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/img");
@@ -15,11 +21,14 @@ pub fn dir() -> Result<PathBuf> {
     if let Some(path) = env::var_os("GHRM_THEME_DIR") {
         return Ok(PathBuf::from(path));
     }
+    if let Some(path) = dev_dir() {
+        return Ok(path);
+    }
     Ok(crate::dirs::data()?.join("theme"))
 }
 
 pub fn ensure() -> Result<()> {
-    if env::var_os("GHRM_THEME_DIR").is_some() {
+    if env::var_os("GHRM_THEME_DIR").is_some() || dev_dir().is_some() {
         return Ok(());
     }
     let d = dir()?;
@@ -86,7 +95,7 @@ fn install_dir(dir: &Dir<'_>, dest: &Path) -> Result<()> {
 }
 
 pub fn clean() -> Result<()> {
-    if env::var_os("GHRM_THEME_DIR").is_some() {
+    if env::var_os("GHRM_THEME_DIR").is_some() || dev_dir().is_some() {
         return Ok(());
     }
     let d = dir()?;
@@ -94,6 +103,47 @@ pub fn clean() -> Result<()> {
         fs::remove_dir_all(&d)?;
     }
     Ok(())
+}
+
+pub fn spawn_dev_watch(reload_tx: broadcast::Sender<String>) -> Result<()> {
+    let Some(root) = dev_dir() else {
+        return Ok(());
+    };
+    let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
+    let mut debouncer = new_debouncer(Duration::from_millis(120), None, tx)?;
+    for dir in THEME_DIRS {
+        debouncer.watch(root.join(dir), RecursiveMode::Recursive)?;
+    }
+
+    std::thread::spawn(move || {
+        let _debouncer = debouncer;
+        for res in rx {
+            let Ok(events) = res else {
+                continue;
+            };
+            if events
+                .iter()
+                .all(|event| matches!(event.event.kind, notify::event::EventKind::Access(_)))
+            {
+                continue;
+            }
+            info!("theme asset change");
+            let _ = reload_tx.send("reload".to_string());
+        }
+    });
+    Ok(())
+}
+
+fn dev_dir() -> Option<PathBuf> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+    if path.join("css").is_dir() && path.join("img").is_dir() && path.join("js").is_dir() {
+        Some(path)
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
