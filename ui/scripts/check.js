@@ -10,12 +10,13 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const buildDir = join(__dirname, '../.vite-check');
 const expectedEntries = ['preview.js', 'main.js', 'gist.js'];
+const expectedChunks = ['adapters.js', 'explorer.js', 'shared.js'];
 
 function checkBuild() {
   let files;
   try {
     files = readdirSync(buildDir);
-  } catch (err) {
+  } catch {
     console.error('Build output directory not found:', buildDir);
     process.exit(1);
   }
@@ -32,9 +33,17 @@ function checkBuild() {
   const chunks = join(buildDir, 'chunks');
   try {
     const chunkFiles = readdirSync(chunks);
+    const missingChunks = expectedChunks.filter(
+      (entry) => !chunkFiles.includes(entry),
+    );
+    if (missingChunks.length > 0) {
+      console.error('Missing expected chunk files:', missingChunks.join(', '));
+      process.exit(1);
+    }
     console.log('Chunks:', chunkFiles.join(', '));
   } catch {
-    console.log('No chunks directory (all code in entries).');
+    console.error('Build output chunks directory not found:', chunks);
+    process.exit(1);
   }
 
   const totalSize = calculateDirSize(buildDir);

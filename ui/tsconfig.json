@@ -12,5 +12,5 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": false
   },
-  "include": ["../assets/js/**/*.js", "../types/**/*.d.ts"]
+  "include": ["src/**/*.js", "types/**/*.d.ts"]
 }

@@ -4,7 +4,13 @@
     "enabled": false
   },
   "files": {
-    "includes": ["**", "!assets/vendor/**"]
+    "includes": [
+      "**",
+      "!assets/js/**",
+      "!assets/vendor/**",
+      "!ui/.vite-check/**",
+      "!ui/node_modules/**"
+    ]
   },
   "formatter": {
     "enabled": true,

@@ -1,7 +1,7 @@
 /**
  * Ambient declarations for ghrm first-party browser modules.
  *
- * Vendor globals are loaded dynamically by assets/js/vendor.js based on
+ * Vendor globals are loaded dynamically by ui/src/vendor.js based on
  * feature detection from data-ghrm-features. These declarations allow
  * TypeScript to check code that references vendor APIs without requiring
  * full type definitions for each library.
@@ -15,14 +15,18 @@ interface HighlightJS {
 // mermaid
 interface MermaidAPI {
   initialize(config: Record<string, unknown>): void;
-  render(id: string, code: string): Promise<{ svg: string; bindFunctions?: (element: Element) => void }>;
+  render(
+    id: string,
+    code: string,
+  ): Promise<{ svg: string; bindFunctions?: (element: Element) => void }>;
   version?: string | (() => string);
 }
 
 // svg-pan-zoom
-interface SvgPanZoom {
-  (svg: SVGElement, options?: Record<string, unknown>): SvgPanZoomInstance;
-}
+type SvgPanZoom = (
+  svg: SVGElement,
+  options?: Record<string, unknown>,
+) => SvgPanZoomInstance;
 interface SvgPanZoomInstance {
   zoomIn(): void;
   zoomOut(): void;
@@ -36,14 +40,18 @@ interface SvgPanZoomInstance {
 }
 
 // KaTeX auto-render
-interface RenderMathInElement {
-  (element: Element, options?: Record<string, unknown>): void;
-}
+type RenderMathInElement = (
+  element: Element,
+  options?: Record<string, unknown>,
+) => void;
 
 // Leaflet
 interface LeafletMap {
   setView(center: [number, number], zoom: number): this;
-  fitBounds(bounds: LeafletLatLngBounds, options?: Record<string, unknown>): this;
+  fitBounds(
+    bounds: LeafletLatLngBounds,
+    options?: Record<string, unknown>,
+  ): this;
   remove(): void;
 }
 interface LeafletLatLngBounds {
@@ -56,14 +64,20 @@ interface LeafletLayer {
 }
 interface LeafletStatic {
   map(element: Element, options?: Record<string, unknown>): LeafletMap;
-  tileLayer(urlTemplate: string, options?: Record<string, unknown>): LeafletLayer;
+  tileLayer(
+    urlTemplate: string,
+    options?: Record<string, unknown>,
+  ): LeafletLayer;
   geoJSON(data: unknown, options?: Record<string, unknown>): LeafletLayer;
   circleMarker(latlng: unknown, options?: Record<string, unknown>): unknown;
 }
 
 // topojson
 interface TopoJSONStatic {
-  feature(topology: unknown, object: unknown): { type: string; features?: unknown[] };
+  feature(
+    topology: unknown,
+    object: unknown,
+  ): { type: string; features?: unknown[] };
 }
 
 // htmx event detail
