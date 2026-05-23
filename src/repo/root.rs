@@ -37,8 +37,7 @@ pub(super) fn discover(root: &Path, exclude_names: &[String]) -> Vec<RepoEntry> 
 
 pub(super) fn git_config_path(dot_git: &Path) -> Option<PathBuf> {
     if dot_git.is_dir() {
-        let config = dot_git.join("config");
-        return config.is_file().then_some(config);
+        return gitdir_config_path(dot_git);
     }
     if !dot_git.is_file() {
         return None;
@@ -55,10 +54,29 @@ pub(super) fn git_config_path(dot_git: &Path) -> Option<PathBuf> {
         } else {
             dot_git.parent()?.join(path)
         };
-        let config = gitdir.join("config");
-        return config.is_file().then_some(config);
+        return gitdir_config_path(&gitdir);
     }
     None
+}
+
+fn gitdir_config_path(gitdir: &Path) -> Option<PathBuf> {
+    let config = gitdir.join("config");
+    if config.is_file() {
+        return Some(config);
+    }
+
+    let commondir = fs::read_to_string(gitdir.join("commondir")).ok()?;
+    let commondir = commondir.trim();
+    if commondir.is_empty() {
+        return None;
+    }
+    let common = if Path::new(commondir).is_absolute() {
+        PathBuf::from(commondir)
+    } else {
+        gitdir.join(commondir)
+    };
+    let config = common.join("config");
+    config.is_file().then_some(config)
 }
 
 fn push_root(roots: &mut Vec<PathBuf>, seen: &mut HashSet<PathBuf>, root: PathBuf) {
@@ -146,12 +164,37 @@ mod tests {
         .unwrap();
     }
 
+    fn write_worktree(root: &Path, gitdir: &Path) {
+        fs::create_dir_all(root).unwrap();
+        fs::create_dir_all(gitdir).unwrap();
+        fs::write(root.join(".git"), format!("gitdir: {}\n", gitdir.display())).unwrap();
+        fs::write(gitdir.join("commondir"), "../..").unwrap();
+    }
+
     #[test]
     fn git_config_path_ignores_empty_git_dir() {
         let root = temp_root("empty");
         fs::create_dir_all(root.join(".git")).unwrap();
 
         assert_eq!(git_config_path(&root.join(".git")), None);
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn git_config_path_follows_worktree_commondir() {
+        let root = temp_root("worktree");
+        let repo = root.join("repo");
+        let worktree = root.join("worktree");
+        let gitdir = repo.join(".git/worktrees/worktree");
+        write_git_config(&repo);
+        write_worktree(&worktree, &gitdir);
+
+        let config = git_config_path(&worktree.join(".git")).unwrap();
+        assert_eq!(
+            fs::canonicalize(config).unwrap(),
+            fs::canonicalize(repo.join(".git/config")).unwrap()
+        );
 
         fs::remove_dir_all(root).ok();
     }
@@ -167,6 +210,27 @@ mod tests {
 
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].root, child);
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn discover_includes_worktree_git_files() {
+        let root = temp_root("worktree-discover");
+        let repo = root.join("repo");
+        let worktree = root.join("worktree");
+        let gitdir = repo.join(".git/worktrees/worktree");
+        write_git_config(&repo);
+        write_worktree(&worktree, &gitdir);
+
+        let entries = discover(&root, &[]);
+        let roots = entries
+            .iter()
+            .map(|entry| entry.root.as_path())
+            .collect::<Vec<_>>();
+
+        assert!(roots.contains(&repo.as_path()));
+        assert!(roots.contains(&worktree.as_path()));
 
         fs::remove_dir_all(root).ok();
     }
