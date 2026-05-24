@@ -30,152 +30,284 @@ describe('ghrm-archive-progress', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders empty initially', () => {
-    expect(element.querySelector('.ghrm-archive-progress')).toBeNull();
+  describe('initial state', () => {
+    it('renders empty initially', () => {
+      expect(element.querySelector('.ghrm-archive-progress')).toBeNull();
+    });
   });
 
-  it('shows progress after startJob', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse({
-        download_url: '/_ghrm/archive/test.zip',
-        status_url: '/_ghrm/archive/status/123',
-      }),
-    );
-
-    await element.startJob('/_ghrm/archive/start');
-    await element.updateComplete;
-
-    expect(element.innerHTML).toContain('ghrm-archive-progress-label');
-    expect(element.innerHTML).toContain('ghrm-archive-progress-fill');
-  });
-
-  it('clears timers on disconnect', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (requestUrl(url).includes('start')) {
-        return jsonResponse({
+  describe('job start', () => {
+    it('sends POST request with JSON accept header', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        jsonResponse({
           download_url: '/_ghrm/archive/test.zip',
           status_url: '/_ghrm/archive/status/123',
-        });
-      }
-      return jsonResponse({
-        state: 'running',
-        percent: 50,
+        }),
+      );
+
+      await element.startJob('/_ghrm/archive/start');
+
+      expect(fetchSpy).toHaveBeenCalledWith('/_ghrm/archive/start', {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
       });
     });
 
-    await element.startJob('/_ghrm/archive/start');
-    await element.updateComplete;
-
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
-    element.remove();
-
-    expect(clearTimeoutSpy).toHaveBeenCalled();
-  });
-
-  it('handles failed job gracefully', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
-
-    await element.startJob('/_ghrm/archive/start');
-    await element.updateComplete;
-    await vi.waitFor(() => element.innerHTML.includes('failed'));
-
-    expect(element.innerHTML).toContain('Archive failed');
-  });
-
-  it('updates progress from status poll', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (requestUrl(url).includes('start')) {
-        return jsonResponse({
+    it('shows progress container after startJob', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        jsonResponse({
           download_url: '/_ghrm/archive/test.zip',
           status_url: '/_ghrm/archive/status/123',
+        }),
+      );
+
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
+
+      const container = element.querySelector('.ghrm-archive-progress');
+      expect(container).toBeTruthy();
+    });
+
+    it('renders running state attribute', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        if (requestUrl(url).includes('start')) {
+          return jsonResponse({
+            download_url: '/_ghrm/archive/test.zip',
+            status_url: '/_ghrm/archive/status/123',
+          });
+        }
+        return jsonResponse({ state: 'running', percent: 10 });
+      });
+
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
+
+      const container = element.querySelector('.ghrm-archive-progress');
+      expect(container?.getAttribute('data-state')).toBe('running');
+    });
+  });
+
+  describe('status polling', () => {
+    it('polls the returned status URL', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (url) => {
+          if (requestUrl(url).includes('start')) {
+            return jsonResponse({
+              download_url: '/_ghrm/archive/test.zip',
+              status_url: '/_ghrm/archive/status/abc123',
+            });
+          }
+          return jsonResponse({ state: 'complete', percent: 100 });
         });
-      }
-      return jsonResponse({
-        state: 'complete',
-        percent: 100,
-        filename: 'test.zip',
+
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
+
+      const statusCalls = fetchSpy.mock.calls.filter(([url]) =>
+        requestUrl(url).includes('status/abc123'),
+      );
+      expect(statusCalls.length).toBeGreaterThan(0);
+      expect(statusCalls[0][1]).toEqual({
+        headers: { Accept: 'application/json' },
       });
     });
 
-    await element.startJob('/_ghrm/archive/start');
-    await element.updateComplete;
+    it('updates rendered count text from status', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        if (requestUrl(url).includes('start')) {
+          return jsonResponse({
+            download_url: '/_ghrm/archive/test.zip',
+            status_url: '/_ghrm/archive/status/123',
+          });
+        }
+        return jsonResponse({
+          state: 'running',
+          percent: 42,
+          done_files: 10,
+          total_files: 25,
+        });
+      });
 
-    expect(element.innerHTML).toContain('Archive complete');
-  });
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
 
-  it('triggers download link creation', async () => {
-    const appendedLinks: HTMLAnchorElement[] = [];
-    const originalAppend = document.body.append.bind(document.body);
-    vi.spyOn(document.body, 'append').mockImplementation((node) => {
-      if (node instanceof HTMLAnchorElement) {
-        appendedLinks.push(node);
-      }
-      return originalAppend(node);
+      const countEl = element.querySelector('.ghrm-archive-progress-count');
+      expect(countEl?.textContent).toContain('42%');
+      expect(countEl?.textContent).toContain('10 / 25 files');
     });
 
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse({
-        download_url: '/_ghrm/archive/test.zip',
-        status_url: '/_ghrm/archive/status/123',
-      }),
-    );
+    it('updates fill width from percent', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        if (requestUrl(url).includes('start')) {
+          return jsonResponse({
+            download_url: '/_ghrm/archive/test.zip',
+            status_url: '/_ghrm/archive/status/123',
+          });
+        }
+        return jsonResponse({ state: 'running', percent: 65 });
+      });
 
-    await element.startJob('/_ghrm/archive/start');
-    await element.updateComplete;
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
 
-    const downloadLink = appendedLinks.find(
-      (l) => l.href.includes('test.zip') && l.hasAttribute('download'),
-    );
-    expect(downloadLink).toBeDefined();
+      const fillEl = element.querySelector(
+        '.ghrm-archive-progress-fill',
+      ) as HTMLElement;
+      expect(fillEl?.style.width).toBe('65%');
+    });
   });
 
-  it('hides after completion timeout', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (requestUrl(url).includes('start')) {
-        return jsonResponse({
+  describe('completion', () => {
+    it('renders complete state attribute', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        if (requestUrl(url).includes('start')) {
+          return jsonResponse({
+            download_url: '/_ghrm/archive/test.zip',
+            status_url: '/_ghrm/archive/status/123',
+          });
+        }
+        return jsonResponse({ state: 'complete', percent: 100 });
+      });
+
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
+
+      const container = element.querySelector('.ghrm-archive-progress');
+      expect(container?.getAttribute('data-state')).toBe('complete');
+    });
+
+    it('renders complete label', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        if (requestUrl(url).includes('start')) {
+          return jsonResponse({
+            download_url: '/_ghrm/archive/test.zip',
+            status_url: '/_ghrm/archive/status/123',
+          });
+        }
+        return jsonResponse({ state: 'complete', percent: 100 });
+      });
+
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
+
+      const labelEl = element.querySelector('.ghrm-archive-progress-label');
+      expect(labelEl?.textContent).toBe('Archive complete');
+    });
+
+    it('hides after completion timeout', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        if (requestUrl(url).includes('start')) {
+          return jsonResponse({
+            download_url: '/_ghrm/archive/test.zip',
+            status_url: '/_ghrm/archive/status/123',
+          });
+        }
+        return jsonResponse({ state: 'complete', percent: 100 });
+      });
+
+      vi.useFakeTimers();
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
+      expect(element.querySelector('.ghrm-archive-progress')).toBeTruthy();
+
+      await vi.advanceTimersByTimeAsync(2000);
+      await element.updateComplete;
+      expect(element.querySelector('.ghrm-archive-progress')).toBeNull();
+      vi.useRealTimers();
+    });
+  });
+
+  describe('download trigger', () => {
+    it('creates download link with correct href and download attribute', async () => {
+      const appendedLinks: HTMLAnchorElement[] = [];
+      const originalAppend = document.body.append.bind(document.body);
+      vi.spyOn(document.body, 'append').mockImplementation((node) => {
+        if (node instanceof HTMLAnchorElement) {
+          appendedLinks.push(node);
+        }
+        return originalAppend(node);
+      });
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        jsonResponse({
           download_url: '/_ghrm/archive/test.zip',
           status_url: '/_ghrm/archive/status/123',
-        });
-      }
-      return jsonResponse({
-        state: 'complete',
-        percent: 100,
-      });
+        }),
+      );
+
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
+
+      const downloadLink = appendedLinks.find(
+        (l) => l.href.includes('test.zip') && l.hasAttribute('download'),
+      );
+      expect(downloadLink).toBeDefined();
+      expect(downloadLink?.dataset.ghrmNative).toBe('1');
     });
-
-    vi.useFakeTimers();
-    await element.startJob('/_ghrm/archive/start');
-    await element.updateComplete;
-    expect(element.innerHTML).toContain('Archive complete');
-
-    await vi.advanceTimersByTimeAsync(2000);
-    await element.updateComplete;
-    expect(element.querySelector('.ghrm-archive-progress')).toBeNull();
-    vi.useRealTimers();
   });
 
-  it('does not duplicate timers on repeated startJob', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (requestUrl(url).includes('start')) {
-        return jsonResponse({
-          download_url: '/_ghrm/archive/test.zip',
-          status_url: '/_ghrm/archive/status/123',
-        });
-      }
-      return jsonResponse({
-        state: 'running',
-        percent: 50,
+  describe('error handling', () => {
+    it('renders failed state on network error', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+        new Error('Network error'),
+      );
+
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
+      await vi.waitFor(
+        () => element.querySelector('[data-state="failed"]') !== null,
+      );
+
+      const container = element.querySelector('.ghrm-archive-progress');
+      expect(container?.getAttribute('data-state')).toBe('failed');
+
+      const labelEl = element.querySelector('.ghrm-archive-progress-label');
+      expect(labelEl?.textContent).toBe('Archive failed');
+    });
+  });
+
+  describe('lifecycle', () => {
+    it('clears timers on disconnect', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        if (requestUrl(url).includes('start')) {
+          return jsonResponse({
+            download_url: '/_ghrm/archive/test.zip',
+            status_url: '/_ghrm/archive/status/123',
+          });
+        }
+        return jsonResponse({ state: 'running', percent: 50 });
       });
+
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
+
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+      element.remove();
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
     });
 
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+    it('does not duplicate timers on repeated startJob', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        if (requestUrl(url).includes('start')) {
+          return jsonResponse({
+            download_url: '/_ghrm/archive/test.zip',
+            status_url: '/_ghrm/archive/status/123',
+          });
+        }
+        return jsonResponse({ state: 'running', percent: 50 });
+      });
 
-    await element.startJob('/_ghrm/archive/start');
-    await element.updateComplete;
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
 
-    await element.startJob('/_ghrm/archive/start2');
-    await element.updateComplete;
+      await element.startJob('/_ghrm/archive/start');
+      await element.updateComplete;
 
-    expect(clearTimeoutSpy).toHaveBeenCalled();
+      await element.startJob('/_ghrm/archive/start2');
+      await element.updateComplete;
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
   });
 });
