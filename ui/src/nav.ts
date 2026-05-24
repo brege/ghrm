@@ -1,27 +1,8 @@
 import { scrollToHash } from './dom';
-import {
-  populateDates,
-  setupNavExternalLinks,
-  setupViewMenu,
-  syncColumnControls,
-} from './explorer';
-import { setupFileViews } from './file';
-import { applyDocChromePref, setupDocChromeToggle } from './prefs';
-import { setSearchCloseHandler, setupPathSearch } from './search';
+import { runRefresh } from './runtime';
 import { beginActivity, endActivity, syncServerStatus } from './status';
-import { buildToc, setupToc } from './toc';
 
 let pendingSamePathSwap = false;
-
-export function setupInitialContent(): void {
-  setupFileViews();
-  setupSearch();
-  setupViewMenu();
-  setupDocChromeToggle();
-  populateDates();
-  setupToc();
-  setupNavExternalLinks();
-}
 
 export function setupHtmxNav(): void {
   document.body.addEventListener('htmx:beforeBoost', (e) => {
@@ -63,24 +44,8 @@ export function setupHtmxNav(): void {
   });
 }
 
-function setupSearch(): void {
-  setSearchCloseHandler(() => {
-    const target = `${location.pathname}${location.search}${location.hash}`;
-    location.assign(target);
-  });
-  setupPathSearch({ populateDates, setupNavExternalLinks, syncColumnControls });
-}
-
 function refreshContent({ resetScroll }: { resetScroll: boolean }): void {
-  syncServerStatus();
-  setupFileViews();
-  setupSearch();
-  setupNavExternalLinks();
-  setupViewMenu();
-  syncColumnControls();
-  applyDocChromePref();
-  populateDates();
-  buildToc();
+  runRefresh();
   if (resetScroll) {
     const hash = location.hash;
     if (hash) {

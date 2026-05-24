@@ -1,14 +1,7 @@
-import { scrollToHash } from './dom';
-import { setupLiveReload } from './live';
-import { setupHtmxNav, setupInitialContent } from './nav';
-import { setupThemeToggle } from './prefs';
-import { setupStatusPeek } from './status';
+import { registerBrowserFeatures } from './features';
+import { runInitial } from './runtime';
 
 document.addEventListener('DOMContentLoaded', () => {
-  setupInitialContent();
-  setupThemeToggle();
-  setupStatusPeek();
-  setupLiveReload();
-  setupHtmxNav();
-  scrollToHash(location.hash);
+  registerBrowserFeatures();
+  runInitial();
 });

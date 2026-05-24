@@ -14,6 +14,12 @@ export function registerFeature(entry: FeatureEntry): void {
   features.push(entry);
 }
 
+export function registerFeatures(entries: readonly FeatureEntry[]): void {
+  for (const entry of entries) {
+    registerFeature(entry);
+  }
+}
+
 export function runPhase(phase: LifecyclePhase): void {
   const entries = features
     .filter((f) => f.phase === phase)

@@ -3,6 +3,7 @@ import {
   getFeatureNames,
   isInitialized,
   registerFeature,
+  registerFeatures,
   resetRuntime,
   runInitial,
   runPhase,
@@ -25,6 +26,17 @@ describe('runtime', () => {
       registerFeature({ name: 'a', phase: 'initial', setup: () => {} });
       registerFeature({ name: 'b', phase: 'refresh', setup: () => {} });
       expect(getFeatureNames()).toEqual(['a', 'b']);
+    });
+  });
+
+  describe('registerFeatures', () => {
+    it('adds feature entries in order', () => {
+      registerFeatures([
+        { name: 'first', phase: 'initial', order: 20, setup: () => {} },
+        { name: 'second', phase: 'initial', order: 10, setup: () => {} },
+      ]);
+
+      expect(getFeatureNames('initial')).toEqual(['second', 'first']);
     });
   });
 
