@@ -44,7 +44,7 @@ Local web-serving code sits behind the HTTP namespace.
 | http/auth.rs | auth middleware and handlers |
 | http/delivery.rs | native file delivery |
 | http/shell.rs | full page and fragment responses |
-| http/theme.rs | embedded app asset cache |
+| http/assets.rs | embedded runtime asset cache |
 | http/vendor.rs | downloaded vendor asset cache |
 
 ## Explorer
