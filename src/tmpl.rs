@@ -537,6 +537,16 @@ mod tests {
         }
 
         #[test]
+        fn explorer_menus_element() {
+            let fix = ExplorerFixture::new();
+            let html = explorer(fix.ctx()).unwrap();
+            assert!(
+                html.contains("<ghrm-explorer-menus>"),
+                "missing ghrm-explorer-menus element"
+            );
+        }
+
+        #[test]
         fn view_menu_elements() {
             let fix = ExplorerFixture::new();
             let html = explorer(fix.ctx()).unwrap();
