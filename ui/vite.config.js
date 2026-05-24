@@ -20,7 +20,7 @@ function generatedBanner() {
   };
 }
 
-const sharedModules = ['dom', 'prefs', 'vendor', 'status', 'live'];
+const sharedModules = ['dom', 'prefs', 'vendor', 'status', 'live', 'runtime'];
 
 function isSharedModule(id) {
   for (const name of sharedModules) {

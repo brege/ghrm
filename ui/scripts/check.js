@@ -284,9 +284,21 @@ function checkBuild() {
   console.log('Total output size:', formatBytes(calculateDirSize(buildDir)));
 }
 
+function checkSourceBuild() {
+  checkNoSourceJs();
+  checkExpectedFiles(buildDir);
+
+  console.log('Source build check passed.');
+  console.log('Entry files:', expectedEntries.join(', '));
+  console.log('Chunks:', expectedChunks.join(', '));
+  console.log('Total output size:', formatBytes(calculateDirSize(buildDir)));
+}
+
 const mode = process.argv[2] ?? 'check';
 if (mode === 'pack') {
   packBuild();
+} else if (mode === 'source') {
+  checkSourceBuild();
 } else if (mode === 'check') {
   checkBuild();
 } else {

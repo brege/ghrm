@@ -527,24 +527,22 @@ mod tests {
         }
 
         #[test]
-        fn archive_progress_elements() {
+        fn archive_progress_element() {
             let fix = ExplorerFixture::new();
             let html = explorer(fix.ctx()).unwrap();
             assert!(
-                html.contains("id=\"ghrm-archive-progress\""),
-                "missing #ghrm-archive-progress"
+                html.contains("<ghrm-archive-progress>"),
+                "missing ghrm-archive-progress element"
             );
+        }
+
+        #[test]
+        fn explorer_menus_element() {
+            let fix = ExplorerFixture::new();
+            let html = explorer(fix.ctx()).unwrap();
             assert!(
-                html.contains("class=\"ghrm-archive-progress-label\""),
-                "missing .ghrm-archive-progress-label"
-            );
-            assert!(
-                html.contains("class=\"ghrm-archive-progress-count\""),
-                "missing .ghrm-archive-progress-count"
-            );
-            assert!(
-                html.contains("class=\"ghrm-archive-progress-fill\""),
-                "missing .ghrm-archive-progress-fill"
+                html.contains("<ghrm-explorer-menus>"),
+                "missing ghrm-explorer-menus element"
             );
         }
 
