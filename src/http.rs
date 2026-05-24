@@ -1,10 +1,10 @@
 pub(crate) mod about;
 pub(crate) mod api;
 pub(crate) mod archive;
+pub(crate) mod assets;
 pub(crate) mod auth;
 pub(crate) mod delivery;
 pub(crate) mod gist;
 pub(crate) mod server;
 pub(crate) mod shell;
-pub(crate) mod theme;
 pub(crate) mod vendor;

@@ -1,7 +1,8 @@
 use std::io::Write;
 
-const THEME_DIRS: &[&str] = &["css", "img", "js"];
-const THEME_SCHEMA: &[u8] = b"theme-cache-v3";
+const ASSET_DIRS: &[&str] = &["css", "img"];
+const ASSET_FILES: &[&str] = &["js.sha256.json", "js.tar.zst"];
+const ASSET_SCHEMA: &[u8] = b"runtime-assets-v1";
 
 fn main() {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -10,14 +11,19 @@ fn main() {
     println!("cargo:rerun-if-changed=assets");
 
     let mut files: Vec<std::path::PathBuf> = Vec::new();
-    for dir in THEME_DIRS {
+    for dir in ASSET_DIRS {
         let path = assets.join(dir);
         println!("cargo:rerun-if-changed={}", path.display());
         collect(&path, &mut files);
     }
+    for file in ASSET_FILES {
+        let path = assets.join(file);
+        println!("cargo:rerun-if-changed={}", path.display());
+        files.push(path);
+    }
     files.sort();
 
-    let mut hash: u64 = fnv1a(14695981039346656037, THEME_SCHEMA);
+    let mut hash: u64 = fnv1a(14695981039346656037, ASSET_SCHEMA);
     for path in &files {
         println!("cargo:rerun-if-changed={}", path.display());
         let rel = path.strip_prefix(&assets).unwrap();
@@ -26,7 +32,7 @@ fn main() {
     }
 
     let out = std::env::var("OUT_DIR").unwrap();
-    let dest = std::path::Path::new(&out).join("theme_version.txt");
+    let dest = std::path::Path::new(&out).join("asset_version.txt");
     write!(std::fs::File::create(dest).unwrap(), "{:016x}", hash).unwrap();
 }
 

@@ -8,6 +8,9 @@ mutants.out/
 # js cdn libs
 assets/vendor/
 
+# generated ui runtime
+assets/js/
+
 # benchmarks
 bench/data/snapshots/
 bench/.asv/
@@ -20,4 +23,5 @@ __pycache__/
 
 # ui workspace
 ui/node_modules/
+ui/.asset-check/
 ui/.vite-check/

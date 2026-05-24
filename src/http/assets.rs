@@ -1,35 +1,36 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use include_dir::{Dir, DirEntry, include_dir};
 use std::{
     collections::BTreeMap,
     env, fs,
-    path::{Path, PathBuf},
+    io::{Cursor, Read},
+    path::{Component, Path, PathBuf},
     thread,
     time::{Duration, SystemTime},
 };
 use tokio::sync::broadcast;
 use tracing::info;
 
-const THEME_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/theme_version.txt"));
-const THEME_DIRS: &[&str] = &["css", "img", "js"];
+const ASSET_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/asset_version.txt"));
+const ASSET_DIRS: &[&str] = &["css", "img", "js"];
 const DEV_WATCH_INTERVAL: Duration = Duration::from_millis(300);
 
 static CSS: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/css");
 static IMG: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/img");
-static JS: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/js");
+static JS_BUNDLE: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/js.tar.zst"));
 
 pub fn dir() -> Result<PathBuf> {
-    if let Some(path) = env::var_os("GHRM_THEME_DIR") {
+    if let Some(path) = env::var_os("GHRM_ASSETS_DIR") {
         return Ok(PathBuf::from(path));
     }
     if let Some(path) = dev_dir() {
         return Ok(path);
     }
-    Ok(crate::dirs::data()?.join("theme"))
+    Ok(crate::dirs::data()?.join("assets"))
 }
 
 pub fn ensure() -> Result<()> {
-    if env::var_os("GHRM_THEME_DIR").is_some() || dev_dir().is_some() {
+    if env::var_os("GHRM_ASSETS_DIR").is_some() || dev_dir().is_some() {
         return Ok(());
     }
     let d = dir()?;
@@ -41,10 +42,10 @@ pub fn ensure() -> Result<()> {
 }
 
 fn current(dest: &Path) -> bool {
-    fs::read_to_string(dest.join("VERSION")).ok().as_deref() == Some(THEME_VERSION)
+    fs::read_to_string(dest.join("VERSION")).ok().as_deref() == Some(ASSET_VERSION)
         && dir_matches(&CSS, dest.join("css").as_path())
         && dir_matches(&IMG, dest.join("img").as_path())
-        && dir_matches(&JS, dest.join("js").as_path())
+        && bundle_matches(dest).unwrap_or(false)
 }
 
 fn dir_matches(dir: &Dir<'_>, dest: &Path) -> bool {
@@ -72,8 +73,8 @@ fn install(dest: &std::path::Path) -> Result<()> {
     fs::create_dir_all(dest)?;
     install_dir(&CSS, &dest.join("css"))?;
     install_dir(&IMG, &dest.join("img"))?;
-    install_dir(&JS, &dest.join("js"))?;
-    fs::write(dest.join("VERSION"), THEME_VERSION)?;
+    install_bundle(dest)?;
+    fs::write(dest.join("VERSION"), ASSET_VERSION)?;
     Ok(())
 }
 
@@ -96,7 +97,7 @@ fn install_dir(dir: &Dir<'_>, dest: &Path) -> Result<()> {
 }
 
 pub fn clean() -> Result<()> {
-    if env::var_os("GHRM_THEME_DIR").is_some() || dev_dir().is_some() {
+    if env::var_os("GHRM_ASSETS_DIR").is_some() || dev_dir().is_some() {
         return Ok(());
     }
     let d = dir()?;
@@ -120,7 +121,7 @@ pub fn spawn_dev_watch(reload_tx: broadcast::Sender<String>) -> Result<()> {
             };
             if next != snapshot {
                 snapshot = next;
-                info!("theme asset change");
+                info!("runtime asset change");
                 let _ = reload_tx.send("reload".to_string());
             }
         }
@@ -136,7 +137,7 @@ struct AssetStamp {
 
 fn dev_snapshot(root: &Path) -> Result<BTreeMap<PathBuf, AssetStamp>> {
     let mut snapshot = BTreeMap::new();
-    for dir in THEME_DIRS {
+    for dir in ASSET_DIRS {
         collect_dev_snapshot(root, &root.join(dir), &mut snapshot)?;
     }
     Ok(snapshot)
@@ -175,11 +176,82 @@ fn dev_dir() -> Option<PathBuf> {
         return None;
     }
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
-    if path.join("css").is_dir() && path.join("img").is_dir() && path.join("js").is_dir() {
+    if path.join("css").is_dir()
+        && path.join("img").is_dir()
+        && path.join("js/main.js").is_file()
+        && path.join("js/preview.js").is_file()
+        && path.join("js/gist.js").is_file()
+    {
         Some(path)
     } else {
         None
     }
+}
+
+fn install_bundle(dest: &Path) -> Result<()> {
+    let decoder = zstd::stream::read::Decoder::new(Cursor::new(JS_BUNDLE))?;
+    let mut archive = tar::Archive::new(decoder);
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let raw_path = entry.path()?.into_owned();
+        let path = bundle_path(&raw_path)?;
+        match entry.header().entry_type() {
+            tar::EntryType::Directory => fs::create_dir_all(dest.join(path))?,
+            tar::EntryType::Regular => {
+                let path = dest.join(path);
+                fs::create_dir_all(path.parent().unwrap())?;
+                let mut file = fs::File::create(path)?;
+                std::io::copy(&mut entry, &mut file)?;
+            }
+            _ => bail!("unsupported runtime asset entry"),
+        }
+    }
+    Ok(())
+}
+
+fn bundle_matches(dest: &Path) -> Result<bool> {
+    let decoder = zstd::stream::read::Decoder::new(Cursor::new(JS_BUNDLE))?;
+    let mut archive = tar::Archive::new(decoder);
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let raw_path = entry.path()?.into_owned();
+        let path = bundle_path(&raw_path)?;
+        match entry.header().entry_type() {
+            tar::EntryType::Directory => {
+                if !dest.join(path).is_dir() {
+                    return Ok(false);
+                }
+            }
+            tar::EntryType::Regular => {
+                let mut expected = Vec::new();
+                entry.read_to_end(&mut expected)?;
+                if fs::read(dest.join(path)).ok().as_deref() != Some(expected.as_slice()) {
+                    return Ok(false);
+                }
+            }
+            _ => return Ok(false),
+        }
+    }
+    Ok(true)
+}
+
+fn bundle_path(path: &Path) -> Result<PathBuf> {
+    let mut components = path.components();
+    let Some(Component::Normal(root)) = components.next() else {
+        bail!("invalid runtime asset path");
+    };
+    if root != "js" {
+        bail!("runtime asset archive must contain js root");
+    }
+
+    let mut out = PathBuf::from(root);
+    for component in components {
+        match component {
+            Component::Normal(part) => out.push(part),
+            _ => bail!("invalid runtime asset path"),
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -188,8 +260,8 @@ mod tests {
     use crate::testutil::TempDir;
 
     #[test]
-    fn install_writes_only_runtime_theme_assets() {
-        let td = TempDir::new("ghrm-theme-install");
+    fn install_writes_only_runtime_assets() {
+        let td = TempDir::new("ghrm-assets-install");
 
         install(td.path()).unwrap();
 
@@ -208,13 +280,13 @@ mod tests {
 
     #[test]
     fn install_includes_nested_js_chunks() {
-        let td = TempDir::new("ghrm-theme-chunks");
+        let td = TempDir::new("ghrm-assets-chunks");
 
         install(td.path()).unwrap();
 
         assert!(
             td.path().join("js/chunks").is_dir(),
-            "theme install must include js/chunks directory"
+            "runtime asset install must include js/chunks directory"
         );
         assert!(
             first_installed_chunk(td.path()).is_file(),
@@ -224,7 +296,7 @@ mod tests {
 
     #[test]
     fn current_rejects_missing_asset() {
-        let td = TempDir::new("ghrm-theme-current");
+        let td = TempDir::new("ghrm-assets-current");
 
         install(td.path()).unwrap();
         assert!(current(td.path()));
@@ -235,7 +307,7 @@ mod tests {
 
     #[test]
     fn current_rejects_missing_entry_script() {
-        let td = TempDir::new("ghrm-theme-entry");
+        let td = TempDir::new("ghrm-assets-entry");
 
         install(td.path()).unwrap();
         assert!(current(td.path()));
@@ -243,13 +315,13 @@ mod tests {
         fs::remove_file(td.path().join("js/preview.js")).unwrap();
         assert!(
             !current(td.path()),
-            "theme should be stale when preview.js is missing"
+            "runtime assets should be stale when preview.js is missing"
         );
     }
 
     #[test]
     fn current_rejects_missing_chunk() {
-        let td = TempDir::new("ghrm-theme-chunk");
+        let td = TempDir::new("ghrm-assets-chunk");
 
         install(td.path()).unwrap();
         assert!(current(td.path()));
@@ -257,13 +329,13 @@ mod tests {
         fs::remove_file(first_installed_chunk(td.path())).unwrap();
         assert!(
             !current(td.path()),
-            "theme should be stale when a js/chunks file is missing"
+            "runtime assets should be stale when a js/chunks file is missing"
         );
     }
 
     #[test]
     fn current_rejects_stale_chunk_content() {
-        let td = TempDir::new("ghrm-theme-chunk-stale");
+        let td = TempDir::new("ghrm-assets-chunk-stale");
 
         install(td.path()).unwrap();
         assert!(current(td.path()));
@@ -271,7 +343,7 @@ mod tests {
         fs::write(first_installed_chunk(td.path()), b"stale content").unwrap();
         assert!(
             !current(td.path()),
-            "theme should be stale when a js/chunks file has wrong content"
+            "runtime assets should be stale when a js/chunks file has wrong content"
         );
     }
 

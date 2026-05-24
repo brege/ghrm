@@ -14,7 +14,7 @@ mod testutil;
 mod tmpl;
 
 use crate::explorer::{column, filter};
-use crate::http::{server, theme, vendor};
+use crate::http::{assets, server, vendor};
 use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
@@ -99,7 +99,7 @@ fn main() -> Result<()> {
     let dump_config = cli.dump_config;
     if cli.clean {
         vendor::clean()?;
-        theme::clean()?;
+        assets::clean()?;
         if cli.target.is_none() {
             return Ok(());
         }
@@ -130,7 +130,7 @@ fn main() -> Result<()> {
     }
 
     vendor::ensure()?;
-    theme::ensure()?;
+    assets::ensure()?;
 
     let filters = filter::Set::resolve(&cfg.walk.filter)?;
     let default_filter_ext = resolved.filter_ext || filters.default_enabled();

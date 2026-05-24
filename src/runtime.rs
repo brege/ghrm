@@ -19,7 +19,7 @@ impl Paths {
         if let Some(config) = config {
             rows.push(row("config", config));
         }
-        rows.push(row("theme", crate::http::theme::dir()?));
+        rows.push(row("assets", crate::http::assets::dir()?));
         rows.push(row("vendor", crate::http::vendor::dir()?));
         Ok(Self { rows })
     }
@@ -71,14 +71,14 @@ mod tests {
     use crate::testutil::TempDir;
 
     #[test]
-    fn rows_include_target_config_theme_and_vendor() {
+    fn rows_include_target_config_assets_and_vendor() {
         let td = TempDir::new("ghrm-runtime-paths");
         let config = td.path().join("config.toml");
 
         let paths = Paths::new(td.path(), Some(&config)).unwrap();
         let labels: Vec<&str> = paths.rows().iter().map(|row| row.label).collect();
 
-        assert_eq!(labels, vec!["root", "config", "theme", "vendor"]);
+        assert_eq!(labels, vec!["root", "config", "assets", "vendor"]);
     }
 
     #[test]

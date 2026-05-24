@@ -101,11 +101,11 @@ fn is_pdf(mime: &str) -> bool {
     mime == "application/pdf"
 }
 
-pub(crate) async fn theme_asset(AxPath(path): AxPath<String>) -> Response {
-    let base = match crate::http::theme::dir() {
+pub(crate) async fn runtime_asset(AxPath(path): AxPath<String>) -> Response {
+    let base = match crate::http::assets::dir() {
         Ok(d) => d,
         Err(e) => {
-            warn!("theme dir error: {}", e);
+            warn!("runtime asset dir error: {}", e);
             return not_found();
         }
     };
