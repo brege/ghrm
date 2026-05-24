@@ -10,6 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "dependencies": {
+    "lit": "3.3.3"
+  },
   "devDependencies": {
     "happy-dom": "20.9.0",
     "typescript": "5.8.3",
