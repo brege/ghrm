@@ -1,7 +1,7 @@
 import { icon } from '../dom';
 
 interface CopyButton extends HTMLButtonElement {
-  _ghrmCopyReset?: ReturnType<typeof setTimeout> | null;
+  _ghrmCopyReset?: number | null;
 }
 
 // ghrm is often opened over plain HTTP from another LAN device. Browsers treat

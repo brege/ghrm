@@ -36,7 +36,7 @@ interface GistTextarea extends HTMLTextAreaElement {
 }
 
 interface GistCopyButton extends HTMLButtonElement {
-  _ghrmCopyReset?: ReturnType<typeof setTimeout> | null;
+  _ghrmCopyReset?: number | null;
 }
 
 interface GistRowInput extends HTMLInputElement {

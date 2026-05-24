@@ -89,6 +89,7 @@ rust-fmt:
 ui:
     pre-commit run biome-check --all-files
     npm --prefix ui run typecheck
+    npm --prefix ui run test
     npm --prefix ui run build:check
 
 # run UI type checks
@@ -102,6 +103,10 @@ ui-lint:
 # format UI files
 ui-fmt:
     npx @biomejs/biome@2.4.6 check --write ui/ assets/css
+
+# run UI tests
+ui-test:
+    npm --prefix ui run test
 
 # build UI source to runtime assets
 ui-build:

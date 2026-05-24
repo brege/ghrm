@@ -9,7 +9,7 @@ interface MermaidBlock extends Element {
 }
 
 interface CopyButton extends HTMLButtonElement {
-  _ghrmCopyReset?: ReturnType<typeof setTimeout> | null;
+  _ghrmCopyReset?: number | null;
 }
 
 let mermaidId = 0;
