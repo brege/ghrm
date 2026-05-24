@@ -92,6 +92,12 @@ ui:
     npm --prefix ui run test
     npm --prefix ui run build:check
 
+# refresh generated bundle when UI source changed - only on main
+ui-release:
+    @branch="$(git rev-parse --abbrev-ref HEAD)"; if [[ "$branch" != "main" ]]; then echo "ui-release only runs on main"; exit 1; fi
+    just ui
+    @if git diff --quiet -- ui && git diff --cached --quiet -- ui && git diff --quiet HEAD^ HEAD -- ui; then echo "No UI source changes; skipping runtime asset pack"; else npm --prefix ui run build; fi
+
 # run UI type checks
 ui-type:
     npm --prefix ui run typecheck
@@ -103,11 +109,3 @@ ui-lint:
 # format UI files
 ui-fmt:
     npx @biomejs/biome@2.4.6 check --write ui/ assets/css
-
-# run UI tests
-ui-test:
-    npm --prefix ui run test
-
-# build UI source to runtime assets
-ui-build:
-    npm --prefix ui run build

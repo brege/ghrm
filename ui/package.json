@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build && node scripts/check.js pack",
-    "build:check": "vite build --outDir .vite-check && node scripts/check.js",
+    "build:check": "vite build --outDir .vite-check && node scripts/check.js source",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
