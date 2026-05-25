@@ -306,6 +306,50 @@ describe('ghrm-gist-stash', () => {
       expect(article?.contains(element)).toBe(true);
     });
 
+    it('refreshes to a new upgraded stash host', async () => {
+      const oldArticle = document.querySelector(
+        'article[data-ghrm-gist-stash]',
+      )!;
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(
+          createStashArticle([
+            {
+              id: 'paste-next',
+              name: 'next-paste',
+              href: '/_ghrm/gist?id=paste-next',
+            },
+          ]),
+          { status: 200 },
+        ),
+      );
+
+      document.dispatchEvent(new CustomEvent('ghrm:live:gist'));
+
+      await vi.waitFor(() => fetchSpy.mock.calls.length > 0);
+      await vi.waitFor(() => oldArticle.isConnected === false);
+
+      const nextArticle = document.querySelector(
+        'article[data-ghrm-gist-stash]',
+      )!;
+      const nextElement =
+        nextArticle.querySelector<GhrmGistStash>('ghrm-gist-stash')!;
+      await nextElement.updateComplete;
+
+      expect(nextElement).not.toBe(element);
+
+      const renameBtn = nextElement.querySelector<HTMLButtonElement>(
+        '[data-ghrm-gist-rename-start]',
+      )!;
+      expect(renameBtn.dataset.ghrmBound).toBe('1');
+
+      renameBtn.click();
+
+      const input = nextElement.querySelector<HTMLInputElement>(
+        '[data-ghrm-gist-row-input]',
+      );
+      expect(input?.value).toBe('next-paste');
+    });
+
     it('removes global listeners on disconnect', async () => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         new Response('<article data-ghrm-gist-stash></article>', {

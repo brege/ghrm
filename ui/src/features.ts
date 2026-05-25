@@ -2,7 +2,6 @@ import { scrollToHash } from './dom';
 import {
   populateDates,
   setupNavExternalLinks,
-  setupViewMenu,
   syncColumnControls,
 } from './explorer';
 import { setupFileViews } from './file';
@@ -33,7 +32,12 @@ export const browserFeatures: readonly FeatureEntry[] = [
     order: 105,
     setup: setupSearchClose,
   },
-  { name: 'view-menu', phase: 'initial', order: 120, setup: setupViewMenu },
+  {
+    name: 'column-controls',
+    phase: 'initial',
+    order: 120,
+    setup: syncColumnControls,
+  },
   {
     name: 'doc-chrome-toggle',
     phase: 'initial',
@@ -76,11 +80,10 @@ export const browserFeatures: readonly FeatureEntry[] = [
     order: 130,
     setup: setupNavExternalLinks,
   },
-  { name: 'view-menu', phase: 'refresh', order: 140, setup: setupViewMenu },
   {
     name: 'column-controls',
     phase: 'refresh',
-    order: 150,
+    order: 140,
     setup: syncColumnControls,
   },
   {

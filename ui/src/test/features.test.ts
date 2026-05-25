@@ -14,7 +14,7 @@ describe('browser features', () => {
     expect(featureNames('initial')).toEqual([
       'file-views',
       'search-close',
-      'view-menu',
+      'column-controls',
       'doc-chrome-toggle',
       'dates',
       'toc',
@@ -32,7 +32,6 @@ describe('browser features', () => {
       'server-status',
       'file-views',
       'nav-links',
-      'view-menu',
       'column-controls',
       'doc-chrome-pref',
       'dates',

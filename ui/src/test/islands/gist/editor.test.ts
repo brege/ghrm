@@ -298,15 +298,22 @@ describe('ghrm-gist-editor', () => {
     });
 
     it('refreshes when content is clean', async () => {
-      const fetchSpy = vi
-        .spyOn(globalThis, 'fetch')
-        .mockResolvedValue(
-          new Response('<article data-ghrm-gist></article>', { status: 200 }),
-        );
+      const oldArticle = document.querySelector('article[data-ghrm-gist]')!;
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(
+          createEditorArticle({
+            id: 'fresh-paste-id',
+            body: 'fresh content',
+            name: 'fresh-paste-id',
+          }),
+          { status: 200 },
+        ),
+      );
 
       document.dispatchEvent(new CustomEvent('ghrm:live:gist'));
 
       await vi.waitFor(() => fetchSpy.mock.calls.length > 0);
+      await vi.waitFor(() => oldArticle.isConnected === false);
 
       const [url, options] = fetchSpy.mock.calls[0];
       expect(url).toBe('/_ghrm/gist');
@@ -316,6 +323,25 @@ describe('ghrm-gist-editor', () => {
       expect((options?.headers as Record<string, string>)?.['HX-Request']).toBe(
         'true',
       );
+
+      const nextArticle = document.querySelector<HTMLElement>(
+        'article[data-ghrm-gist]',
+      )!;
+      const nextElement =
+        nextArticle.querySelector<GhrmGistEditor>('ghrm-gist-editor')!;
+      await nextElement.updateComplete;
+
+      expect(nextArticle.dataset.ghrmGistId).toBe('fresh-paste-id');
+      expect(nextElement).not.toBe(element);
+
+      const textarea = nextElement.querySelector('textarea')!;
+      const saveButton = nextElement.querySelector<HTMLButtonElement>(
+        '[data-ghrm-gist-save]',
+      )!;
+      textarea.value = 'fresh content with edits';
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+      expect(saveButton.disabled).toBe(false);
     });
   });
 
