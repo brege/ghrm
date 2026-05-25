@@ -19,6 +19,15 @@ run target=".":
 dev target=".":
     cargo run --locked -- --no-browser "{{target}}"
 
+# run ghrm with ui rebuild watcher
+dev-ui target=".":
+    npx --prefix ui vite build --config ui/vite.config.js && { \
+        npx --prefix ui vite build --config ui/vite.config.js --watch & \
+        VITE_PID=$!; \
+        trap "kill $VITE_PID 2>/dev/null" EXIT; \
+        cargo run --locked -- --no-browser "{{target}}"; \
+    }
+
 # print the resolved ghrm configuration
 dump-config target=".":
     cargo run --locked -- --dump-config "{{target}}"
