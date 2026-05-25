@@ -20,6 +20,7 @@ describe('main entrypoint', () => {
 
     expect(customElements.get('ghrm-explorer-menus')).toBeDefined();
     expect(customElements.get('ghrm-archive-progress')).toBeDefined();
+    expect(customElements.get('ghrm-search-panel')).toBeDefined();
     expect(registerBrowserFeatures).toHaveBeenCalledOnce();
     expect(runInitial).toHaveBeenCalledOnce();
   });
