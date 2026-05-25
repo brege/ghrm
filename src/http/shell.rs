@@ -121,7 +121,7 @@ fn gist_nav_html(show_gist: bool, active: bool, oob: bool) -> String {
         )
     };
     format!(
-        "<span id=\"ghrm-gist-slot\"{oob_attr}><a id=\"{id}\" href=\"{href}\"{boost} aria-label=\"{label}\" title=\"{label}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"#{icon}\"></use></svg></a></span>"
+        "<span id=\"ghrm-gist-slot\"{oob_attr}><a id=\"{id}\" href=\"{href}\"{boost} aria-label=\"{label}\" title=\"{label}\"><svg aria-hidden=\"true\" focusable=\"false\"><use href=\"/_ghrm/assets/js/icons.svg#{icon}\"></use></svg></a></span>"
     )
 }
 
@@ -258,7 +258,7 @@ mod tests {
         assert!(html.contains("id=\"ghrm-home-link\""));
         assert!(html.contains("href=\"/\""));
         assert!(html.contains("hx-boost=\"false\""));
-        assert!(html.contains("ghrm-icon-home"));
+        assert!(html.contains("href=\"/_ghrm/assets/js/icons.svg#ghrm-icon-home\""));
         assert!(!html.contains("id=\"ghrm-gist-link\""));
     }
 
@@ -269,7 +269,7 @@ mod tests {
         assert!(html.contains("id=\"ghrm-gist-link\""));
         assert!(html.contains("href=\"/_ghrm/gist\""));
         assert!(html.contains("hx-boost=\"false\""));
-        assert!(html.contains("ghrm-icon-note"));
+        assert!(html.contains("href=\"/_ghrm/assets/js/icons.svg#ghrm-icon-note\""));
         assert!(!html.contains("id=\"ghrm-home-link\""));
     }
 

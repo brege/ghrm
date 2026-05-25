@@ -8,7 +8,8 @@
     "strict": false,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "jsx": "react-jsx",
     "verbatimModuleSyntax": false
   },
-  "include": ["src/**/*.ts", "types/**/*.d.ts", "vitest.config.ts"]
+  "include": ["icons.tsx", "src/**/*.ts", "types/**/*.d.ts", "vitest.config.ts"]
 }

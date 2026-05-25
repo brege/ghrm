@@ -52,7 +52,7 @@
   fill: currentColor;
 }
 
-.ghrm-view-menu-toggle use[href="#ghrm-icon-filter"] {
+.ghrm-view-menu-toggle use[href$="#ghrm-icon-filter"] {
   stroke: currentColor;
 }
 

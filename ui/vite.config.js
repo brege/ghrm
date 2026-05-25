@@ -1,6 +1,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import { generateSprite } from './scripts/icons.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const srcRoot = resolve(__dirname, 'src');
@@ -16,6 +17,19 @@ function generatedBanner() {
           artifact.code = `${banner}\n${artifact.code}`;
         }
       }
+    },
+  };
+}
+
+function iconSprite() {
+  return {
+    name: 'ghrm-icon-sprite',
+    async generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'icons.svg',
+        source: await generateSprite(),
+      });
     },
   };
 }
@@ -36,7 +50,7 @@ function isExplorerModule(id) {
 }
 
 export default defineConfig({
-  plugins: [generatedBanner()],
+  plugins: [generatedBanner(), iconSprite()],
   build: {
     outDir: outRoot,
     emptyOutDir: true,

@@ -42,23 +42,23 @@
   hx-target="article.markdown-body"
   hx-swap="outerHTML show:none"
   hx-push-url="true">
-{% include "fragments/icons.html" %}  <header class="ghrm-topbar">
+  <header class="ghrm-topbar">
     <div class="ghrm-topbar-inner">
 {{ source|safe }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
         <div class="ghrm-search-field">
           <button id="ghrm-search-mode" type="button" class="ghrm-search-mode" title="Switch search mode" aria-label="Switch search mode">
             <svg class="icon-path" aria-hidden="true" focusable="false">
-              <use href="#ghrm-icon-search-path"></use>
+              <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-search-path"></use>
             </svg>
             <svg class="icon-content" aria-hidden="true" focusable="false">
-              <use href="#ghrm-icon-search-content"></use>
+              <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-search-content"></use>
             </svg>
           </button>
           <input id="ghrm-path-search-input" class="ghrm-path-search-input" type="search" placeholder="Search paths" aria-label="Search paths">
         </div>
         <button id="ghrm-path-search-toggle" type="button" aria-expanded="false" aria-label="Search paths" title="Search paths">
           <svg aria-hidden="true" focusable="false">
-            <use href="#ghrm-icon-search"></use>
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-search"></use>
           </svg>
         </button>
         <span id="ghrm-path-search-status" class="ghrm-path-search-status" aria-live="polite"></span>
@@ -66,24 +66,24 @@
       </div>
       <button id="doc-chrome-toggle" type="button" hidden aria-label="Hide document wrapper" title="Hide document wrapper">
         <svg class="icon-framed" aria-hidden="true" focusable="false">
-          <use href="#ghrm-icon-doc-framed"></use>
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-doc-framed"></use>
         </svg>
         <svg class="icon-flat" aria-hidden="true" focusable="false">
-          <use href="#ghrm-icon-doc-flat"></use>
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-doc-flat"></use>
         </svg>
       </button>
       <button id="theme-toggle" type="button" aria-label="Toggle theme">
         <svg class="icon-sun" aria-hidden="true" focusable="false">
-          <use href="#ghrm-icon-sun"></use>
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-sun"></use>
         </svg>
         <svg class="icon-moon" aria-hidden="true" focusable="false">
-          <use href="#ghrm-icon-moon"></use>
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-moon"></use>
         </svg>
       </button>
 {{ gist_nav|safe }}
 {% if show_logout %}      <a id="ghrm-logout" href="/_ghrm/logout" hx-boost="false" aria-label="Log out" title="Log out">
         <svg aria-hidden="true" focusable="false">
-          <use href="#ghrm-icon-logout"></use>
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-logout"></use>
         </svg>
       </a>
 {% endif %}

@@ -3,7 +3,7 @@
 {% else %}{% for row in rows %}<tr>
   <td class="ghrm-nav-icon">
     <svg aria-hidden="true" focusable="false" class="octicon">
-      <use href="#{% if row.is_dir %}ghrm-icon-dir{% else %}ghrm-icon-file{% endif %}"></use>
+      <use href="/_ghrm/assets/js/icons.svg#{% if row.is_dir %}ghrm-icon-dir{% else %}ghrm-icon-file{% endif %}"></use>
     </svg>
   </td>
   <td class="ghrm-nav-name"><a class="ghrm-search-path" href="{{ row.href }}">{{ row.html|safe }}</a></td>
