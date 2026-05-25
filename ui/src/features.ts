@@ -2,7 +2,6 @@ import { scrollToHash } from './dom';
 import {
   populateDates,
   setupNavExternalLinks,
-  setupViewMenu,
   syncColumnControls,
 } from './explorer';
 import { setupFileViews } from './file';
@@ -14,22 +13,31 @@ import {
   setupThemeToggle,
 } from './prefs';
 import { type FeatureEntry, registerFeatures } from './runtime';
-import { setSearchCloseHandler, setupPathSearch } from './search';
+import { setSearchCloseHandler } from './search';
 import { setupStatusPeek, syncServerStatus } from './status';
 import { buildToc, setupToc } from './toc';
 
-function setupSearch(): void {
+function setupSearchClose(): void {
   setSearchCloseHandler(() => {
     const target = `${location.pathname}${location.search}${location.hash}`;
     location.assign(target);
   });
-  setupPathSearch({ populateDates, setupNavExternalLinks, syncColumnControls });
 }
 
 export const browserFeatures: readonly FeatureEntry[] = [
   { name: 'file-views', phase: 'initial', order: 100, setup: setupFileViews },
-  { name: 'path-search', phase: 'initial', order: 110, setup: setupSearch },
-  { name: 'view-menu', phase: 'initial', order: 120, setup: setupViewMenu },
+  {
+    name: 'search-close',
+    phase: 'initial',
+    order: 105,
+    setup: setupSearchClose,
+  },
+  {
+    name: 'column-controls',
+    phase: 'initial',
+    order: 120,
+    setup: syncColumnControls,
+  },
   {
     name: 'doc-chrome-toggle',
     phase: 'initial',
@@ -66,18 +74,16 @@ export const browserFeatures: readonly FeatureEntry[] = [
     setup: syncServerStatus,
   },
   { name: 'file-views', phase: 'refresh', order: 110, setup: setupFileViews },
-  { name: 'path-search', phase: 'refresh', order: 120, setup: setupSearch },
   {
     name: 'nav-links',
     phase: 'refresh',
     order: 130,
     setup: setupNavExternalLinks,
   },
-  { name: 'view-menu', phase: 'refresh', order: 140, setup: setupViewMenu },
   {
     name: 'column-controls',
     phase: 'refresh',
-    order: 150,
+    order: 140,
     setup: syncColumnControls,
   },
   {

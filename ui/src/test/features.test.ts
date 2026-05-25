@@ -13,8 +13,8 @@ describe('browser features', () => {
   it('declares initial setup order', () => {
     expect(featureNames('initial')).toEqual([
       'file-views',
-      'path-search',
-      'view-menu',
+      'search-close',
+      'column-controls',
       'doc-chrome-toggle',
       'dates',
       'toc',
@@ -31,9 +31,7 @@ describe('browser features', () => {
     expect(featureNames('refresh')).toEqual([
       'server-status',
       'file-views',
-      'path-search',
       'nav-links',
-      'view-menu',
       'column-controls',
       'doc-chrome-pref',
       'dates',

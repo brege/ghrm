@@ -53,10 +53,6 @@ export function populateDates(): void {
   }
 }
 
-export function setupViewMenu(): void {
-  syncColumnControls();
-}
-
 export function setupNavExternalLinks(): void {
   for (const row of document.querySelectorAll('.ghrm-nav-table tr')) {
     const nameLink = row.querySelector('.ghrm-nav-name a');

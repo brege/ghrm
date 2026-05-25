@@ -471,6 +471,10 @@ mod tests {
                 html.contains("id=\"ghrm-path-search-status\""),
                 "missing #ghrm-path-search-status"
             );
+            assert!(
+                html.contains("<ghrm-search-panel>"),
+                "missing search panel island host"
+            );
         }
 
         #[test]
@@ -862,6 +866,44 @@ mod tests {
             assert!(
                 html.contains("data-ghrm-gist-rename-start"),
                 "stash row missing data-ghrm-gist-rename-start"
+            );
+        }
+
+        #[test]
+        fn gist_editor_island_host() {
+            let html = gist(minimal_gist_ctx()).unwrap();
+            let article = html.find("<article ").unwrap();
+            let host = html.find("<ghrm-gist-editor>").unwrap();
+            assert!(
+                html.contains("<ghrm-gist-editor>"),
+                "gist missing <ghrm-gist-editor> island host"
+            );
+            assert!(
+                html.contains("</ghrm-gist-editor>"),
+                "gist missing </ghrm-gist-editor> closing tag"
+            );
+            assert!(
+                article < host,
+                "gist island host must be inside the article boundary"
+            );
+        }
+
+        #[test]
+        fn gist_stash_island_host() {
+            let html = gist_stash(minimal_gist_stash_ctx()).unwrap();
+            let article = html.find("<article ").unwrap();
+            let host = html.find("<ghrm-gist-stash>").unwrap();
+            assert!(
+                html.contains("<ghrm-gist-stash>"),
+                "stash missing <ghrm-gist-stash> island host"
+            );
+            assert!(
+                html.contains("</ghrm-gist-stash>"),
+                "stash missing </ghrm-gist-stash> closing tag"
+            );
+            assert!(
+                article < host,
+                "stash island host must be inside the article boundary"
             );
         }
     }

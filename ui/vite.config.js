@@ -20,7 +20,7 @@ function generatedBanner() {
   };
 }
 
-const sharedModules = ['dom', 'prefs', 'vendor', 'status', 'live', 'runtime'];
+const sharedModules = ['dom', 'prefs', 'vendor', 'status', 'runtime'];
 
 function isSharedModule(id) {
   for (const name of sharedModules) {
@@ -29,6 +29,10 @@ function isSharedModule(id) {
     }
   }
   return false;
+}
+
+function isExplorerModule(id) {
+  return id.endsWith('/explorer.js') || id.endsWith('/explorer.ts');
 }
 
 export default defineConfig({
@@ -53,6 +57,9 @@ export default defineConfig({
         manualChunks: (id) => {
           if (id.includes('/adapters/')) {
             return 'adapters';
+          }
+          if (isExplorerModule(id)) {
+            return 'explorer';
           }
           if (isSharedModule(id)) {
             return 'shared';
