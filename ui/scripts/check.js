@@ -26,6 +26,7 @@ const extractDir = join(__dirname, '../.asset-check');
 const srcDir = join(__dirname, '../src');
 const expectedEntries = ['preview.js', 'main.js', 'gist.js'];
 const expectedChunks = ['adapters.js', 'explorer.js', 'shared.js'];
+const expectedAssets = ['icons.svg'];
 
 function fail(message, ...parts) {
   console.error(message, ...parts);
@@ -83,6 +84,11 @@ function checkExpectedFiles(dir) {
     .filter((chunk) => !fileSet.has(chunk));
   if (missingChunks.length > 0) {
     fail('Missing expected chunk files:', missingChunks.join(', '));
+  }
+
+  const missingAssets = expectedAssets.filter((asset) => !fileSet.has(asset));
+  if (missingAssets.length > 0) {
+    fail('Missing expected asset files:', missingAssets.join(', '));
   }
 }
 
@@ -260,6 +266,7 @@ function packBuild() {
   console.log('Asset archive packed.');
   console.log('Entry files:', expectedEntries.join(', '));
   console.log('Chunks:', expectedChunks.join(', '));
+  console.log('Assets:', expectedAssets.join(', '));
   console.log('Total output size:', formatBytes(calculateDirSize(runtimeDir)));
   console.log('Archive size:', formatBytes(statSync(archivePath).size));
 }
@@ -281,6 +288,7 @@ function checkBuild() {
   console.log('Build check passed.');
   console.log('Entry files:', expectedEntries.join(', '));
   console.log('Chunks:', expectedChunks.join(', '));
+  console.log('Assets:', expectedAssets.join(', '));
   console.log('Total output size:', formatBytes(calculateDirSize(buildDir)));
 }
 
@@ -291,6 +299,7 @@ function checkSourceBuild() {
   console.log('Source build check passed.');
   console.log('Entry files:', expectedEntries.join(', '));
   console.log('Chunks:', expectedChunks.join(', '));
+  console.log('Assets:', expectedAssets.join(', '));
   console.log('Total output size:', formatBytes(calculateDirSize(buildDir)));
 }
 

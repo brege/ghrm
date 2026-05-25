@@ -57,6 +57,6 @@ fn octicon_for_title(title: &str) -> Option<&'static str> {
 
 fn octicon_svg(icon: &str) -> String {
     format!(
-        "<svg class=\"octicon\" width=\"16\" height=\"16\" aria-hidden=\"true\"><use href=\"#ghrm-icon-{icon}\"></use></svg>"
+        "<svg class=\"octicon\" width=\"16\" height=\"16\" aria-hidden=\"true\"><use href=\"/_ghrm/assets/js/icons.svg#ghrm-icon-{icon}\"></use></svg>"
     )
 }

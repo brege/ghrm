@@ -28,7 +28,7 @@ export function asElement(target: EventTarget | null): Element | null {
 }
 
 export function icon(name: string, cls = 'ghrm-file-icon'): string {
-  return `<svg aria-hidden="true" height="16" width="16" class="${cls}"><use href="#ghrm-icon-${name}"></use></svg>`;
+  return `<svg aria-hidden="true" height="16" width="16" class="${cls}"><use href="/_ghrm/assets/js/icons.svg#ghrm-icon-${name}"></use></svg>`;
 }
 
 export function escapeHtml(value: string): string {

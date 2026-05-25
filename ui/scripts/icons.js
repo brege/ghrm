@@ -14,18 +14,18 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { transformWithEsbuild } from 'vite';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const repoRoot = resolve(__dirname, '../..');
 const sourcePath = join(__dirname, '../icons.tsx');
 const compiledSourcePath = join(repoRoot, 'ui/.asset-check/icons-source.mjs');
-const spritePath = join(repoRoot, 'assets/templates/fragments/icons.html');
+const runtimeSpritePath = join(repoRoot, 'assets/js/icons.svg');
 const refRoots = ['assets/templates', 'assets/css', 'src', 'ui/src'];
 const productionRoots = ['ui/src'];
 const skippedDirs = new Set(['.asset-check', '.vite-check', 'node_modules']);
 const expectedIconCount = 56;
-const spriteOpen =
-  '  <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">';
-const spriteClose = '  </svg>';
+const spriteOpen = '<svg xmlns="http://www.w3.org/2000/svg">';
+const spriteClose = '</svg>';
 const dynamicAskamaContracts = [
   {
     expression: 'row.icon',
@@ -188,6 +188,10 @@ function renderSprite(data) {
   return `${spriteOpen}\n${data.icons.map((icon) => icon.symbol).join('\n')}\n${spriteClose}\n`;
 }
 
+export async function generateSprite() {
+  return renderSprite(await readSource());
+}
+
 function walkFiles(dir) {
   const files = [];
   if (!existsSync(dir)) return files;
@@ -222,7 +226,7 @@ function collectIconRefs() {
     /^\s*"([A-Za-z0-9-]+)"\s*=>\s*Some\("([A-Za-z0-9-]+)"\),/gm;
 
   // Matches Askama icon expressions whose concrete IDs are supplied by Rust.
-  const askamaIconPattern = /href="#\{\{\s*([A-Za-z0-9_.]+)\s*\}\}"/g;
+  const askamaIconPattern = /href="[^"]*#\{\{\s*([A-Za-z0-9_.]+)\s*\}\}"/g;
 
   function addRef(id, file, kind) {
     if (!refs.has(id)) refs.set(id, new Set());
@@ -231,7 +235,7 @@ function collectIconRefs() {
 
   for (const root of refRoots) {
     for (const file of walkFiles(join(repoRoot, root))) {
-      if (file === spritePath || file === sourcePath) continue;
+      if (file === sourcePath) continue;
 
       const text = readText(file);
       for (const match of text.matchAll(iconRefPattern)) {
@@ -355,19 +359,8 @@ function reportRefs(refs, dynamicRefs) {
   }
 }
 
-function checkGenerated(data) {
-  const expected = renderSprite(data);
-  const actual = readText(spritePath);
-
-  if (actual !== expected) {
-    fail(
-      'Icon sprite differs from generated output. Run npm --prefix ui run icons:write.',
-    );
-  }
-}
-
 function writeGenerated(data) {
-  writeText(spritePath, renderSprite(data));
+  writeText(runtimeSpritePath, renderSprite(data));
 }
 
 function checkProductionImports() {
@@ -402,7 +395,6 @@ async function main() {
     checkProductionImports();
     const { refs, dynamicRefs } = collectIconRefs();
     checkRefs(data, refs, dynamicRefs);
-    checkGenerated(data);
     reportRefs(refs, dynamicRefs);
     console.log('Icon sprite check passed.');
   } else {
@@ -410,6 +402,8 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  fail('Icon command failed:', error.message);
-});
+if (resolve(process.argv[1] ?? '') === __filename) {
+  main().catch((error) => {
+    fail('Icon command failed:', error.message);
+  });
+}
