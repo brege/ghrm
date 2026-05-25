@@ -31,7 +31,8 @@ pub struct SearchResponse {
 
 pub struct SearchOpts<'a> {
     pub query: &'a str,
-    pub root: &'a Path,
+    pub session_root: &'a Path,
+    pub walk_root: &'a Path,
     pub use_ignore: bool,
     pub hidden: bool,
     pub exclude_names: &'a [String],
@@ -55,7 +56,7 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
     let results: Mutex<Vec<SearchResult>> = Mutex::new(Vec::new());
     let truncated = Mutex::new(false);
 
-    let mut walk = WalkBuilder::new(opts.root);
+    let mut walk = WalkBuilder::new(opts.walk_root);
     walk.hidden(!opts.hidden)
         .git_ignore(opts.use_ignore)
         .git_exclude(opts.use_ignore)
@@ -91,7 +92,7 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
 
             let path = entry.path();
 
-            let rel = match path.strip_prefix(opts.root) {
+            let rel = match path.strip_prefix(opts.session_root) {
                 Ok(r) => r.to_path_buf(),
                 Err(_) => return ignore::WalkState::Continue,
             };
@@ -202,7 +203,8 @@ mod tests {
 
         let resp = search(SearchOpts {
             query: "needle",
-            root: td.path(),
+            session_root: td.path(),
+            walk_root: td.path(),
             use_ignore: false,
             hidden: true,
             exclude_names: &["target".to_string()],

@@ -19,6 +19,15 @@ run target=".":
 dev target=".":
     cargo run --locked -- --no-browser "{{target}}"
 
+# run ghrm with ui rebuild watcher
+dev-ui target=".":
+    npx --prefix ui vite build --config ui/vite.config.js && { \
+        npx --prefix ui vite build --config ui/vite.config.js --watch & \
+        VITE_PID=$!; \
+        trap "kill $VITE_PID 2>/dev/null" EXIT; \
+        cargo run --locked -- --no-browser "{{target}}"; \
+    }
+
 # print the resolved ghrm configuration
 dump-config target=".":
     cargo run --locked -- --dump-config "{{target}}"
@@ -86,10 +95,11 @@ rust-fmt:
     cargo fmt --manifest-path ghrm-stat/Cargo.toml
 
 # run all UI checks
-ui:
+ui: ui-fmt
     pre-commit run biome-check --all-files
     npm --prefix ui run typecheck
     npm --prefix ui run test
+    npm --prefix ui run icons:check
     npm --prefix ui run build:check
 
 # refresh generated bundle when UI source changed - only on main
@@ -108,4 +118,4 @@ ui-lint:
 
 # format UI files
 ui-fmt:
-    npx @biomejs/biome@2.4.6 check --write ui/ assets/css
+    npx @biomejs/biome@2.4.6 format --write ui/ assets/css

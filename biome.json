@@ -8,6 +8,7 @@
       "**",
       "!assets/js/**",
       "!assets/vendor/**",
+      "!ui/.asset-check/**",
       "!ui/.vite-check/**",
       "!ui/node_modules/**"
     ]
