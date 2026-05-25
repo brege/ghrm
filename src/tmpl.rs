@@ -471,6 +471,10 @@ mod tests {
                 html.contains("id=\"ghrm-path-search-status\""),
                 "missing #ghrm-path-search-status"
             );
+            assert!(
+                html.contains("<ghrm-search-panel>"),
+                "missing search panel island host"
+            );
         }
 
         #[test]

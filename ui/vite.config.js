@@ -20,7 +20,7 @@ function generatedBanner() {
   };
 }
 
-const sharedModules = ['dom', 'prefs', 'vendor', 'status', 'live', 'runtime'];
+const sharedModules = ['dom', 'prefs', 'vendor', 'status', 'runtime'];
 
 function isSharedModule(id) {
   for (const name of sharedModules) {
@@ -53,6 +53,9 @@ export default defineConfig({
         manualChunks: (id) => {
           if (id.includes('/adapters/')) {
             return 'adapters';
+          }
+          if (id.endsWith('/explorer.ts') || id.endsWith('/explorer.js')) {
+            return 'explorer';
           }
           if (isSharedModule(id)) {
             return 'shared';
