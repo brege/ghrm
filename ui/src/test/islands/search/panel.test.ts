@@ -382,7 +382,7 @@ describe('ghrm-search-panel', () => {
       });
     });
 
-    it('requests content search with htmx fragment headers', async () => {
+    it('requests content search with htmx fragment headers and current path', async () => {
       const toggle = document.getElementById('ghrm-path-search-toggle')!;
       const modeBtn = document.getElementById('ghrm-search-mode')!;
       const input = document.getElementById(
@@ -404,7 +404,7 @@ describe('ghrm-search-panel', () => {
 
       expect(request.pathname).toBe('/_ghrm/search');
       expect(request.searchParams.get('q')).toBe('needle');
-      expect(request.searchParams.has('path')).toBe(false);
+      expect(request.searchParams.get('path')).toBe('/test');
       expect(options.headers).toEqual({
         Accept: 'text/html',
         'HX-Request': 'true',

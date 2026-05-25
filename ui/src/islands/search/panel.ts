@@ -114,8 +114,11 @@ function fetchPathResults(
   return searchFragment('/_ghrm/path-search', params);
 }
 
-function fetchContentResults(query: string): Promise<SearchFragmentResponse> {
-  const params = buildSearchParams(query);
+function fetchContentResults(
+  query: string,
+  currentPath: string,
+): Promise<SearchFragmentResponse> {
+  const params = buildSearchParams(query, { path: currentPath });
   return searchFragment('/_ghrm/search', params);
 }
 
@@ -334,7 +337,7 @@ export class GhrmSearchPanel extends LitElement {
     try {
       if (searchMode === 'content') {
         this.status.textContent = 'Searching...';
-        const resp = await fetchContentResults(query);
+        const resp = await fetchContentResults(query, this.currentPath);
         if (seq !== this.searchSeq) return;
         if (this.empty) this.empty.hidden = true;
         this.table.hidden = false;

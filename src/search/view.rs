@@ -108,16 +108,23 @@ pub(crate) fn content_fragment(
     resp: &super::SearchResponse,
     view: &ViewState,
     cfg: &ViewConfig,
+    scope_prefix: Option<&str>,
 ) -> Option<Response> {
     let rows = resp
         .results
         .iter()
-        .map(|row| ContentSearchRow {
-            href: view::with_view(&format!("/{}", row.path), view, cfg),
-            path: row.path.clone(),
-            line: row.line,
-            html: format_content_snippet(&row.text, &row.ranges),
-            modified: row.modified,
+        .map(|row| {
+            let display = scope_prefix
+                .and_then(|prefix| row.path.strip_prefix(prefix))
+                .map(|s| s.trim_start_matches('/').to_string())
+                .unwrap_or_else(|| row.path.clone());
+            ContentSearchRow {
+                href: view::with_view(&format!("/{}", row.path), view, cfg),
+                path: display,
+                line: row.line,
+                html: format_content_snippet(&row.text, &row.ranges),
+                modified: row.modified,
+            }
         })
         .collect::<Vec<_>>();
     let body = match tmpl::content_search(ContentSearchCtx {

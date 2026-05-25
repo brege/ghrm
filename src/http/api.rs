@@ -1,6 +1,7 @@
 use crate::explorer::view::ViewQuery;
 use crate::explorer::{column, view, walk};
 use crate::http::server::{AppState, Mode};
+use crate::paths;
 use crate::render;
 use crate::repo::RepoSet;
 use crate::search;
@@ -53,6 +54,7 @@ pub(crate) async fn tree(
 #[derive(Default, Deserialize)]
 pub(crate) struct SearchQuery {
     q: Option<String>,
+    path: Option<String>,
     #[serde(flatten)]
     view: ViewQuery,
 }
@@ -68,6 +70,12 @@ pub(crate) async fn search(
         _ => return bad_request(r#"{"error":"missing query"}"#),
     };
 
+    let (search_root, path_prefix) = resolve_search_scope(&s.target, q.path.as_deref());
+    let search_root = match search_root {
+        Some(root) => root,
+        None => return bad_request(r#"{"error":"invalid path"}"#),
+    };
+
     let view = view::from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let exclude_names = if view.opts.show_excludes {
         &[][..]
@@ -77,9 +85,9 @@ pub(crate) async fn search(
     let matcher = view::matcher(&view, &s.filters);
     let filter_exts = view::filter_exts(&view, &s.filter_exts);
 
-    let resp = search::search(search::SearchOpts {
+    let mut resp = search::search(search::SearchOpts {
         query,
-        root: &s.target,
+        root: &search_root,
         use_ignore: view.use_ignore,
         hidden: view.opts.show_hidden,
         exclude_names,
@@ -88,8 +96,15 @@ pub(crate) async fn search(
         max_rows: s.search_max_rows,
     });
 
+    if let Some(ref prefix) = path_prefix {
+        for result in &mut resp.results {
+            result.path = format!("{}/{}", prefix, result.path);
+        }
+    }
+
     if wants_html(&headers) {
-        return search::view::content_fragment(&resp, &view, &s.view_cfg).unwrap_or_else(not_found);
+        return search::view::content_fragment(&resp, &view, &s.view_cfg, path_prefix.as_deref())
+            .unwrap_or_else(not_found);
     }
 
     json_response(&resp, "api_search")
@@ -303,6 +318,22 @@ fn wants_html(headers: &HeaderMap) -> bool {
             .is_some_and(|value| value.contains("text/html"))
 }
 
+fn resolve_search_scope(target: &Path, path: Option<&str>) -> (Option<PathBuf>, Option<String>) {
+    let raw = path.unwrap_or("").trim_matches('/');
+    if raw.is_empty() {
+        return (Some(target.to_path_buf()), None);
+    }
+    let rel = match paths::safe_rel(raw) {
+        Some(r) => r,
+        None => return (None, None),
+    };
+    let scope = target.join(&rel);
+    if !scope.is_dir() {
+        return (None, None);
+    }
+    (Some(scope), Some(rel.to_string_lossy().into_owned()))
+}
+
 fn bad_request(body: &'static str) -> Response {
     Response::builder()
         .status(StatusCode::BAD_REQUEST)
@@ -442,5 +473,71 @@ mod tests {
         assert!(resp.truncated);
         let names: Vec<_> = resp.results.into_iter().map(|row| row.display).collect();
         assert_eq!(names, vec!["match-large.md", "match-mid.md"]);
+    }
+
+    #[test]
+    fn resolve_search_scope_rejects_parent_traversal() {
+        let td = TempDir::new("ghrm-scope");
+        fs::create_dir_all(td.path().join("sub")).unwrap();
+
+        let (scope, _) = resolve_search_scope(td.path(), Some("../escape"));
+        assert!(scope.is_none());
+
+        let (scope, _) = resolve_search_scope(td.path(), Some("sub/../.."));
+        assert!(scope.is_none());
+    }
+
+    #[test]
+    fn resolve_search_scope_returns_prefix_for_child() {
+        let td = TempDir::new("ghrm-scope");
+        fs::create_dir_all(td.path().join("plans/brege")).unwrap();
+
+        let (scope, prefix) = resolve_search_scope(td.path(), Some("plans/brege"));
+        assert!(scope.is_some());
+        assert_eq!(scope.unwrap(), td.path().join("plans/brege"));
+        assert_eq!(prefix.as_deref(), Some("plans/brege"));
+    }
+
+    #[test]
+    fn resolve_search_scope_returns_none_prefix_for_root() {
+        let td = TempDir::new("ghrm-scope");
+
+        let (scope, prefix) = resolve_search_scope(td.path(), None);
+        assert_eq!(scope.unwrap(), td.path());
+        assert!(prefix.is_none());
+
+        let (scope, prefix) = resolve_search_scope(td.path(), Some(""));
+        assert_eq!(scope.unwrap(), td.path());
+        assert!(prefix.is_none());
+    }
+
+    #[test]
+    fn scoped_content_search_returns_session_root_paths() {
+        let td = TempDir::new("ghrm-scoped-search");
+        fs::create_dir_all(td.path().join("plans/brege")).unwrap();
+        fs::write(td.path().join("root.md"), "needle in root").unwrap();
+        fs::write(td.path().join("plans/brege/bench.md"), "needle in child").unwrap();
+
+        let resp = search::search(search::SearchOpts {
+            query: "needle",
+            root: &td.path().join("plans/brege"),
+            use_ignore: false,
+            hidden: true,
+            exclude_names: &[],
+            filter_exts: None,
+            group_filter: None,
+            max_rows: 10,
+        });
+
+        assert_eq!(resp.results.len(), 1);
+        assert_eq!(resp.results[0].path, "bench.md");
+
+        let mut adjusted = resp;
+        let prefix = "plans/brege";
+        for result in &mut adjusted.results {
+            result.path = format!("{}/{}", prefix, result.path);
+        }
+
+        assert_eq!(adjusted.results[0].path, "plans/brege/bench.md");
     }
 }
