@@ -85,9 +85,10 @@ pub(crate) async fn search(
     let matcher = view::matcher(&view, &s.filters);
     let filter_exts = view::filter_exts(&view, &s.filter_exts);
 
-    let mut resp = search::search(search::SearchOpts {
+    let resp = search::search(search::SearchOpts {
         query,
-        root: &search_root,
+        session_root: &s.target,
+        walk_root: &search_root,
         use_ignore: view.use_ignore,
         hidden: view.opts.show_hidden,
         exclude_names,
@@ -95,12 +96,6 @@ pub(crate) async fn search(
         group_filter: matcher.as_ref(),
         max_rows: s.search_max_rows,
     });
-
-    if let Some(ref prefix) = path_prefix {
-        for result in &mut resp.results {
-            result.path = format!("{}/{}", prefix, result.path);
-        }
-    }
 
     if wants_html(&headers) {
         return search::view::content_fragment(&resp, &view, &s.view_cfg, path_prefix.as_deref())
@@ -331,6 +326,17 @@ fn resolve_search_scope(target: &Path, path: Option<&str>) -> (Option<PathBuf>, 
     if !scope.is_dir() {
         return (None, None);
     }
+    let canon_target = match target.canonicalize() {
+        Ok(p) => p,
+        Err(_) => return (None, None),
+    };
+    let canon_scope = match scope.canonicalize() {
+        Ok(p) => p,
+        Err(_) => return (None, None),
+    };
+    if !canon_scope.starts_with(&canon_target) {
+        return (None, None);
+    }
     (Some(scope), Some(rel.to_string_lossy().into_owned()))
 }
 
@@ -498,6 +504,24 @@ mod tests {
         assert_eq!(prefix.as_deref(), Some("plans/brege"));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn resolve_search_scope_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let td = TempDir::new("ghrm-scope-symlink");
+        let external = TempDir::new("ghrm-external");
+        fs::create_dir_all(external.path().join("secret")).unwrap();
+
+        symlink(external.path(), td.path().join("escape")).unwrap();
+
+        let (scope, _) = resolve_search_scope(td.path(), Some("escape"));
+        assert!(scope.is_none());
+
+        let (scope, _) = resolve_search_scope(td.path(), Some("escape/secret"));
+        assert!(scope.is_none());
+    }
+
     #[test]
     fn resolve_search_scope_returns_none_prefix_for_root() {
         let td = TempDir::new("ghrm-scope");
@@ -520,7 +544,8 @@ mod tests {
 
         let resp = search::search(search::SearchOpts {
             query: "needle",
-            root: &td.path().join("plans/brege"),
+            session_root: td.path(),
+            walk_root: &td.path().join("plans/brege"),
             use_ignore: false,
             hidden: true,
             exclude_names: &[],
@@ -530,14 +555,6 @@ mod tests {
         });
 
         assert_eq!(resp.results.len(), 1);
-        assert_eq!(resp.results[0].path, "bench.md");
-
-        let mut adjusted = resp;
-        let prefix = "plans/brege";
-        for result in &mut adjusted.results {
-            result.path = format!("{}/{}", prefix, result.path);
-        }
-
-        assert_eq!(adjusted.results[0].path, "plans/brege/bench.md");
+        assert_eq!(resp.results[0].path, "plans/brege/bench.md");
     }
 }
