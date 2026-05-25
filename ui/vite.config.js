@@ -31,6 +31,10 @@ function isSharedModule(id) {
   return false;
 }
 
+function isExplorerModule(id) {
+  return id.endsWith('/explorer.js') || id.endsWith('/explorer.ts');
+}
+
 export default defineConfig({
   plugins: [generatedBanner()],
   build: {
@@ -53,6 +57,9 @@ export default defineConfig({
         manualChunks: (id) => {
           if (id.includes('/adapters/')) {
             return 'adapters';
+          }
+          if (isExplorerModule(id)) {
+            return 'explorer';
           }
           if (isSharedModule(id)) {
             return 'shared';
