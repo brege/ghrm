@@ -20,6 +20,10 @@ const repoRoot = resolve(__dirname, '../..');
 const sourcePath = join(__dirname, '../icons.tsx');
 const compiledSourcePath = join(repoRoot, 'ui/.asset-check/icons-source.mjs');
 const runtimeSpritePath = join(repoRoot, 'assets/js/icons.svg');
+const obsoleteSourcePaths = [
+  join(repoRoot, 'assets/templates/fragments/icons.html'),
+  join(repoRoot, 'ui/icons.json'),
+];
 const refRoots = ['assets/templates', 'assets/css', 'src', 'ui/src'];
 const productionRoots = ['ui/src'];
 const skippedDirs = new Set(['.asset-check', '.vite-check', 'node_modules']);
@@ -190,6 +194,52 @@ function renderSprite(data) {
 
 export async function generateSprite() {
   return renderSprite(await readSource());
+}
+
+function checkSpriteShape(data) {
+  const sprite = renderSprite(data);
+  if (!sprite.startsWith(`${spriteOpen}\n`) || !sprite.endsWith('\n</svg>\n')) {
+    fail('Generated icon sprite has an unexpected SVG wrapper.');
+  }
+
+  const expectedIds = sourceIds(data);
+  const symbolIds = [];
+
+  // Matches generated symbol opening tags and extracts their normalized attrs.
+  const symbolPattern = /<symbol\b([^>]*)>/g;
+  for (const match of sprite.matchAll(symbolPattern)) {
+    const attrs = parseAttrs(match[1]);
+    const id = attrs.get('id');
+    if (!id) {
+      fail('Generated icon sprite contains a symbol without an id.');
+    }
+    if (!attrs.has('viewBox')) {
+      fail('Generated icon sprite contains a symbol without viewBox:', id);
+    }
+    symbolIds.push(id);
+  }
+
+  if (symbolIds.length !== data.icons.length) {
+    fail(
+      'Generated icon sprite has unexpected symbol count:',
+      `${symbolIds.length}, expected ${data.icons.length}`,
+    );
+  }
+
+  const duplicates = symbolIds.filter(
+    (id, index) => symbolIds.indexOf(id) !== index,
+  );
+  if (duplicates.length > 0) {
+    fail(
+      'Generated icon sprite contains duplicate symbols:',
+      duplicates.join(', '),
+    );
+  }
+
+  const missing = [...expectedIds].filter((id) => !symbolIds.includes(id));
+  if (missing.length > 0) {
+    fail('Generated icon sprite is missing source IDs:', missing.join(', '));
+  }
 }
 
 function walkFiles(dir) {
@@ -363,6 +413,15 @@ function writeGenerated(data) {
   writeText(runtimeSpritePath, renderSprite(data));
 }
 
+function checkNoObsoleteSources() {
+  const obsolete = obsoleteSourcePaths
+    .filter((path) => existsSync(path))
+    .map((path) => toPosix(relative(repoRoot, path)));
+  if (obsolete.length > 0) {
+    fail('Obsolete icon source artifacts remain:', obsolete.join(', '));
+  }
+}
+
 function checkProductionImports() {
   const offenders = [];
 
@@ -392,6 +451,8 @@ async function main() {
     writeGenerated(await readSource());
   } else if (mode === 'check') {
     const data = await readSource();
+    checkNoObsoleteSources();
+    checkSpriteShape(data);
     checkProductionImports();
     const { refs, dynamicRefs } = collectIconRefs();
     checkRefs(data, refs, dynamicRefs);
