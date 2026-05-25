@@ -71,6 +71,10 @@ describe('ghrm-search-panel', () => {
     vi.unstubAllGlobals();
   });
 
+  function currentFetchMock(): ReturnType<typeof vi.fn> {
+    return fetch as unknown as ReturnType<typeof vi.fn>;
+  }
+
   describe('panel visibility', () => {
     it('shows search panel when explorer article exists', () => {
       const search = document.getElementById('ghrm-path-search')!;
@@ -193,7 +197,9 @@ describe('ghrm-search-panel', () => {
       input.value = 'test';
       input.dispatchEvent(new Event('input', { bubbles: true }));
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(tbody.innerHTML).toContain('result');
+      });
 
       toggle.click();
 
@@ -242,24 +248,14 @@ describe('ghrm-search-panel', () => {
 
   describe('stale response handling', () => {
     it('discards stale responses', async () => {
-      let resolveFirst: (value: unknown) => void;
-      const firstPromise = new Promise((r) => {
-        resolveFirst = r;
+      let resolveFirst: (value: unknown) => void = () => {};
+      const firstFetch = new Promise((resolve) => {
+        resolveFirst = resolve;
       });
 
       const fetchMock = vi
         .fn()
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              resolveFirst = () =>
-                resolve({
-                  ok: true,
-                  text: () => Promise.resolve('<tr><td>stale</td></tr>'),
-                  headers: new Map([['X-Ghrm-Search-Count', '1']]),
-                });
-            }),
-        )
+        .mockImplementationOnce(() => firstFetch)
         .mockImplementationOnce(() =>
           Promise.resolve({
             ok: true,
@@ -284,10 +280,18 @@ describe('ghrm-search-panel', () => {
       input.value = 'second';
       input.dispatchEvent(new Event('input', { bubbles: true }));
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(tbody.innerHTML).toContain('fresh');
+      });
 
-      resolveFirst!(null);
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      resolveFirst({
+        ok: true,
+        text: () => Promise.resolve('<tr><td>stale</td></tr>'),
+        headers: new Map([['X-Ghrm-Search-Count', '1']]),
+      });
+      await firstFetch;
+      await Promise.resolve();
 
       expect(tbody.innerHTML).toContain('fresh');
       expect(tbody.innerHTML).not.toContain('stale');
@@ -306,7 +310,9 @@ describe('ghrm-search-panel', () => {
       input.value = 'test';
       input.dispatchEvent(new Event('input', { bubbles: true }));
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(tbody.innerHTML).toContain('result');
+      });
 
       expect(tbody.innerHTML).toContain('result');
     });
@@ -322,7 +328,9 @@ describe('ghrm-search-panel', () => {
       input.value = 'test';
       input.dispatchEvent(new Event('input', { bubbles: true }));
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(table.hidden).toBe(false);
+      });
 
       expect(table.hidden).toBe(false);
     });
@@ -338,9 +346,69 @@ describe('ghrm-search-panel', () => {
       input.value = 'test';
       input.dispatchEvent(new Event('input', { bubbles: true }));
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(empty.hidden).toBe(true);
+      });
 
       expect(empty.hidden).toBe(true);
+    });
+  });
+
+  describe('fetch contract', () => {
+    it('requests path search with htmx fragment headers and current path', async () => {
+      const toggle = document.getElementById('ghrm-path-search-toggle')!;
+      const input = document.getElementById(
+        'ghrm-path-search-input',
+      ) as HTMLInputElement;
+      const fetchMock = currentFetchMock();
+
+      toggle.click();
+      input.value = 'two words';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+
+      await vi.waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+
+      const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const request = new URL(url, location.origin);
+
+      expect(request.pathname).toBe('/_ghrm/path-search');
+      expect(request.searchParams.get('q')).toBe('two words');
+      expect(request.searchParams.get('path')).toBe('/test');
+      expect(options.headers).toEqual({
+        Accept: 'text/html',
+        'HX-Request': 'true',
+      });
+    });
+
+    it('requests content search with htmx fragment headers', async () => {
+      const toggle = document.getElementById('ghrm-path-search-toggle')!;
+      const modeBtn = document.getElementById('ghrm-search-mode')!;
+      const input = document.getElementById(
+        'ghrm-path-search-input',
+      ) as HTMLInputElement;
+      const fetchMock = currentFetchMock();
+
+      toggle.click();
+      modeBtn.click();
+      input.value = 'needle';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+
+      await vi.waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+
+      const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const request = new URL(url, location.origin);
+
+      expect(request.pathname).toBe('/_ghrm/search');
+      expect(request.searchParams.get('q')).toBe('needle');
+      expect(request.searchParams.has('path')).toBe(false);
+      expect(options.headers).toEqual({
+        Accept: 'text/html',
+        'HX-Request': 'true',
+      });
     });
   });
 
@@ -356,7 +424,9 @@ describe('ghrm-search-panel', () => {
       input.value = 'test';
       input.dispatchEvent(new Event('input', { bubbles: true }));
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(status.textContent).toBe('1 path');
+      });
 
       expect(status.textContent).toBe('1 path');
     });
@@ -372,7 +442,9 @@ describe('ghrm-search-panel', () => {
       input.value = 'test';
       input.dispatchEvent(new Event('input', { bubbles: true }));
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(status.textContent).toBe('1 path');
+      });
       expect(status.textContent).toBe('1 path');
 
       toggle.click();
@@ -395,7 +467,9 @@ describe('ghrm-search-panel', () => {
       input.value = 'test';
       input.dispatchEvent(new Event('input', { bubbles: true }));
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(hasActiveSearch()).toBe(true);
+      });
 
       expect(hasActiveSearch()).toBe(true);
     });
@@ -490,7 +564,9 @@ describe('ghrm-search-panel', () => {
       toggle.click();
       input.value = 'query';
       input.dispatchEvent(new Event('input', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(oldTbody.innerHTML).toContain('result for /test');
+      });
 
       expect(oldTbody.innerHTML).toContain('result for /test');
 
@@ -514,7 +590,9 @@ describe('ghrm-search-panel', () => {
 
       input.value = 'another';
       input.dispatchEvent(new Event('input', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(newTbody.innerHTML).toContain('result for /newpath');
+      });
 
       expect(newTbody.innerHTML).toContain('result for /newpath');
       expect(oldTbody.innerHTML).toContain('result for /test');
