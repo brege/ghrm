@@ -3,9 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=11.10.0"
+  },
   "scripts": {
     "build": "vite build && node scripts/check.js pack",
     "build:check": "vite build --outDir .vite-check && node scripts/check.js source",
+    "icons:check": "node scripts/icons.js check",
+    "icons:write": "node scripts/icons.js write",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
