@@ -11,15 +11,21 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { transformWithEsbuild } from 'vite';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '../..');
-const sourcePath = join(__dirname, '../icons.json');
+const sourcePath = join(__dirname, '../icons.tsx');
+const compiledSourcePath = join(repoRoot, 'ui/.asset-check/icons-source.mjs');
 const spritePath = join(repoRoot, 'assets/templates/fragments/icons.html');
 const refRoots = ['assets/templates', 'assets/css', 'src', 'ui/src'];
+const productionRoots = ['ui/src'];
 const skippedDirs = new Set(['.asset-check', '.vite-check', 'node_modules']);
 const expectedIconCount = 56;
+const spriteOpen =
+  '  <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">';
+const spriteClose = '  </svg>';
 const dynamicAskamaContracts = [
   {
     expression: 'row.icon',
@@ -55,49 +61,131 @@ function writeText(path, text) {
   writeFileSync(path, text);
 }
 
-function readSource() {
-  let data;
+function checkSourceText(text) {
+  // Reject copied SVG payload in the reviewed icon declaration source.
+  const svgPayloadPattern = /<\s*(?:path|svg|symbol)\b|d="/i;
+  if (svgPayloadPattern.test(text)) {
+    fail('Icon declaration source must not contain copied SVG payload.');
+  }
+}
+
+async function loadSourceModule() {
+  const sourceText = readText(sourcePath);
+  checkSourceText(sourceText);
+
+  const result = await transformWithEsbuild(sourceText, sourcePath, {
+    format: 'esm',
+    jsx: 'automatic',
+    jsxImportSource: 'react',
+    loader: 'tsx',
+    target: 'es2022',
+  });
+
+  writeText(compiledSourcePath, result.code);
+
   try {
-    data = JSON.parse(readText(sourcePath));
+    return await import(
+      `${pathToFileURL(compiledSourcePath).href}?t=${Date.now()}`
+    );
   } catch (error) {
-    fail('Unable to parse icon source:', error.message);
+    fail('Unable to load icon declaration source:', error.message);
+  }
+}
+
+async function loadRenderer() {
+  try {
+    return await import('react-dom/server');
+  } catch (error) {
+    fail('Unable to load React static renderer:', error.message);
+  }
+}
+
+function parseAttrs(rawAttrs) {
+  const attrs = new Map();
+
+  // Matches XML attribute assignments in the rendered SVG opening tag.
+  const attrPattern = /\s([A-Za-z_:][A-Za-z0-9_.:-]*)="([^"]*)"/g;
+  for (const match of rawAttrs.matchAll(attrPattern)) {
+    if (attrs.has(match[1])) {
+      fail('Rendered icon has duplicate SVG attribute:', match[1]);
+    }
+    attrs.set(match[1], match[2]);
   }
 
-  if (data.version !== 1) {
-    fail('Unsupported icon source version:', String(data.version));
+  return attrs;
+}
+
+function formatAttrs(attrs) {
+  return attrs.map(([name, value]) => `${name}="${value}"`).join(' ');
+}
+
+function renderSymbol(id, rendered) {
+  const trimmed = rendered.trim();
+
+  // Captures the rendered SVG opening attributes and child markup.
+  const svgPattern = /^<svg\b([^>]*)>([\s\S]*)<\/svg>$/;
+  const match = trimmed.match(svgPattern);
+  if (!match) {
+    fail('Rendered icon did not produce a single SVG element:', id);
   }
-  if (!Array.isArray(data.icons)) {
-    fail('Icon source must contain an icons array.');
+
+  const attrs = parseAttrs(match[1]);
+  const viewBox = attrs.get('viewBox');
+  if (!viewBox) {
+    fail('Rendered icon is missing viewBox:', id);
   }
-  if (data.icons.length !== expectedIconCount) {
+
+  const ignoredAttrs = new Set(['height', 'role', 'width', 'xmlns']);
+  const symbolAttrs = [];
+  for (const [name, value] of attrs) {
+    if (ignoredAttrs.has(name) || name === 'viewBox') continue;
+    symbolAttrs.push([name, value]);
+  }
+  symbolAttrs.sort(([left], [right]) => left.localeCompare(right));
+  symbolAttrs.unshift(['id', id], ['viewBox', viewBox]);
+
+  return `    <symbol ${formatAttrs(symbolAttrs)}>${match[2]}</symbol>`;
+}
+
+async function readSource() {
+  const source = await loadSourceModule();
+  const { renderToStaticMarkup } = await loadRenderer();
+
+  if (!Array.isArray(source.icons)) {
+    fail('Icon source must export an icons array.');
+  }
+  if (source.icons.length !== expectedIconCount) {
     fail(
       'Icon source has unexpected icon count:',
-      `${data.icons.length}, expected ${expectedIconCount}`,
+      `${source.icons.length}, expected ${expectedIconCount}`,
     );
   }
 
   const ids = new Set();
-  for (const icon of data.icons) {
+  const icons = [];
+  for (const icon of source.icons) {
     if (typeof icon.id !== 'string' || !icon.id.startsWith('ghrm-icon-')) {
       fail('Invalid icon id:', String(icon.id));
-    }
-    if (typeof icon.symbol !== 'string' || !icon.symbol.includes('<symbol ')) {
-      fail('Icon entry is missing symbol markup:', icon.id);
-    }
-    if (!icon.symbol.includes(`id="${icon.id}"`)) {
-      fail('Icon symbol id does not match source id:', icon.id);
     }
     if (ids.has(icon.id)) {
       fail('Duplicate icon id:', icon.id);
     }
+    if (typeof icon.icon !== 'object' || icon.icon === null) {
+      fail('Icon entry is missing an imported component tag:', icon.id);
+    }
+
     ids.add(icon.id);
+    icons.push({
+      id: icon.id,
+      symbol: renderSymbol(icon.id, renderToStaticMarkup(icon.icon)),
+    });
   }
 
-  return data;
+  return { icons };
 }
 
 function renderSprite(data) {
-  return `${data.sprite.open}\n${data.icons.map((icon) => icon.symbol).join('\n')}\n${data.sprite.close}\n`;
+  return `${spriteOpen}\n${data.icons.map((icon) => icon.symbol).join('\n')}\n${spriteClose}\n`;
 }
 
 function walkFiles(dir) {
@@ -282,16 +370,46 @@ function writeGenerated(data) {
   writeText(spritePath, renderSprite(data));
 }
 
-const mode = process.argv[2] ?? 'check';
-if (mode === 'write') {
-  writeGenerated(readSource());
-} else if (mode === 'check') {
-  const data = readSource();
-  const { refs, dynamicRefs } = collectIconRefs();
-  checkRefs(data, refs, dynamicRefs);
-  checkGenerated(data);
-  reportRefs(refs, dynamicRefs);
-  console.log('Icon sprite check passed.');
-} else {
-  fail('Unknown icon mode:', mode);
+function checkProductionImports() {
+  const offenders = [];
+
+  // Matches static and dynamic imports of the icon source packages.
+  const forbiddenImportPattern =
+    /\bfrom\s+['"](?:react|react-dom(?:\/[^'"]*)?|react-icons(?:\/[^'"]*)?)['"]|\bimport\s*\(\s*['"](?:react|react-dom(?:\/[^'"]*)?|react-icons(?:\/[^'"]*)?)['"]\s*\)/;
+
+  for (const root of productionRoots) {
+    for (const file of walkFiles(join(repoRoot, root))) {
+      if (forbiddenImportPattern.test(readText(file))) {
+        offenders.push(toPosix(relative(repoRoot, file)));
+      }
+    }
+  }
+
+  if (offenders.length > 0) {
+    fail(
+      'Production UI source imports icon-generation packages:',
+      offenders.join(', '),
+    );
+  }
 }
+
+async function main() {
+  const mode = process.argv[2] ?? 'check';
+  if (mode === 'write') {
+    writeGenerated(await readSource());
+  } else if (mode === 'check') {
+    const data = await readSource();
+    checkProductionImports();
+    const { refs, dynamicRefs } = collectIconRefs();
+    checkRefs(data, refs, dynamicRefs);
+    checkGenerated(data);
+    reportRefs(refs, dynamicRefs);
+    console.log('Icon sprite check passed.');
+  } else {
+    fail('Unknown icon mode:', mode);
+  }
+}
+
+main().catch((error) => {
+  fail('Icon command failed:', error.message);
+});
