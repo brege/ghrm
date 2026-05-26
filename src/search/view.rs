@@ -113,18 +113,12 @@ pub(crate) fn content_fragment(
     let rows = resp
         .results
         .iter()
-        .map(|row| {
-            let display = scope_prefix
-                .and_then(|prefix| row.path.strip_prefix(prefix))
-                .map(|s| s.trim_start_matches('/').to_string())
-                .unwrap_or_else(|| row.path.clone());
-            ContentSearchRow {
-                href: view::with_view(&format!("/{}", row.path), view, cfg),
-                path: display,
-                line: row.line,
-                html: format_content_snippet(&row.text, &row.ranges),
-                modified: row.modified,
-            }
+        .map(|row| ContentSearchRow {
+            href: view::with_view(&format!("/{}", row.path), view, cfg),
+            path: scoped_display_path(&row.path, scope_prefix),
+            line: row.line,
+            html: format_content_snippet(&row.text, &row.ranges),
+            modified: row.modified,
         })
         .collect::<Vec<_>>();
     let body = match tmpl::content_search(ContentSearchCtx {
@@ -148,6 +142,13 @@ pub(crate) fn content_fragment(
         false,
         resp.max_rows,
     ))
+}
+
+fn scoped_display_path(path: &str, scope_prefix: Option<&str>) -> String {
+    scope_prefix
+        .and_then(|prefix| path.strip_prefix(prefix))
+        .map(|s| s.trim_start_matches('/').to_string())
+        .unwrap_or_else(|| path.to_string())
 }
 
 fn content_colspan() -> usize {
@@ -278,4 +279,215 @@ fn html_response(
         .header("X-Ghrm-Search-Max-Rows", max_rows.to_string())
         .body(Body::from(body))
         .unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn highlight_match_wraps_query() {
+        let result = highlight_match("src/main.rs", "main");
+        assert!(result.contains(r#"<strong class="ghrm-search-hit">main</strong>"#));
+    }
+
+    #[test]
+    fn highlight_match_case_insensitive() {
+        let result = highlight_match("README.md", "readme");
+        assert!(result.contains(r#"<strong class="ghrm-search-hit">README</strong>"#));
+    }
+
+    #[test]
+    fn highlight_match_escapes_html() {
+        let result = highlight_match("<script>test</script>", "test");
+        assert!(result.contains("&lt;script&gt;"));
+        assert!(result.contains("&lt;/script&gt;"));
+        assert!(result.contains(r#"<strong class="ghrm-search-hit">test</strong>"#));
+    }
+
+    #[test]
+    fn highlight_match_multiple_occurrences() {
+        let result = highlight_match("test/test.rs", "test");
+        let count = result
+            .matches(r#"<strong class="ghrm-search-hit">"#)
+            .count();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn highlight_match_no_match() {
+        let result = highlight_match("src/lib.rs", "xyz");
+        assert!(!result.contains("<strong"));
+        assert_eq!(result, "src/lib.rs");
+    }
+
+    #[test]
+    fn highlight_ranges_marks_positions() {
+        let result = highlight_ranges("hello world", &[(0, 5)]);
+        assert_eq!(result, "<mark>hello</mark> world");
+    }
+
+    #[test]
+    fn highlight_ranges_multiple() {
+        let result = highlight_ranges("foo bar baz", &[(0, 3), (8, 11)]);
+        assert_eq!(result, "<mark>foo</mark> bar <mark>baz</mark>");
+    }
+
+    #[test]
+    fn highlight_ranges_escapes_html() {
+        let result = highlight_ranges("<tag>", &[(1, 4)]);
+        assert!(result.contains("&lt;"));
+        assert!(result.contains("<mark>tag</mark>"));
+        assert!(result.contains("&gt;"));
+    }
+
+    #[test]
+    fn highlight_ranges_empty() {
+        let result = highlight_ranges("unchanged", &[]);
+        assert_eq!(result, "unchanged");
+    }
+
+    #[test]
+    fn content_window_short_text_unchanged() {
+        let text = "short line";
+        let window = content_window(text, &[(0, 5)]);
+        assert_eq!(window.text, text);
+        assert_eq!(window.ranges, vec![(0, 5)]);
+        assert!(!window.prefix);
+        assert!(!window.suffix);
+    }
+
+    #[test]
+    fn content_window_long_text_clips() {
+        let text = "a".repeat(200);
+        let window = content_window(&text, &[(100, 105)]);
+        assert!(window.text.len() <= CONTENT_SNIPPET_MAX);
+        assert!(window.prefix || window.suffix);
+    }
+
+    #[test]
+    fn content_window_adjusts_ranges() {
+        let text = "a".repeat(200);
+        let window = content_window(&text, &[(100, 105)]);
+        assert!(!window.ranges.is_empty());
+        for (start, end) in &window.ranges {
+            assert!(*start < window.text.len());
+            assert!(*end <= window.text.len());
+        }
+    }
+
+    #[test]
+    fn content_window_range_outside_window_filtered() {
+        let text = "a".repeat(200);
+        let window = content_window(&text, &[(0, 5)]);
+        let has_range_in_window = window.ranges.iter().any(|(s, e)| *e > *s);
+        if window.prefix {
+            assert!(window.ranges.is_empty() || has_range_in_window);
+        }
+    }
+
+    #[test]
+    fn path_response_pending_state() {
+        let resp = PathResponse::pending(50);
+        assert!(resp.pending);
+        assert!(resp.results.is_empty());
+        assert!(!resp.truncated);
+        assert_eq!(resp.max_rows, 50);
+    }
+
+    #[test]
+    fn path_response_converts_rows() {
+        let columns = column::Set::from_defaults(|def| def.default_visible);
+        let rows = super::super::path::Rows {
+            rows: vec![super::super::path::Row {
+                href: "/file.rs".to_string(),
+                display: "file.rs".to_string(),
+                is_dir: false,
+                modified: Some(1700000000),
+                size: Some(1024),
+                lines: Some(100),
+                commit_subject: Some("test commit".to_string()),
+                commit_timestamp: Some(1700000000),
+            }],
+            truncated: true,
+            max_rows: 100,
+        };
+        let resp = path_response(rows, &columns);
+
+        assert!(!resp.pending);
+        assert!(resp.truncated);
+        assert_eq!(resp.max_rows, 100);
+        assert_eq!(resp.results.len(), 1);
+        assert_eq!(resp.results[0].href, "/file.rs");
+        assert_eq!(resp.results[0].display, "file.rs");
+        assert!(!resp.results[0].is_dir);
+    }
+
+    #[test]
+    fn html_response_sets_headers() {
+        let resp = html_response("body".to_string(), 5, false, false, 100);
+        assert_eq!(resp.headers().get("X-Ghrm-Search-Count").unwrap(), "5");
+        assert_eq!(resp.headers().get("X-Ghrm-Search-Truncated").unwrap(), "0");
+        assert_eq!(resp.headers().get("X-Ghrm-Search-Pending").unwrap(), "0");
+        assert_eq!(resp.headers().get("X-Ghrm-Search-Max-Rows").unwrap(), "100");
+        assert_eq!(
+            resp.headers().get("Content-Type").unwrap(),
+            "text/html; charset=utf-8"
+        );
+    }
+
+    #[test]
+    fn html_response_truncated_header() {
+        let resp = html_response("body".to_string(), 100, true, false, 100);
+        assert_eq!(resp.headers().get("X-Ghrm-Search-Truncated").unwrap(), "1");
+    }
+
+    #[test]
+    fn html_response_pending_header() {
+        let resp = html_response("body".to_string(), 0, false, true, 50);
+        assert_eq!(resp.headers().get("X-Ghrm-Search-Pending").unwrap(), "1");
+        assert_eq!(resp.headers().get("X-Ghrm-Search-Max-Rows").unwrap(), "50");
+    }
+
+    #[test]
+    fn scoped_display_path_strips_prefix() {
+        assert_eq!(
+            scoped_display_path("src/lib/utils.rs", Some("src/lib")),
+            "utils.rs"
+        );
+    }
+
+    #[test]
+    fn scoped_display_path_no_prefix() {
+        assert_eq!(scoped_display_path("src/main.rs", None), "src/main.rs");
+    }
+
+    #[test]
+    fn scoped_display_path_prefix_mismatch() {
+        assert_eq!(
+            scoped_display_path("tests/main.rs", Some("src")),
+            "tests/main.rs"
+        );
+    }
+
+    #[test]
+    fn content_colspan_finds_date_column() {
+        let colspan = content_colspan();
+        assert!(colspan > 0);
+        assert!(colspan <= column::DEFS.len() + 1);
+    }
+
+    #[test]
+    fn format_content_snippet_short() {
+        let result = format_content_snippet("short text", &[(6, 10)]);
+        assert!(result.contains("<mark>text</mark>"));
+        assert!(!result.contains("..."));
+    }
+
+    #[test]
+    fn format_content_snippet_long_adds_ellipsis() {
+        let long_text = "a".repeat(200);
+        let result = format_content_snippet(&long_text, &[(100, 105)]);
+        assert!(result.contains("..."));
+    }
 }
