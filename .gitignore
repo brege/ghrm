@@ -1,15 +1,16 @@
 # rust
-/target/
-ghrm-stat/target/
-
-# mutants
-mutants.out/
+target/
 
 # js cdn libs
 assets/vendor/
 
 # generated ui runtime
 assets/js/
+
+# ui workspace
+ui/node_modules/
+ui/.asset-check/
+ui/.vite-check/
 
 # benchmarks
 bench/data/snapshots/
@@ -20,8 +21,3 @@ bench/.home/
 bench/.uv-cache/
 bench/.venv/
 __pycache__/
-
-# ui workspace
-ui/node_modules/
-ui/.asset-check/
-ui/.vite-check/
