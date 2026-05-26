@@ -25,6 +25,168 @@ const LANGUAGE_COLORS: &[&str] = &[
     "#d19a66", "#8b5cf6", "#f1e05a", "#e34c26", "#3572a5", "#000080",
 ];
 
+struct StatDisplay {
+    label: &'static str,
+    icon: &'static str,
+    is_list: bool,
+    has_timestamp: bool,
+}
+
+const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
+    (
+        ghrm_stat::Tool::Title,
+        StatDisplay {
+            label: "Title",
+            icon: "",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Project,
+        StatDisplay {
+            label: "Project",
+            icon: "ghrm-icon-table",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Description,
+        StatDisplay {
+            label: "Description",
+            icon: "",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Head,
+        StatDisplay {
+            label: "Head",
+            icon: "ghrm-icon-location",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Pending,
+        StatDisplay {
+            label: "Pending",
+            icon: "",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Version,
+        StatDisplay {
+            label: "Version",
+            icon: "ghrm-icon-fork",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Created,
+        StatDisplay {
+            label: "Created",
+            icon: "ghrm-icon-created",
+            is_list: false,
+            has_timestamp: true,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Languages,
+        StatDisplay {
+            label: "Languages",
+            icon: "",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Authors,
+        StatDisplay {
+            label: "Authors",
+            icon: "ghrm-icon-people",
+            is_list: true,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::LastChange,
+        StatDisplay {
+            label: "Updated",
+            icon: "ghrm-icon-update",
+            is_list: false,
+            has_timestamp: true,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Url,
+        StatDisplay {
+            label: "URL",
+            icon: "",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Commits,
+        StatDisplay {
+            label: "Commits",
+            icon: "ghrm-icon-commit",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Churn,
+        StatDisplay {
+            label: "Churn",
+            icon: "ghrm-icon-repeat",
+            is_list: true,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Loc,
+        StatDisplay {
+            label: "LOC",
+            icon: "ghrm-icon-loc",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::Size,
+        StatDisplay {
+            label: "Size",
+            icon: "ghrm-icon-data",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+    (
+        ghrm_stat::Tool::License,
+        StatDisplay {
+            label: "License",
+            icon: "ghrm-icon-scale",
+            is_list: false,
+            has_timestamp: false,
+        },
+    ),
+];
+
+fn stat_display(tool: ghrm_stat::Tool) -> &'static StatDisplay {
+    STAT_DISPLAYS
+        .iter()
+        .find(|(t, _)| *t == tool)
+        .map(|(_, d)| d)
+        .expect("all tools must have display definitions")
+}
+
 #[derive(Default, Deserialize)]
 pub(crate) struct AboutQuery {
     path: Option<String>,
@@ -516,7 +678,7 @@ fn stat_title_attr(
 }
 
 fn stat_title_ts(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Option<u64> {
-    if !matches!(tool, ghrm_stat::Tool::Created | ghrm_stat::Tool::LastChange) {
+    if !stat_display(tool).has_timestamp {
         return None;
     }
     rows.first()
@@ -605,7 +767,7 @@ fn stat_items(
     repo_root: &Path,
     served_root: &Path,
 ) -> Vec<AboutStatItem> {
-    if !matches!(tool, ghrm_stat::Tool::Authors | ghrm_stat::Tool::Churn) {
+    if !stat_display(tool).is_list {
         return Vec::new();
     }
     rows.iter()
@@ -696,42 +858,14 @@ fn plural(value: &str, single: &'static str, multiple: &'static str) -> &'static
 }
 
 fn stat_title(tool: ghrm_stat::Tool) -> &'static str {
-    match tool {
-        ghrm_stat::Tool::Title => "Title",
-        ghrm_stat::Tool::Project => "Project",
-        ghrm_stat::Tool::Description => "Description",
-        ghrm_stat::Tool::Head => "Head",
-        ghrm_stat::Tool::Pending => "Pending",
-        ghrm_stat::Tool::Version => "Version",
-        ghrm_stat::Tool::Created => "Created",
-        ghrm_stat::Tool::Languages => "Languages",
-        ghrm_stat::Tool::Authors => "Authors",
-        ghrm_stat::Tool::LastChange => "Updated",
-        ghrm_stat::Tool::Url => "URL",
-        ghrm_stat::Tool::Commits => "Commits",
-        ghrm_stat::Tool::Churn => "Churn",
-        ghrm_stat::Tool::Loc => "LOC",
-        ghrm_stat::Tool::Size => "Size",
-        ghrm_stat::Tool::License => "License",
-    }
+    stat_display(tool).label
 }
 
 fn stat_icon(tool: ghrm_stat::Tool, value: &str) -> &'static str {
-    match tool {
-        ghrm_stat::Tool::Url => forge_icon(value),
-        ghrm_stat::Tool::Version => "ghrm-icon-fork",
-        ghrm_stat::Tool::Project => "ghrm-icon-table",
-        ghrm_stat::Tool::Head => "ghrm-icon-location",
-        ghrm_stat::Tool::Created => "ghrm-icon-created",
-        ghrm_stat::Tool::Authors => "ghrm-icon-people",
-        ghrm_stat::Tool::License => "ghrm-icon-scale",
-        ghrm_stat::Tool::LastChange => "ghrm-icon-update",
-        ghrm_stat::Tool::Commits => "ghrm-icon-commit",
-        ghrm_stat::Tool::Churn => "ghrm-icon-repeat",
-        ghrm_stat::Tool::Loc => "ghrm-icon-loc",
-        ghrm_stat::Tool::Size => "ghrm-icon-data",
-        _ => "",
+    if tool == ghrm_stat::Tool::Url {
+        return forge_icon(value);
     }
+    stat_display(tool).icon
 }
 
 fn stat_href(tool: ghrm_stat::Tool, value: &str, source: &SourceState) -> String {
@@ -795,6 +929,18 @@ mod tests {
             .iter()
             .map(|metric| metric.title.as_str())
             .collect()
+    }
+
+    #[test]
+    fn display_table_covers_all_tools() {
+        use clap::ValueEnum;
+        for tool in ghrm_stat::Tool::value_variants() {
+            let display = stat_display(*tool);
+            assert!(
+                !display.label.is_empty(),
+                "{tool:?} must have a non-empty label"
+            );
+        }
     }
 
     #[test]
@@ -881,6 +1027,10 @@ mod tests {
         created
             .metrics
             .push(ghrm_stat::RowMetric::new("timestamp", "10"));
+        let mut last_change = ghrm_stat::Row::new("lastChange", "2 days ago");
+        last_change
+            .metrics
+            .push(ghrm_stat::RowMetric::new("timestamp", "1700000000"));
         let report = ghrm_stat::Report {
             root: PathBuf::from("/tmp/repo"),
             sections: vec![
@@ -900,6 +1050,7 @@ mod tests {
                     ],
                 ),
                 ghrm_stat::Section::new(ghrm_stat::Tool::Created, vec![created]),
+                ghrm_stat::Section::new(ghrm_stat::Tool::LastChange, vec![last_change]),
                 ghrm_stat::Section::new(
                     ghrm_stat::Tool::Languages,
                     vec![
@@ -930,6 +1081,10 @@ mod tests {
         assert_eq!(created.value, "3 years ago");
         assert_eq!(created.title_ts, Some(10));
         assert!(created.title.is_empty());
+
+        let updated = about_row(&stats.stats, "Updated");
+        assert_eq!(updated.value, "2 days ago");
+        assert_eq!(updated.title_ts, Some(1700000000));
 
         assert_eq!(stats.languages[0].name, "Rust");
         assert_eq!(stats.languages[0].value, "60.0%");

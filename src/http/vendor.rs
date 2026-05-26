@@ -11,9 +11,26 @@ use std::{
 };
 
 const COMMON_FEATURE: &str = "common";
-const MERMAID_FEATURE: &str = "mermaid";
-const MATH_FEATURE: &str = "math";
-const MAP_FEATURE: &str = "map";
+
+struct RenderedFeature {
+    vendor_feature: &'static str,
+    flag: fn(&Rendered) -> bool,
+}
+
+const RENDERED_FEATURES: &[RenderedFeature] = &[
+    RenderedFeature {
+        vendor_feature: "mermaid",
+        flag: |r| r.has_mermaid,
+    },
+    RenderedFeature {
+        vendor_feature: "math",
+        flag: |r| r.has_math,
+    },
+    RenderedFeature {
+        vendor_feature: "map",
+        flag: |r| r.has_map,
+    },
+];
 
 pub fn plan(r: &Rendered) -> Assets {
     manifest().plan(&feature_names(r))
@@ -31,14 +48,10 @@ pub fn client_json() -> &'static str {
 }
 
 fn feature_names(r: &Rendered) -> Vec<&'static str> {
-    [
-        (r.has_mermaid, MERMAID_FEATURE),
-        (r.has_math, MATH_FEATURE),
-        (r.has_map, MAP_FEATURE),
-    ]
-    .into_iter()
-    .filter_map(|(enabled, name)| enabled.then_some(name))
-    .collect()
+    RENDERED_FEATURES
+        .iter()
+        .filter_map(|f| (f.flag)(r).then_some(f.vendor_feature))
+        .collect()
 }
 
 pub fn dir() -> Result<PathBuf> {
@@ -201,6 +214,11 @@ impl Manifest {
         if !self.features.contains_key(COMMON_FEATURE) {
             bail!("missing common feature");
         }
+        for f in RENDERED_FEATURES {
+            if !self.features.contains_key(f.vendor_feature) {
+                bail!("missing rendered feature: {}", f.vendor_feature);
+            }
+        }
         let mut paths = BTreeSet::new();
         for item in &self.files {
             validate_rel(&item.path)?;
@@ -318,13 +336,27 @@ mod tests {
     #[test]
     fn plan_expands_feature_assets() {
         let plan = plan(&rendered(true, true, true));
-
-        assert_eq!(
-            feature_list(&rendered(true, true, true)),
-            "mermaid math map"
-        );
         assert!(plan.styles.len() > manifest().features[COMMON_FEATURE].styles.len());
         assert!(plan.scripts.len() > manifest().features[COMMON_FEATURE].scripts.len());
+    }
+
+    #[test]
+    fn feature_list_maps_flags_to_vendor_keys() {
+        let cases: &[(bool, bool, bool, &str)] = &[
+            (false, false, false, ""),
+            (true, false, false, "mermaid"),
+            (false, true, false, "math"),
+            (false, false, true, "map"),
+            (true, false, true, "mermaid map"),
+            (true, true, true, "mermaid math map"),
+        ];
+        for &(mermaid, math, map, expected) in cases {
+            assert_eq!(
+                feature_list(&rendered(mermaid, math, map)),
+                expected,
+                "flags ({mermaid}, {math}, {map}) should produce {expected:?}"
+            );
+        }
     }
 
     #[test]
@@ -339,6 +371,33 @@ mod tests {
             value["mermaidVersion"],
             manifest().public_url(&manifest().mermaid_version.path)
         );
+    }
+
+    #[test]
+    fn validation_rejects_missing_rendered_feature() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../../assets/config.json")).unwrap();
+        let mut modified = config.clone();
+        modified
+            .as_object_mut()
+            .unwrap()
+            .get_mut("features")
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .remove("math");
+
+        let raw = serde_json::to_string(&modified).unwrap();
+        match manifest_from_str(&raw) {
+            Ok(_) => panic!("expected validation to fail"),
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    msg.contains("missing rendered feature: math"),
+                    "expected error about missing rendered feature, got: {msg}"
+                );
+            }
+        }
     }
 
     #[test]
