@@ -371,4 +371,102 @@ mod tests {
         assert!(html.contains(r#"class="language-rust""#));
         assert!(html.contains("<tbody></tbody>"));
     }
+
+    #[tokio::test]
+    async fn previews_text_true_for_markdown() {
+        use crate::testutil::TempDir;
+        let dir = TempDir::new("ghrm-delivery-md");
+        let md_path = dir.path().join("readme.md");
+        std::fs::write(&md_path, "# Title\n").unwrap();
+
+        assert!(previews_text(&md_path).await);
+    }
+
+    #[tokio::test]
+    async fn previews_text_true_for_source() {
+        use crate::testutil::TempDir;
+        let dir = TempDir::new("ghrm-delivery-rs");
+        let rs_path = dir.path().join("main.rs");
+        std::fs::write(&rs_path, "fn main() {}\n").unwrap();
+
+        assert!(previews_text(&rs_path).await);
+    }
+
+    #[tokio::test]
+    async fn previews_text_false_for_binary() {
+        use crate::testutil::TempDir;
+        let dir = TempDir::new("ghrm-delivery-bin");
+        let bin_path = dir.path().join("program");
+        let elf = &[
+            0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00,
+        ];
+        std::fs::write(&bin_path, elf).unwrap();
+
+        assert!(!previews_text(&bin_path).await);
+    }
+
+    #[tokio::test]
+    async fn stream_download_sets_content_disposition() {
+        use crate::testutil::TempDir;
+        let dir = TempDir::new("ghrm-delivery-download");
+        let path = dir.path().join("doc.md");
+        std::fs::write(&path, "# Doc\n").unwrap();
+
+        let resp = stream_download(&path).await;
+
+        assert!(resp.status().is_success());
+        let disp = resp.headers().get(header::CONTENT_DISPOSITION).unwrap();
+        assert!(disp.to_str().unwrap().contains("doc.md"));
+    }
+
+    #[tokio::test]
+    async fn stream_file_not_found_returns_404() {
+        let resp = stream_file(Path::new("/nonexistent/path/file.txt")).await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn raw_source_html_escapes_content() {
+        let html = raw_source_html("<script>alert('xss')</script>");
+        assert!(html.contains("&lt;script&gt;"));
+        assert!(!html.contains("<script>alert"));
+    }
+
+    #[test]
+    fn not_found_returns_404_with_no_store() {
+        let resp = not_found();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            resp.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
+    }
+
+    #[test]
+    fn file_mode_svg_binary_is_download() {
+        let svg_bytes: &[u8] = &[0x00, 0x00, 0x00, 0x01, 0x00];
+        assert_eq!(
+            file_mode(Path::new("image.svg"), svg_bytes),
+            FileMode::Download
+        );
+    }
+
+    #[test]
+    fn file_mode_extension_override_content() {
+        let text = b"plain text content here";
+        assert_eq!(file_mode(Path::new("doc.MD"), text), FileMode::Markdown);
+    }
+
+    #[test]
+    fn file_view_attrs_kind_preserved() {
+        let md = file_view_attrs("/docs/readme.md", FileView::markdown());
+        assert!(md.contains(r#"data-ghrm-view-kind="markdown""#));
+
+        let src = file_view_attrs("/src/main.rs", FileView::source());
+        assert!(src.contains(r#"data-ghrm-view-kind="source""#));
+
+        let dual = file_view_attrs("/icon.svg", FileView::dual());
+        assert!(dual.contains(r#"data-ghrm-view-kind="dual""#));
+    }
 }

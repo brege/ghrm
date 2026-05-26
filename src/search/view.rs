@@ -284,6 +284,40 @@ fn html_response(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::explorer::walk::{Sort, ViewOpts};
+    use axum::body::to_bytes;
+
+    async fn response_text(response: Response) -> String {
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        String::from_utf8(bytes.to_vec()).unwrap()
+    }
+
+    fn test_columns() -> column::Set {
+        column::Set::from_defaults(|def| def.default_visible)
+    }
+
+    fn test_view_config() -> ViewConfig {
+        ViewConfig {
+            default: ViewOpts::default(),
+            default_use_ignore: true,
+            default_groups: Vec::new(),
+            default_sort: Sort::Name,
+            default_columns: test_columns(),
+            can_toggle_excludes: false,
+        }
+    }
+
+    fn test_view_state(cfg: &ViewConfig) -> ViewState {
+        ViewState {
+            opts: cfg.default,
+            use_ignore: cfg.default_use_ignore,
+            groups: Vec::new(),
+            sort: cfg.default_sort,
+            sort_dir: cfg.default_sort.default_dir(),
+            columns: cfg.default_columns.clone(),
+            show_headers: false,
+        }
+    }
 
     #[test]
     fn highlight_match_wraps_query() {
@@ -489,5 +523,114 @@ mod tests {
         let long_text = "a".repeat(200);
         let result = format_content_snippet(&long_text, &[(100, 105)]);
         assert!(result.contains("..."));
+    }
+
+    #[tokio::test]
+    async fn path_fragment_returns_some_with_rows() {
+        let cfg = test_view_config();
+        let view = test_view_state(&cfg);
+        let resp = PathResponse {
+            results: vec![PathResult {
+                href: "/file.rs".to_string(),
+                display: "file.rs".to_string(),
+                is_dir: false,
+                cells: Vec::new(),
+            }],
+            truncated: false,
+            max_rows: 100,
+            pending: false,
+        };
+
+        let result = path_fragment(&resp, "file", &view, &cfg);
+
+        assert!(result.is_some(), "path_fragment must return Some");
+        let response = result.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get("X-Ghrm-Search-Count").unwrap(), "1");
+        let body = response_text(response).await;
+        assert!(body.contains("ghrm-search-path"));
+        assert!(body.contains(r#"<strong class="ghrm-search-hit">file</strong>.rs"#));
+    }
+
+    #[tokio::test]
+    async fn path_fragment_pending_returns_some() {
+        let cfg = test_view_config();
+        let view = test_view_state(&cfg);
+        let resp = PathResponse::pending(50);
+
+        let result = path_fragment(&resp, "q", &view, &cfg);
+
+        assert!(result.is_some(), "pending path_fragment must return Some");
+        let response = result.unwrap();
+        assert_eq!(
+            response.headers().get("X-Ghrm-Search-Pending").unwrap(),
+            "1"
+        );
+        let body = response_text(response).await;
+        assert!(body.contains("Indexing paths"));
+    }
+
+    #[tokio::test]
+    async fn content_fragment_returns_some_with_rows() {
+        use super::super::{SearchResponse, SearchResult};
+        let cfg = test_view_config();
+        let view = test_view_state(&cfg);
+        let resp = SearchResponse {
+            results: vec![SearchResult {
+                path: "src/main.rs".to_string(),
+                line: 10,
+                text: "fn main() {}".to_string(),
+                ranges: vec![(3, 7)],
+                modified: Some(1700000000),
+            }],
+            truncated: false,
+            max_rows: 100,
+        };
+
+        let result = content_fragment(&resp, &view, &cfg, None);
+
+        assert!(result.is_some(), "content_fragment must return Some");
+        let response = result.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get("X-Ghrm-Search-Count").unwrap(), "1");
+        let body = response_text(response).await;
+        assert!(body.contains("ghrm-content-result"));
+        assert!(body.contains("src/main.rs"));
+        assert!(body.contains("<mark>main</mark>"));
+    }
+
+    #[tokio::test]
+    async fn content_fragment_scoped_display_path() {
+        use super::super::{SearchResponse, SearchResult};
+        let cfg = test_view_config();
+        let view = test_view_state(&cfg);
+        let resp = SearchResponse {
+            results: vec![SearchResult {
+                path: "src/lib/utils.rs".to_string(),
+                line: 5,
+                text: "let x = 1;".to_string(),
+                ranges: vec![(4, 5)],
+                modified: None,
+            }],
+            truncated: false,
+            max_rows: 100,
+        };
+
+        let result = content_fragment(&resp, &view, &cfg, Some("src/lib"));
+
+        assert!(result.is_some());
+        let response = result.unwrap();
+        assert_eq!(response.headers().get("X-Ghrm-Search-Count").unwrap(), "1");
+        let body = response_text(response).await;
+        assert!(body.contains("utils.rs"));
+        assert!(!body.contains(">src/lib/utils.rs<"));
+    }
+
+    #[test]
+    fn content_colspan_value_reasonable() {
+        let colspan = content_colspan();
+        let date_idx = column::DEFS.iter().position(|def| def.key == "date");
+        let expected = date_idx.map_or(column::DEFS.len() + 1, |idx| idx + 1);
+        assert_eq!(colspan, expected);
     }
 }

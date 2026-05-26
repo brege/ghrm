@@ -250,4 +250,25 @@ mod tests {
         assert!(result.contains(r#"ghrm-crumb-link"#));
         assert!(result.contains(r#"ghrm-crumb-current">src</strong>"#));
     }
+
+    #[test]
+    fn crumbs_depth_math_with_nonzero_root_idx() {
+        let target = PathBuf::from("/home/user/code/project");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(
+            &target,
+            Some(Path::new("/home/user")),
+            "src/lib",
+            &view,
+            &cfg,
+        );
+
+        assert!(result.contains(r#"href="/""#), "project should link to /");
+        assert!(
+            result.contains(r#"href="/src/""#),
+            "src should link to /src/, got: {result}"
+        );
+    }
 }
