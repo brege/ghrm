@@ -65,11 +65,13 @@ pub(crate) fn file_mode(path: &Path, bytes: &[u8]) -> FileMode {
         return FileMode::Dual;
     }
     if let Some(kind) = infer::get(bytes) {
+        if is_pdf(kind.mime_type()) {
+            return FileMode::Native;
+        }
         return match kind.matcher_type() {
             infer::MatcherType::Image | infer::MatcherType::Video | infer::MatcherType::Audio => {
                 FileMode::Native
             }
-            infer::MatcherType::App if is_pdf(kind.mime_type()) => FileMode::Native,
             infer::MatcherType::Text => FileMode::Source,
             _ => FileMode::Download,
         };
@@ -274,6 +276,12 @@ mod tests {
     }
 
     #[test]
+    fn content_disposition_escapes_backslashes() {
+        let value = content_disposition(Path::new("odd\\name.md"));
+        assert_eq!(value, "attachment; filename=\"odd\\\\name.md\"");
+    }
+
+    #[test]
     fn file_mode_markdown_by_extension() {
         assert_eq!(
             file_mode(Path::new("README.md"), b"# Title\n"),
@@ -308,6 +316,14 @@ mod tests {
     }
 
     #[test]
+    fn file_mode_pdf_is_native() {
+        let pdf = &[
+            0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a, 0x25, 0xe2, 0xe3, 0xcf, 0xd3,
+        ];
+        assert_eq!(file_mode(Path::new("report.pdf"), pdf), FileMode::Native);
+    }
+
+    #[test]
     fn file_mode_zstd_is_download() {
         let zstd = &[0x28, 0xb5, 0x2f, 0xfd];
         assert_eq!(
@@ -323,6 +339,29 @@ mod tests {
             0x00, 0x00,
         ];
         assert_eq!(file_mode(Path::new("program"), elf), FileMode::Download);
+    }
+
+    #[test]
+    fn internal_file_href_trims_slashes() {
+        assert_eq!(
+            internal_file_href("raw", "/docs/readme.md/"),
+            "/_ghrm/raw/docs/readme.md"
+        );
+        assert_eq!(
+            internal_file_href("download", "docs/readme.md"),
+            "/_ghrm/download/docs/readme.md"
+        );
+    }
+
+    #[test]
+    fn file_view_attrs_escapes_current_and_urls() {
+        let attrs = file_view_attrs("docs/odd\"name.md", FileView::source());
+
+        assert!(attrs.contains(r#"data-current-path="docs/odd&quot;name.md""#));
+        assert!(attrs.contains(r#"data-ghrm-raw-url="/_ghrm/raw/docs/odd&quot;name.md""#));
+        assert!(
+            attrs.contains(r#"data-ghrm-download-url="/_ghrm/download/docs/odd&quot;name.md""#)
+        );
     }
 
     #[test]

@@ -93,6 +93,10 @@ pub async fn login_submit(State(s): State<AppState>, Form(form): Form<LoginFormD
     let Some(auth) = s.auth.as_ref() else {
         return not_found();
     };
+    login_response(auth, form)
+}
+
+fn login_response(auth: &AuthState, form: LoginFormData) -> Response {
     let next = sanitize_next(form.next.as_deref());
     if form.username != auth.username || !verify_password(auth, &form.password) {
         let loc = format!(
@@ -119,6 +123,10 @@ pub async fn logout(State(s): State<AppState>) -> Response {
     let Some(auth) = s.auth.as_ref() else {
         return not_found();
     };
+    logout_response(auth)
+}
+
+fn logout_response(auth: &AuthState) -> Response {
     Response::builder()
         .status(StatusCode::SEE_OTHER)
         .header(header::LOCATION, "/_ghrm/login")
@@ -272,4 +280,137 @@ fn not_found() -> Response {
         .status(StatusCode::NOT_FOUND)
         .body(Body::empty())
         .unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn auth_state() -> AuthState {
+        AuthState::new(
+            AuthConfig {
+                username: "alice".to_string(),
+                password: "secret".to_string(),
+            },
+            8123,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn sanitize_next_rejects_external_and_auth_targets() {
+        assert_eq!(sanitize_next(None), "/");
+        assert_eq!(sanitize_next(Some("")), "/");
+        assert_eq!(
+            sanitize_next(Some("/docs/readme.md?x=1")),
+            "/docs/readme.md?x=1"
+        );
+        assert_eq!(sanitize_next(Some("https://example.test")), "/");
+        assert_eq!(sanitize_next(Some("//example.test/path")), "/");
+        assert_eq!(sanitize_next(Some("/_ghrm/login?next=/docs")), "/");
+        assert_eq!(sanitize_next(Some("/_ghrm/logout")), "/");
+    }
+
+    #[test]
+    fn challenge_redirects_pages_and_rejects_internal_paths() {
+        let page = challenge(&"/docs/readme.md?q=rust".parse::<Uri>().unwrap());
+        assert_eq!(page.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            page.headers().get(header::LOCATION).unwrap(),
+            "/_ghrm/login?next=%2Fdocs%2Freadme%2Emd%3Fq%3Drust"
+        );
+
+        let api = challenge(&"/_ghrm/search?q=rust".parse::<Uri>().unwrap());
+        assert_eq!(api.status(), StatusCode::UNAUTHORIZED);
+        assert!(api.headers().get(header::LOCATION).is_none());
+    }
+
+    #[test]
+    fn session_accepts_valid_token_only() {
+        let auth = auth_state();
+        assert!(verify_password(&auth, "secret"));
+        assert!(!verify_password(&auth, "wrong"));
+
+        let token = session_token(&auth, now_secs() + 60);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            format!("{}={token}", auth.cookie_name).parse().unwrap(),
+        );
+        assert!(has_session(&auth, &headers));
+
+        let other = AuthState::new(
+            AuthConfig {
+                username: "alice".to_string(),
+                password: "wrong".to_string(),
+            },
+            8123,
+        )
+        .unwrap();
+        let bad_token = session_token(&other, now_secs() + 60);
+        headers.insert(
+            header::COOKIE,
+            format!("{}={bad_token}", auth.cookie_name).parse().unwrap(),
+        );
+        assert!(!has_session(&auth, &headers));
+    }
+
+    #[test]
+    fn login_rejects_invalid_password_without_cookie() {
+        let auth = auth_state();
+        let response = login_response(
+            &auth,
+            LoginFormData {
+                username: "alice".to_string(),
+                password: "wrong".to_string(),
+                next: Some("/docs/readme.md?x=1".to_string()),
+            },
+        );
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response.headers().get(header::LOCATION).unwrap(),
+            "/_ghrm/login?next=%2Fdocs%2Freadme%2Emd%3Fx%3D1&error=1"
+        );
+        assert!(response.headers().get(header::SET_COOKIE).is_none());
+    }
+
+    #[test]
+    fn login_sets_session_cookie() {
+        let auth = auth_state();
+        let response = login_response(
+            &auth,
+            LoginFormData {
+                username: "alice".to_string(),
+                password: "secret".to_string(),
+                next: Some("/docs/readme.md".to_string()),
+            },
+        );
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response.headers().get(header::LOCATION).unwrap(),
+            "/docs/readme.md"
+        );
+        let cookie = response.headers().get(header::SET_COOKIE).unwrap();
+        let cookie = cookie.to_str().unwrap();
+        assert!(cookie.starts_with("ghrm_8123_sid="));
+        assert!(cookie.contains("; Path=/; Max-Age=43200; HttpOnly; SameSite=Lax"));
+    }
+
+    #[test]
+    fn logout_clears_session_cookie() {
+        let auth = auth_state();
+        let response = logout_response(&auth);
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response.headers().get(header::LOCATION).unwrap(),
+            "/_ghrm/login"
+        );
+        assert_eq!(
+            response.headers().get(header::SET_COOKIE).unwrap(),
+            "ghrm_8123_sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
+        );
+    }
 }
