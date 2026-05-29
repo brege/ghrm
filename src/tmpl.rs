@@ -139,6 +139,7 @@ pub struct FilterControl {
     pub active: bool,
     pub hidden: bool,
     pub group: bool,
+    pub separator: bool,
 }
 
 pub struct SortControl {

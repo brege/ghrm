@@ -160,6 +160,14 @@ button.ghrm-view-option {
   padding-left: 26px;
 }
 
+.ghrm-view-separated {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 2px solid var(--borderColor-muted, #d1d9e0b3);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
 hr.ghrm-menu-separator {
   all: unset;
   display: block;

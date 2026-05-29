@@ -8,7 +8,7 @@
           </svg>
         </button>
         <div id="ghrm-view-menu" class="ghrm-view-menu" role="menu" aria-label="Filter files" hidden>
-{% for option in filter_controls %}          <a class="ghrm-view-option{% if option.active %} is-active{% endif %}{% if option.group %} ghrm-view-group{% endif %}" href="{{ option.href }}" role="menuitemcheckbox" aria-checked="{% if option.active %}true{% else %}false{% endif %}" title="{{ option.title }}"{% if option.hidden %} hidden{% endif %}>
+{% for option in filter_controls %}          <a class="ghrm-view-option{% if option.active %} is-active{% endif %}{% if option.group %} ghrm-view-group{% endif %}{% if option.separator %} ghrm-view-separated{% endif %}" href="{{ option.href }}" role="menuitemcheckbox" aria-checked="{% if option.active %}true{% else %}false{% endif %}" title="{{ option.title }}"{% if option.hidden %} hidden{% endif %}>
             <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
               <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
             </svg>
