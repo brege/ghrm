@@ -153,7 +153,6 @@ fn main() -> Result<()> {
         filters,
         exclude_names: resolved.exclude_names,
         watch_silent: resolved.watch_silent,
-        dangerously_traverse_excludes: resolved.dangerously_traverse_excludes,
         show_excludes: resolved.show_excludes,
         search_max_rows: resolved.max_rows,
         config_path: resolved.config_path,

@@ -303,6 +303,7 @@ fn build_controls(
             active: view.opts.show_hidden,
             hidden: false,
             group: false,
+            separator: false,
         },
         FilterControl {
             href: view::with_view(href, &view::toggle_excludes(view, cfg), cfg),
@@ -311,6 +312,7 @@ fn build_controls(
             active: view.opts.show_excludes,
             hidden: !cfg.can_toggle_excludes,
             group: false,
+            separator: false,
         },
         FilterControl {
             href: view::with_view(href, &view::toggle_ignore(view), cfg),
@@ -319,6 +321,7 @@ fn build_controls(
             active: !view.use_ignore,
             hidden: false,
             group: false,
+            separator: false,
         },
         FilterControl {
             href: view::with_view(href, &view::toggle_filter(view, cfg), cfg),
@@ -327,6 +330,7 @@ fn build_controls(
             active: view.opts.filter_ext,
             hidden: false,
             group: false,
+            separator: true,
         },
     ];
     for group in filters.groups() {
@@ -337,6 +341,7 @@ fn build_controls(
             active: view.opts.filter_ext && view.groups.contains(&group.name),
             hidden: false,
             group: true,
+            separator: false,
         });
     }
 

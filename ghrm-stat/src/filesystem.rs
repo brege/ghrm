@@ -21,6 +21,7 @@ pub struct FsFilterGroup {
     pub name: String,
     pub label: String,
     pub globs: Vec<String>,
+    pub default_enabled: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -47,12 +48,14 @@ pub struct FsTotals {
 pub struct FsFilterTotal {
     pub name: String,
     pub label: String,
+    pub default_enabled: bool,
     pub totals: FsTotals,
 }
 
 struct FilterGroup {
     name: String,
     label: String,
+    default_enabled: bool,
     matcher: ignore::types::Types,
 }
 
@@ -202,6 +205,7 @@ fn build_filter_groups(groups: &[FsFilterGroup]) -> Result<Vec<FilterGroup>> {
             Ok(FilterGroup {
                 name: group.name.clone(),
                 label: group.label.clone(),
+                default_enabled: group.default_enabled,
                 matcher: builder
                     .build()
                     .map_err(|err| anyhow!("invalid filter matcher: {err}"))?,
@@ -229,6 +233,7 @@ fn filter_totals(files: &[FileEntry], groups: &[FilterGroup]) -> Vec<FsFilterTot
         out.push(FsFilterTotal {
             name: group.name.clone(),
             label: group.label.clone(),
+            default_enabled: group.default_enabled,
             totals,
         });
     }
@@ -319,6 +324,7 @@ mod tests {
                     name: "docs".to_string(),
                     label: "Docs".to_string(),
                     globs: vec!["*.md".to_string()],
+                    default_enabled: true,
                 }],
                 same_file_system: true,
                 ..FsConfig::default()
@@ -330,6 +336,7 @@ mod tests {
         assert_eq!(report.totals.dirs, 1);
         assert_eq!(report.filters[0].totals.files, 1);
         assert_eq!(report.filters[0].totals.dirs, 1);
+        assert!(report.filters[0].default_enabled);
     }
 
     fn rand() -> u128 {

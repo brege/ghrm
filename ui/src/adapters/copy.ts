@@ -1,8 +1,10 @@
 import { icon } from '../dom';
 
-interface CopyButton extends HTMLButtonElement {
+export interface CopyButton extends HTMLButtonElement {
   _ghrmCopyReset?: number | null;
 }
+
+type CopyText = string | (() => string | Promise<string>);
 
 // ghrm is often opened over plain HTTP from another LAN device. Browsers treat
 // localhost as a secure context, but not http://192.168.x.x, so the Clipboard
@@ -81,6 +83,14 @@ export function showCopied(button: CopyButton): void {
   }, copyResetDelay);
 }
 
+export function bindCopy(button: CopyButton, text: CopyText): void {
+  button.addEventListener('click', async () => {
+    const value = typeof text === 'function' ? await text() : text;
+    await writeClipboard(value);
+    showCopied(button);
+  });
+}
+
 export function addCopyButtons(): void {
   for (const pre of document.querySelectorAll('.markdown-body pre')) {
     if (!(pre instanceof HTMLPreElement)) continue;
@@ -104,10 +114,7 @@ export function addCopyButtons(): void {
     button.dataset.copyFeedback = 'Copied!';
     button.title = 'Copy';
     button.innerHTML = `${copyIcon()}${checkIcon()}`;
-    button.addEventListener('click', async () => {
-      await writeClipboard(getCopyText(pre));
-      showCopied(button);
-    });
+    bindCopy(button, () => getCopyText(pre));
 
     host.appendChild(button);
   }
