@@ -70,6 +70,20 @@ export function shouldReloadForChange(
   return parentPath(changed) === current.path;
 }
 
+export function shouldNavigateToParent(
+  current: ContentPath | null,
+  path: string | null,
+): boolean {
+  if (!current || path === null) return false;
+  const changed = cleanRelPath(path);
+  const active = cleanRelPath(current.path);
+  return (
+    current.kind === 'dir' &&
+    changed !== '' &&
+    (active === changed || active.startsWith(`${changed}/`))
+  );
+}
+
 function currentContentPath(): ContentPath | null {
   const explorer = qsel('article[data-explorer]');
   if (explorer) {
@@ -100,15 +114,19 @@ function dispatchLiveEvent(event: LiveEvent): void {
 
 function handleLiveEvent(message: string): void {
   const event = parseLiveMessage(message);
+  const current = currentContentPath();
   if (
     event.name === 'reload' &&
-    !shouldReloadForChange(currentContentPath(), event.path)
+    !shouldReloadForChange(current, event.path) &&
+    !shouldNavigateToParent(current, event.path)
   ) {
     return;
   }
 
   dispatchLiveEvent(event);
-  if (event.name === 'reload') {
+  if (event.name === 'reload' && shouldNavigateToParent(current, event.path)) {
+    location.assign(parentHref(event.path || ''));
+  } else if (event.name === 'reload') {
     location.reload();
   } else if (event.name === 'nav-ready') {
     refreshActiveSearch();
@@ -135,4 +153,10 @@ function parentPath(path: string): string {
   const clean = cleanRelPath(path);
   const slash = clean.lastIndexOf('/');
   return slash === -1 ? '' : clean.slice(0, slash);
+}
+
+function parentHref(path: string): string {
+  const parent = parentPath(path);
+  const href = parent === '' ? '/' : `/${parent}/`;
+  return `${href}${location.search}${location.hash}`;
 }
