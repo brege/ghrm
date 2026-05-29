@@ -928,6 +928,9 @@ mod tests {
         assert!(html.contains("href=\"https://github.com/brege/ghrm\""));
         assert!(html.contains(">brege/ghrm</span>"));
         assert!(html.contains("data-stats-loaded=\"false\""));
+        assert!(html.contains("id=\"ghrm-about-panel-menu-toggle\""));
+        assert!(html.contains("data-ghrm-about-panel-option=\"paths\""));
+        assert!(html.contains("data-ghrm-about-panel=\"paths\""));
     }
 
     #[test]

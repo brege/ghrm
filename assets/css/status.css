@@ -107,6 +107,31 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   gap: 18px;
 }
 
+.ghrm-about-tools {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  z-index: 3;
+}
+
+.ghrm-about-panel-menu {
+  min-width: 210px;
+}
+
+.ghrm-about-panel-menu-toggle {
+  border: 0;
+  background: transparent;
+}
+
+.ghrm-about-panel-menu-toggle:hover,
+.ghrm-about-panel-menu-toggle[aria-expanded="true"] {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+.ghrm-about-panel-menu-toggle svg {
+  transform: rotate(90deg);
+}
+
 .ghrm-about-summary {
   min-width: 0;
   display: grid;
@@ -143,6 +168,12 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 
 .ghrm-about-peek.is-details-open .ghrm-about-details {
   display: grid;
+}
+
+.ghrm-detail-scope[hidden],
+.ghrm-detail-panel[hidden],
+.ghrm-detail-grid[hidden] {
+  display: none;
 }
 
 .ghrm-about-project {

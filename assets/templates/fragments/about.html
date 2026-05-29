@@ -1,4 +1,43 @@
 <section id="ghrm-about-peek" class="ghrm-about-peek" data-stats-loaded="{% if stats_loaded %}true{% else %}false{% endif %}" hidden>
+  <div class="ghrm-about-tools">
+    <button id="ghrm-about-panel-menu-toggle" class="ghrm-view-menu-toggle ghrm-about-panel-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Choose detail panels" title="Choose detail panels">
+      <svg aria-hidden="true" focusable="false">
+        <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-columns"></use>
+      </svg>
+    </button>
+    <div id="ghrm-about-panel-menu" class="ghrm-view-menu ghrm-about-panel-menu" role="menu" aria-label="Choose detail panels" hidden>
+      <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="scope" role="menuitemcheckbox" aria-checked="true" title="Show scope panel">
+        <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+        </svg>
+        <span class="ghrm-view-option-label">Scope</span>
+      </button>
+      <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="directory" role="menuitemcheckbox" aria-checked="true" title="Show this directory panel">
+        <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+        </svg>
+        <span class="ghrm-view-option-label">This Directory</span>
+      </button>
+      <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="filters" role="menuitemcheckbox" aria-checked="true" title="Show available filters panel">
+        <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+        </svg>
+        <span class="ghrm-view-option-label">Available Filters</span>
+      </button>
+      <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="paths" role="menuitemcheckbox" aria-checked="true" title="Show paths panel">
+        <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+        </svg>
+        <span class="ghrm-view-option-label">Paths</span>
+      </button>
+      <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="network" role="menuitemcheckbox" aria-checked="true" title="Show network panel">
+        <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+        </svg>
+        <span class="ghrm-view-option-label">Network</span>
+      </button>
+    </div>
+  </div>
   <div class="ghrm-about-peek-inner">
 {% if stats.has_summary() %}
     <div class="ghrm-about-summary" aria-label="Repository summary">
@@ -85,7 +124,7 @@
     </div>
 {% endif %}
     <div class="ghrm-about-details" aria-label="ghrm details">
-{% if !details.scope.is_empty() %}      <section class="ghrm-detail-scope" aria-label="Scan scope">
+{% if !details.scope.is_empty() %}      <section class="ghrm-detail-scope" data-ghrm-about-panel="scope" aria-label="Scan scope">
         <div class="ghrm-about-heading">Scope</div>
         <dl class="ghrm-detail-list">
 {% for item in details.scope %}          <div class="ghrm-detail-row">
@@ -95,8 +134,8 @@
 {% endfor %}        </dl>
       </section>
 {% endif %}
-{% if !details.directory.is_empty() || !details.filters.is_empty() %}      <div class="ghrm-detail-grid">
-{% if !details.directory.is_empty() %}        <section class="ghrm-detail-panel" aria-label="This directory">
+{% if !details.directory.is_empty() || !details.filters.is_empty() || !details.paths.is_empty() || !details.network.is_empty() %}      <div class="ghrm-detail-grid">
+{% if !details.directory.is_empty() %}        <section class="ghrm-detail-panel" data-ghrm-about-panel="directory" aria-label="This directory">
           <div class="ghrm-about-heading">This Directory</div>
           <div class="ghrm-detail-panel-body">
             <table class="ghrm-detail-table">
@@ -110,7 +149,7 @@
           </div>
         </section>
 {% endif %}
-{% if !details.filters.is_empty() %}        <section class="ghrm-detail-panel" aria-label="Available filters">
+{% if !details.filters.is_empty() %}        <section class="ghrm-detail-panel" data-ghrm-about-panel="filters" aria-label="Available filters">
           <div class="ghrm-about-heading">Available Filters</div>
           <div class="ghrm-detail-panel-body">
             <table class="ghrm-detail-table">
@@ -123,10 +162,8 @@
             </table>
           </div>
         </section>
-{% endif %}      </div>
 {% endif %}
-{% if !details.paths.is_empty() || !details.network.is_empty() %}      <div class="ghrm-detail-grid">
-{% if !details.paths.is_empty() %}        <section class="ghrm-detail-panel" aria-label="Runtime paths">
+{% if !details.paths.is_empty() %}        <section class="ghrm-detail-panel" data-ghrm-about-panel="paths" aria-label="Runtime paths">
           <div class="ghrm-about-heading">Paths</div>
           <div class="ghrm-detail-panel-body">
             <dl class="ghrm-detail-list">
@@ -138,7 +175,7 @@
           </div>
         </section>
 {% endif %}
-{% if !details.network.is_empty() %}        <section class="ghrm-detail-panel" aria-label="Runtime network">
+{% if !details.network.is_empty() %}        <section class="ghrm-detail-panel" data-ghrm-about-panel="network" aria-label="Runtime network">
           <div class="ghrm-about-heading">Network</div>
           <div class="ghrm-detail-panel-body">
             <dl class="ghrm-detail-list">
