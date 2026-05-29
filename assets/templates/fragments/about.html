@@ -1,9 +1,9 @@
 <section id="ghrm-about-peek" class="ghrm-about-peek" data-stats-loaded="{% if stats_loaded %}true{% else %}false{% endif %}" hidden>
   <div class="ghrm-about-peek-inner">
 {% if stats.has_summary() %}
-    <div class="ghrm-about-summary">
-      <div class="ghrm-about-main">
-{% if !stats.metadata.is_empty() %}        <div class="ghrm-about-stats" aria-label="Repository metadata">
+    <div class="ghrm-about-summary" aria-label="Repository summary">
+      <div class="ghrm-about-summary-col">
+{% if !stats.metadata.is_empty() %}        <section class="ghrm-about-stats ghrm-summary-panel" aria-label="Repository metadata">
           <div class="ghrm-about-heading">About</div>
           <dl class="ghrm-stat-list">
 {% for row in stats.metadata %}            <div class="ghrm-stat-row">
@@ -21,9 +21,30 @@
 {% endif %}{% endif %}{% endif %}              </dd>
             </div>
 {% endfor %}          </dl>
-        </div>
+        </section>
 {% endif %}
-{% if !stats.languages.is_empty() %}        <div class="ghrm-languages" aria-label="Languages">
+{% if !stats.history.is_empty() %}        <section class="ghrm-about-stats ghrm-summary-panel" aria-label="Repository history">
+          <div class="ghrm-about-heading">History</div>
+          <dl class="ghrm-stat-list">
+{% for row in stats.history %}            <div class="ghrm-stat-row">
+              <dt>{% if !row.icon.is_empty() %}<svg aria-hidden="true"><use href="/_ghrm/assets/js/icons.svg#{{ row.icon }}"></use></svg>{% endif %}<span>{{ row.label }}</span></dt>
+              <dd{% if !row.title.is_empty() %} title="{{ row.title }}"{% endif %}{% if let Some(ts) = row.title_ts %} data-ghrm-title-ts="{{ ts }}"{% endif %}>
+{% if !row.items.is_empty() %}                <dl class="ghrm-stat-sublist">
+{% for item in row.items %}                  <div>
+                    <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
+                    <dd>{% if !item.metrics.is_empty() %}<span class="ghrm-stat-metrics">{% for metric in item.metrics %}<span class="ghrm-stat-metric"{% if !metric.title.is_empty() %} title="{{ metric.title }}"{% endif %}><span>{{ metric.value }}</span>{% if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif %}</span>{% endfor %}</span>{% else %}{{ item.value }}{% endif %}</dd>
+                  </div>
+{% endfor %}                </dl>
+{% else %}{% if !row.parts.is_empty() %}                <span class="ghrm-stat-parts">{% for part in row.parts %}{% if part.separator %}<span class="ghrm-stat-separator" aria-hidden="true">/</span>{% endif %}<span>{{ part.value }}</span>{% endfor %}</span>
+{% else %}{% if !row.href.is_empty() %}                <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
+{% else %}                {{ row.value }}
+{% endif %}{% endif %}{% endif %}              </dd>
+            </div>
+{% endfor %}          </dl>
+        </section>
+{% endif %}      </div>
+      <div class="ghrm-about-summary-col">
+{% if !stats.languages.is_empty() %}        <section class="ghrm-languages ghrm-summary-panel" aria-label="Languages">
           <div class="ghrm-about-heading">Languages</div>
           <div class="ghrm-lang-bar" aria-hidden="true">
 {% for lang in stats.languages %}            <span title="{{ lang.title }}" style="{{ lang.style }}"></span>
@@ -39,40 +60,97 @@
               <dd><span class="ghrm-lang-lines" title="{{ stats.language_total }} lines of code">{{ stats.language_total }}</span><span class="ghrm-lang-percent">LOC</span></dd>
             </div>
 {% endif %}          </dl>
-        </div>
+        </section>
+{% endif %}
+{% if !stats.activity.is_empty() %}        <section class="ghrm-about-stats ghrm-summary-panel" aria-label="Repository activity">
+          <div class="ghrm-about-heading">Activity</div>
+          <dl class="ghrm-stat-list">
+{% for row in stats.activity %}            <div class="ghrm-stat-row">
+              <dt>{% if !row.icon.is_empty() %}<svg aria-hidden="true"><use href="/_ghrm/assets/js/icons.svg#{{ row.icon }}"></use></svg>{% endif %}<span>{{ row.label }}</span></dt>
+              <dd{% if !row.title.is_empty() %} title="{{ row.title }}"{% endif %}{% if let Some(ts) = row.title_ts %} data-ghrm-title-ts="{{ ts }}"{% endif %}>
+{% if !row.items.is_empty() %}                <dl class="ghrm-stat-sublist">
+{% for item in row.items %}                  <div>
+                    <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
+                    <dd>{% if !item.metrics.is_empty() %}<span class="ghrm-stat-metrics">{% for metric in item.metrics %}<span class="ghrm-stat-metric"{% if !metric.title.is_empty() %} title="{{ metric.title }}"{% endif %}><span>{{ metric.value }}</span>{% if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif %}</span>{% endfor %}</span>{% else %}{{ item.value }}{% endif %}</dd>
+                  </div>
+{% endfor %}                </dl>
+{% else %}{% if !row.parts.is_empty() %}                <span class="ghrm-stat-parts">{% for part in row.parts %}{% if part.separator %}<span class="ghrm-stat-separator" aria-hidden="true">/</span>{% endif %}<span>{{ part.value }}</span>{% endfor %}</span>
+{% else %}{% if !row.href.is_empty() %}                <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
+{% else %}                {{ row.value }}
+{% endif %}{% endif %}{% endif %}              </dd>
+            </div>
+{% endfor %}          </dl>
+        </section>
 {% endif %}      </div>
-{% if !stats.stats.is_empty() %}      <div class="ghrm-about-stats ghrm-repo-stats" aria-label="Repository stats">
-        <div class="ghrm-about-heading">Stats</div>
-        <dl class="ghrm-stat-list">
-{% for row in stats.stats %}          <div class="ghrm-stat-row">
-            <dt>{% if !row.icon.is_empty() %}<svg aria-hidden="true"><use href="/_ghrm/assets/js/icons.svg#{{ row.icon }}"></use></svg>{% endif %}<span>{{ row.label }}</span></dt>
-            <dd{% if !row.title.is_empty() %} title="{{ row.title }}"{% endif %}{% if let Some(ts) = row.title_ts %} data-ghrm-title-ts="{{ ts }}"{% endif %}>
-{% if !row.items.is_empty() %}              <dl class="ghrm-stat-sublist">
-{% for item in row.items %}                <div>
-                  <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
-                  <dd>{% if !item.metrics.is_empty() %}<span class="ghrm-stat-metrics">{% for metric in item.metrics %}<span class="ghrm-stat-metric"{% if !metric.title.is_empty() %} title="{{ metric.title }}"{% endif %}><span>{{ metric.value }}</span>{% if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif %}</span>{% endfor %}</span>{% else %}{{ item.value }}{% endif %}</dd>
-                </div>
-{% endfor %}              </dl>
-{% else %}{% if !row.parts.is_empty() %}              <span class="ghrm-stat-parts">{% for part in row.parts %}{% if part.separator %}<span class="ghrm-stat-separator" aria-hidden="true">/</span>{% endif %}<span>{{ part.value }}</span>{% endfor %}</span>
-{% else %}{% if !row.href.is_empty() %}              <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
-{% else %}              {{ row.value }}
-{% endif %}{% endif %}{% endif %}            </dd>
-          </div>
-{% endfor %}        </dl>
-      </div>
-{% endif %}    </div>
+    </div>
 {% endif %}
     <div class="ghrm-about-details" aria-label="ghrm details">
-{% for section in detail_sections %}      <div class="ghrm-runtime-paths {{ section.class_name }}" aria-label="{{ section.heading }}">
-        <div class="ghrm-about-heading">{{ section.heading }}</div>
-        <dl>
-{% for item in section.rows %}          <div class="ghrm-runtime-path">
+{% if !details.scope.is_empty() %}      <section class="ghrm-detail-scope" aria-label="Scan scope">
+        <div class="ghrm-about-heading">Scope</div>
+        <dl class="ghrm-detail-list">
+{% for item in details.scope %}          <div class="ghrm-detail-row">
             <dt>{{ item.label }}</dt>
-            <dd title="{% if !item.title.is_empty() %}{{ item.title }}{% else %}{{ item.value }}{% endif %}">{% if !item.cells.is_empty() %}<span class="ghrm-detail-cells">{% for cell in item.cells %}<span>{{ cell }}</span>{% endfor %}</span>{% else %}{{ item.value }}{% endif %}</dd>
+            <dd title="{{ item.title }}">{{ item.value }}</dd>
           </div>
 {% endfor %}        </dl>
-      </div>
-{% endfor %}
+      </section>
+{% endif %}
+{% if !details.directory.is_empty() || !details.filters.is_empty() %}      <div class="ghrm-detail-grid">
+{% if !details.directory.is_empty() %}        <section class="ghrm-detail-panel" aria-label="This directory">
+          <div class="ghrm-about-heading">This Directory</div>
+          <div class="ghrm-detail-panel-body">
+            <table class="ghrm-detail-table">
+              <thead>
+                <tr><th>Metric</th><th>Value</th></tr>
+              </thead>
+              <tbody>
+{% for item in details.directory %}                <tr><td>{{ item.label }}</td><td title="{{ item.title }}">{{ item.value }}</td></tr>
+{% endfor %}              </tbody>
+            </table>
+          </div>
+        </section>
+{% endif %}
+{% if !details.filters.is_empty() %}        <section class="ghrm-detail-panel" aria-label="Available filters">
+          <div class="ghrm-about-heading">Available Filters</div>
+          <div class="ghrm-detail-panel-body">
+            <table class="ghrm-detail-table">
+              <thead>
+                <tr><th>Group</th><th>Files</th><th>Dirs</th><th>Size</th></tr>
+              </thead>
+              <tbody>
+{% for row in details.filters %}                <tr><td>{{ row.label }}{% if row.default_enabled %}<span aria-label="default enabled">*</span>{% endif %}</td><td>{{ row.files }}</td><td>{{ row.dirs }}</td><td>{{ row.size }}</td></tr>
+{% endfor %}              </tbody>
+            </table>
+          </div>
+        </section>
+{% endif %}      </div>
+{% endif %}
+{% if !details.paths.is_empty() || !details.network.is_empty() %}      <div class="ghrm-detail-grid">
+{% if !details.paths.is_empty() %}        <section class="ghrm-detail-panel" aria-label="Runtime paths">
+          <div class="ghrm-about-heading">Paths</div>
+          <div class="ghrm-detail-panel-body">
+            <dl class="ghrm-detail-list">
+{% for item in details.paths %}              <div class="ghrm-detail-row">
+                <dt>{{ item.label }}</dt>
+                <dd title="{{ item.title }}">{{ item.value }}</dd>
+              </div>
+{% endfor %}            </dl>
+          </div>
+        </section>
+{% endif %}
+{% if !details.network.is_empty() %}        <section class="ghrm-detail-panel" aria-label="Runtime network">
+          <div class="ghrm-about-heading">Network</div>
+          <div class="ghrm-detail-panel-body">
+            <dl class="ghrm-detail-list">
+{% for item in details.network %}              <div class="ghrm-detail-row">
+                <dt>{{ item.label }}</dt>
+                <dd title="{{ item.title }}">{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.value }}</a>{% else %}{{ item.value }}{% endif %}</dd>
+              </div>
+{% endfor %}            </dl>
+          </div>
+        </section>
+{% endif %}      </div>
+{% endif %}
     </div>
 {% if !local_path.is_empty() %}    <div class="ghrm-about-local-path" aria-label="Local path">
       <span>not a git repo</span>

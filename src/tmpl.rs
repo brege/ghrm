@@ -20,7 +20,7 @@ pub struct PageShell<'a> {
 #[derive(Template)]
 #[template(path = "fragments/about.html")]
 pub struct AboutPeek<'a> {
-    pub detail_sections: &'a [AboutDetailSection],
+    pub details: &'a AboutDetails,
     pub stats_loaded: bool,
     pub stats: &'a AboutStats,
     pub local_path: &'a str,
@@ -32,14 +32,18 @@ pub struct AboutPeek<'a> {
 #[derive(Default)]
 pub struct AboutStats {
     pub metadata: Vec<AboutStatRow>,
-    pub stats: Vec<AboutStatRow>,
+    pub history: Vec<AboutStatRow>,
+    pub activity: Vec<AboutStatRow>,
     pub languages: Vec<AboutLanguage>,
     pub language_total: String,
 }
 
 impl AboutStats {
     pub fn has_summary(&self) -> bool {
-        !self.metadata.is_empty() || !self.stats.is_empty() || !self.languages.is_empty()
+        !self.metadata.is_empty()
+            || !self.history.is_empty()
+            || !self.activity.is_empty()
+            || !self.languages.is_empty()
     }
 }
 
@@ -81,17 +85,28 @@ pub struct AboutLanguage {
     pub title: String,
 }
 
-pub struct AboutDetailSection {
-    pub heading: String,
-    pub class_name: &'static str,
-    pub rows: Vec<AboutDetailRow>,
+#[derive(Default)]
+pub struct AboutDetails {
+    pub scope: Vec<AboutDetailRow>,
+    pub directory: Vec<AboutDetailRow>,
+    pub filters: Vec<AboutFilterRow>,
+    pub paths: Vec<AboutDetailRow>,
+    pub network: Vec<AboutDetailRow>,
 }
 
 pub struct AboutDetailRow {
     pub label: String,
     pub value: String,
     pub title: String,
-    pub cells: Vec<String>,
+    pub href: String,
+}
+
+pub struct AboutFilterRow {
+    pub label: String,
+    pub files: String,
+    pub dirs: String,
+    pub size: String,
+    pub default_enabled: bool,
 }
 
 #[derive(Template)]
