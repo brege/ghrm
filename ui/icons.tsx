@@ -37,7 +37,14 @@ import {
 } from 'react-icons/go';
 import { IoMdCode } from 'react-icons/io';
 import { IoCloudOfflineOutline } from 'react-icons/io5';
-import { LuFile, LuList, LuRabbit, LuTable2, LuTurtle } from 'react-icons/lu';
+import {
+  LuCopySlash,
+  LuFile,
+  LuList,
+  LuRabbit,
+  LuTable2,
+  LuTurtle,
+} from 'react-icons/lu';
 import {
   MdBorderOuter,
   MdCommit,
@@ -92,6 +99,7 @@ export const icons: Icon[] = [
   { id: 'ghrm-icon-zip', icon: <LuTurtle /> },
   { id: 'ghrm-icon-wrap', icon: <MdWrapText /> },
   { id: 'ghrm-icon-copy', icon: <GoCopy /> },
+  { id: 'ghrm-icon-copy-path', icon: <LuCopySlash /> },
   { id: 'ghrm-icon-check', icon: <FiCheck /> },
   { id: 'ghrm-icon-fullscreen', icon: <GoScreenFull /> },
   { id: 'ghrm-icon-zoom-in', icon: <GoZoomIn /> },

@@ -7,6 +7,7 @@ import {
 import { setupFileViews } from './file';
 import { setupLiveReload } from './live';
 import { setupHtmxNav } from './nav';
+import { setupPathCopy } from './path-copy';
 import {
   applyDocChromePref,
   setupDocChromeToggle,
@@ -53,6 +54,12 @@ export const browserFeatures: readonly FeatureEntry[] = [
     setup: setupNavExternalLinks,
   },
   {
+    name: 'path-copy',
+    phase: 'initial',
+    order: 165,
+    setup: setupPathCopy,
+  },
+  {
     name: 'theme-toggle',
     phase: 'initial',
     order: 200,
@@ -79,6 +86,12 @@ export const browserFeatures: readonly FeatureEntry[] = [
     phase: 'refresh',
     order: 130,
     setup: setupNavExternalLinks,
+  },
+  {
+    name: 'path-copy',
+    phase: 'refresh',
+    order: 135,
+    setup: setupPathCopy,
   },
   {
     name: 'column-controls',
