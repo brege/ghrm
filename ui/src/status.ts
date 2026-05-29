@@ -3,18 +3,19 @@ import {
   positionFloatingPanel,
   qsel,
   qselAllFrom,
-  qselFrom,
 } from './dom';
 
 let active = 0;
 let connected = false;
 let peekOpen = false;
-let detailsOpen = false;
 let aboutPanelMenuSetup = false;
 
 const ABOUT_PANEL_PREF = 'ghrm-about-hidden-panels';
 const ABOUT_PANELS = new Set([
-  'scope',
+  'about',
+  'history',
+  'languages',
+  'activity',
   'directory',
   'filters',
   'paths',
@@ -88,15 +89,32 @@ function openAboutPanelMenu(): void {
   if (!toggle || !menu) return;
   menu.hidden = false;
   toggle.setAttribute('aria-expanded', 'true');
-  positionFloatingPanel(menu, toggle, 210);
+  positionFloatingPanel(menu, toggle, 230);
 }
 
-function syncDetailGrids(root: Document | Element = document): void {
-  for (const grid of qselAllFrom(root, '.ghrm-detail-grid')) {
-    const panels = [...grid.children].filter(
-      (child): child is HTMLElement => child instanceof HTMLElement,
-    );
+function syncAboutPanelGrids(root: Document | Element = document): void {
+  for (const grid of qselAllFrom(root, '.ghrm-about-panel-grid')) {
+    const panels = qselAllFrom(grid, '[data-ghrm-about-panel]');
     grid.hidden = panels.length > 0 && panels.every((panel) => panel.hidden);
+  }
+}
+
+function aboutPanelInRoot(
+  root: Document | Element,
+  name: string,
+): HTMLElement | null {
+  const panel = root.querySelector(`[data-ghrm-about-panel="${name}"]`);
+  return panel instanceof HTMLElement ? panel : null;
+}
+
+function syncAboutMenuSections(root: Document | Element): void {
+  for (const section of qselAllFrom(root, '.ghrm-about-menu-section')) {
+    const options = qselAllFrom(
+      section,
+      '[data-ghrm-about-panel-option], .ghrm-about-menu-link',
+    );
+    section.hidden =
+      options.length > 0 && options.every((option) => option.hidden);
   }
 }
 
@@ -112,9 +130,7 @@ export function applyAboutPanelPrefs(
   }
   for (const option of qselAllFrom(root, '[data-ghrm-about-panel-option]')) {
     const name = validAboutPanel(option.dataset.ghrmAboutPanelOption);
-    const panel = name
-      ? document.querySelector(`[data-ghrm-about-panel="${name}"]`)
-      : null;
+    const panel = name ? aboutPanelInRoot(root, name) : null;
     if (!name || !panel) {
       option.hidden = true;
       continue;
@@ -124,7 +140,8 @@ export function applyAboutPanelPrefs(
     option.classList.toggle('is-active', shown);
     option.setAttribute('aria-checked', shown ? 'true' : 'false');
   }
-  syncDetailGrids(root);
+  syncAboutMenuSections(root);
+  syncAboutPanelGrids(root);
 }
 
 export function toggleAboutPanel(name: string): void {
@@ -188,7 +205,7 @@ export function setupAboutPanelMenu(): void {
     const menu = aboutPanelMenu();
     const toggle = aboutPanelToggle();
     if (!menu || !toggle || menu.hidden) return;
-    positionFloatingPanel(menu, toggle, 210);
+    positionFloatingPanel(menu, toggle, 230);
   });
 }
 
@@ -280,9 +297,6 @@ function sync(): void {
   const source = document.getElementById('ghrm-source-slot');
   const button = source?.querySelector('.ghrm-source-badge');
   const peek = qsel('#ghrm-about-peek');
-  const detailsButton = peek
-    ? qselFrom(peek, '.ghrm-about-stamp-button')
-    : null;
 
   if (source) {
     source.classList.toggle('is-active', active > 0);
@@ -293,19 +307,10 @@ function sync(): void {
   }
   if (peek) {
     peek.hidden = !peekOpen;
-    peek.classList.toggle('is-details-open', detailsOpen);
     applyAboutPanelPrefs(peek);
     if (!peekOpen) {
       closeAboutPanelMenu();
     }
-  }
-  if (detailsButton) {
-    const detailsLabel = detailsOpen
-      ? 'Hide runtime details'
-      : 'Show runtime details';
-    detailsButton.setAttribute('aria-expanded', detailsOpen ? 'true' : 'false');
-    detailsButton.setAttribute('aria-label', detailsLabel);
-    detailsButton.title = detailsLabel;
   }
   document.body?.classList.toggle('ghrm-about-open', peekOpen);
 }
@@ -337,13 +342,6 @@ export function setupStatusPeek(): void {
   document.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
-    if (target.closest('.ghrm-about-stamp-button')) {
-      event.preventDefault();
-      detailsOpen = !detailsOpen;
-      sync();
-      return;
-    }
-
     if (!target.closest('.ghrm-source-badge')) return;
     event.preventDefault();
     peekOpen = !peekOpen;

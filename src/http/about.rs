@@ -380,8 +380,8 @@ fn source_row(source: &SourceState) -> Option<AboutDetailRow> {
 
 fn scope_rows(s: &AppState, report: &ghrm_stat::filesystem::FsReport) -> Vec<AboutDetailRow> {
     vec![
-        detail_row("directory", display_fs_path(s, &report.root)),
-        detail_row("relative to", served_root(s).display().to_string()),
+        detail_row("ghrm root", served_root(s).display().to_string()),
+        detail_row("currently", display_fs_path(s, &report.root)),
     ]
 }
 
@@ -929,6 +929,9 @@ mod tests {
         assert!(html.contains(">brege/ghrm</span>"));
         assert!(html.contains("data-stats-loaded=\"false\""));
         assert!(html.contains("id=\"ghrm-about-panel-menu-toggle\""));
+        assert!(html.contains("Git"));
+        assert!(html.contains("Runtime"));
+        assert!(html.contains("Ghrm"));
         assert!(html.contains("data-ghrm-about-panel-option=\"paths\""));
         assert!(html.contains("data-ghrm-about-panel=\"paths\""));
     }
@@ -941,9 +944,9 @@ mod tests {
 
         assert!(html.contains("class=\"ghrm-about-peek\""));
         assert!(!html.contains("data-details-only"));
-        assert!(!html.contains("ghrm-about-summary"));
-        assert!(html.contains("ghrm-about-stamp-shell"));
-        assert!(html.contains("ghrm-about-stamp-button"));
+        assert!(!html.contains("data-ghrm-about-panel=\"about\""));
+        assert!(!html.contains("ghrm-about-stamp-shell"));
+        assert!(!html.contains("ghrm-about-stamp-mark"));
     }
 
     #[test]
@@ -964,21 +967,24 @@ mod tests {
 
         assert!(html.contains("class=\"ghrm-about-peek\""));
         assert!(!html.contains("data-details-only"));
-        assert!(html.contains("ghrm-about-summary"));
-        assert!(html.contains("ghrm-about-stamp-button"));
+        assert!(html.contains("ghrm-about-panel-grid"));
+        assert!(html.contains("data-ghrm-about-panel=\"about\""));
+        assert!(html.contains("data-ghrm-about-panel-option=\"about\""));
+        assert!(!html.contains("ghrm-about-stamp-mark"));
     }
 
     #[test]
-    fn about_html_renders_local_path_above_stamp_shell() {
+    fn about_html_renders_local_path_below_panel_grid() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
         let details = runtime_details(&runtime_paths, &SourceState::NoRepo, None);
         let html = html_with_details(&details, &stats, true, "/tmp/local");
 
+        let grid = html.find("ghrm-about-panel-grid").unwrap();
         let path = html.find("/tmp/local").unwrap();
-        let stamp = html.find("ghrm-about-stamp-shell").unwrap();
         assert!(html.contains("not a git repo"));
-        assert!(path < stamp);
+        assert!(grid < path);
+        assert!(!html.contains("ghrm-about-stamp-shell"));
     }
 
     #[test]

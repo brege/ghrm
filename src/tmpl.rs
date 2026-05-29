@@ -38,15 +38,6 @@ pub struct AboutStats {
     pub language_total: String,
 }
 
-impl AboutStats {
-    pub fn has_summary(&self) -> bool {
-        !self.metadata.is_empty()
-            || !self.history.is_empty()
-            || !self.activity.is_empty()
-            || !self.languages.is_empty()
-    }
-}
-
 pub struct AboutStatRow {
     pub label: String,
     pub value: String,

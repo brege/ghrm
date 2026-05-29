@@ -1,48 +1,94 @@
 <section id="ghrm-about-peek" class="ghrm-about-peek" data-stats-loaded="{% if stats_loaded %}true{% else %}false{% endif %}" hidden>
   <div class="ghrm-about-tools">
-    <button id="ghrm-about-panel-menu-toggle" class="ghrm-view-menu-toggle ghrm-about-panel-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Choose detail panels" title="Choose detail panels">
+    <button id="ghrm-about-panel-menu-toggle" class="ghrm-view-menu-toggle ghrm-about-panel-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Choose about panels" title="Choose about panels">
       <svg aria-hidden="true" focusable="false">
         <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-columns"></use>
       </svg>
     </button>
-    <div id="ghrm-about-panel-menu" class="ghrm-view-menu ghrm-about-panel-menu" role="menu" aria-label="Choose detail panels" hidden>
-      <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="scope" role="menuitemcheckbox" aria-checked="true" title="Show scope panel">
-        <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-        </svg>
-        <span class="ghrm-view-option-label">Scope</span>
-      </button>
-      <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="directory" role="menuitemcheckbox" aria-checked="true" title="Show this directory panel">
-        <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-        </svg>
-        <span class="ghrm-view-option-label">This Directory</span>
-      </button>
-      <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="filters" role="menuitemcheckbox" aria-checked="true" title="Show available filters panel">
-        <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-        </svg>
-        <span class="ghrm-view-option-label">Available Filters</span>
-      </button>
-      <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="paths" role="menuitemcheckbox" aria-checked="true" title="Show paths panel">
-        <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-        </svg>
-        <span class="ghrm-view-option-label">Paths</span>
-      </button>
-      <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="network" role="menuitemcheckbox" aria-checked="true" title="Show network panel">
-        <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-        </svg>
-        <span class="ghrm-view-option-label">Network</span>
-      </button>
+    <div id="ghrm-about-panel-menu" class="ghrm-view-menu ghrm-about-panel-menu" role="menu" aria-label="Choose about panels" hidden>
+      <div class="ghrm-about-menu-section" role="group" aria-label="Git panels">
+        <div class="ghrm-about-menu-heading">Git</div>
+        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="about" role="menuitemcheckbox" aria-checked="true" title="Show about panel">
+          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+          </svg>
+          <span class="ghrm-view-option-label">About</span>
+        </button>
+        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="history" role="menuitemcheckbox" aria-checked="true" title="Show history panel">
+          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+          </svg>
+          <span class="ghrm-view-option-label">History</span>
+        </button>
+        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="languages" role="menuitemcheckbox" aria-checked="true" title="Show languages panel">
+          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+          </svg>
+          <span class="ghrm-view-option-label">Languages</span>
+        </button>
+        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="activity" role="menuitemcheckbox" aria-checked="true" title="Show activity panel">
+          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+          </svg>
+          <span class="ghrm-view-option-label">Activity</span>
+        </button>
+      </div>
+      <div class="ghrm-about-menu-section" role="group" aria-label="Runtime panels">
+        <div class="ghrm-about-menu-heading">Runtime</div>
+        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="directory" role="menuitemcheckbox" aria-checked="true" title="Show directory metrics panel">
+          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+          </svg>
+          <span class="ghrm-view-option-label">Directory Metrics</span>
+        </button>
+        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="filters" role="menuitemcheckbox" aria-checked="true" title="Show available filters panel">
+          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+          </svg>
+          <span class="ghrm-view-option-label">Available Filters</span>
+        </button>
+        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="paths" role="menuitemcheckbox" aria-checked="true" title="Show paths panel">
+          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+          </svg>
+          <span class="ghrm-view-option-label">Paths</span>
+        </button>
+        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="network" role="menuitemcheckbox" aria-checked="true" title="Show network panel">
+          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+          </svg>
+          <span class="ghrm-view-option-label">Network</span>
+        </button>
+      </div>
+      <div class="ghrm-about-menu-section" role="group" aria-label="Ghrm links">
+        <div class="ghrm-about-menu-heading">Ghrm</div>
+        <a class="ghrm-view-option ghrm-about-menu-link" href="{{ project_href }}" target="_blank" rel="noopener noreferrer" role="menuitem" title="Open brege/ghrm">
+          <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-github"></use>
+          </svg>
+          <span class="ghrm-view-option-label">brege/ghrm</span>
+        </a>
+        <a class="ghrm-view-option ghrm-about-menu-link" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer" role="menuitem" title="Open ghrm v{{ project_version }}">
+          <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-fork"></use>
+          </svg>
+          <span class="ghrm-view-option-label">v{{ project_version }}</span>
+        </a>
+      </div>
     </div>
   </div>
   <div class="ghrm-about-peek-inner">
-{% if stats.has_summary() %}
-    <div class="ghrm-about-summary" aria-label="Repository summary">
-      <div class="ghrm-about-summary-col">
-{% if !stats.metadata.is_empty() %}        <section class="ghrm-about-stats ghrm-summary-panel" aria-label="Repository metadata">
+{% if !details.scope.is_empty() %}    <div class="ghrm-about-scope" aria-label="Current scope">
+      <dl>
+{% for item in details.scope %}        <div>
+          <dt>{{ item.label }}</dt>
+          <dd title="{{ item.title }}">{{ item.value }}</dd>
+        </div>
+{% endfor %}      </dl>
+    </div>
+{% endif %}
+    <div class="ghrm-about-panel-grid" aria-label="About panels">
+{% if !stats.metadata.is_empty() %}      <section class="ghrm-about-tile ghrm-about-stats ghrm-summary-panel" data-ghrm-about-panel="about" aria-label="Repository metadata">
           <div class="ghrm-about-heading">About</div>
           <dl class="ghrm-stat-list">
 {% for row in stats.metadata %}            <div class="ghrm-stat-row">
@@ -62,7 +108,7 @@
 {% endfor %}          </dl>
         </section>
 {% endif %}
-{% if !stats.history.is_empty() %}        <section class="ghrm-about-stats ghrm-summary-panel" aria-label="Repository history">
+{% if !stats.history.is_empty() %}      <section class="ghrm-about-tile ghrm-about-stats ghrm-summary-panel" data-ghrm-about-panel="history" aria-label="Repository history">
           <div class="ghrm-about-heading">History</div>
           <dl class="ghrm-stat-list">
 {% for row in stats.history %}            <div class="ghrm-stat-row">
@@ -81,9 +127,8 @@
             </div>
 {% endfor %}          </dl>
         </section>
-{% endif %}      </div>
-      <div class="ghrm-about-summary-col">
-{% if !stats.languages.is_empty() %}        <section class="ghrm-languages ghrm-summary-panel" aria-label="Languages">
+{% endif %}
+{% if !stats.languages.is_empty() %}      <section class="ghrm-about-tile ghrm-languages ghrm-summary-panel" data-ghrm-about-panel="languages" aria-label="Languages">
           <div class="ghrm-about-heading">Languages</div>
           <div class="ghrm-lang-bar" aria-hidden="true">
 {% for lang in stats.languages %}            <span title="{{ lang.title }}" style="{{ lang.style }}"></span>
@@ -101,7 +146,7 @@
 {% endif %}          </dl>
         </section>
 {% endif %}
-{% if !stats.activity.is_empty() %}        <section class="ghrm-about-stats ghrm-summary-panel" aria-label="Repository activity">
+{% if !stats.activity.is_empty() %}      <section class="ghrm-about-tile ghrm-about-stats ghrm-summary-panel" data-ghrm-about-panel="activity" aria-label="Repository activity">
           <div class="ghrm-about-heading">Activity</div>
           <dl class="ghrm-stat-list">
 {% for row in stats.activity %}            <div class="ghrm-stat-row">
@@ -120,23 +165,9 @@
             </div>
 {% endfor %}          </dl>
         </section>
-{% endif %}      </div>
-    </div>
 {% endif %}
-    <div class="ghrm-about-details" aria-label="ghrm details">
-{% if !details.scope.is_empty() %}      <section class="ghrm-detail-scope" data-ghrm-about-panel="scope" aria-label="Scan scope">
-        <div class="ghrm-about-heading">Scope</div>
-        <dl class="ghrm-detail-list">
-{% for item in details.scope %}          <div class="ghrm-detail-row">
-            <dt>{{ item.label }}</dt>
-            <dd title="{{ item.title }}">{{ item.value }}</dd>
-          </div>
-{% endfor %}        </dl>
-      </section>
-{% endif %}
-{% if !details.directory.is_empty() || !details.filters.is_empty() || !details.paths.is_empty() || !details.network.is_empty() %}      <div class="ghrm-detail-grid">
-{% if !details.directory.is_empty() %}        <section class="ghrm-detail-panel" data-ghrm-about-panel="directory" aria-label="This directory">
-          <div class="ghrm-about-heading">This Directory</div>
+{% if !details.directory.is_empty() %}      <section class="ghrm-about-tile ghrm-detail-panel" data-ghrm-about-panel="directory" aria-label="Directory metrics">
+          <div class="ghrm-about-heading">Directory Metrics</div>
           <div class="ghrm-detail-panel-body">
             <table class="ghrm-detail-table">
               <thead>
@@ -149,7 +180,7 @@
           </div>
         </section>
 {% endif %}
-{% if !details.filters.is_empty() %}        <section class="ghrm-detail-panel" data-ghrm-about-panel="filters" aria-label="Available filters">
+{% if !details.filters.is_empty() %}      <section class="ghrm-about-tile ghrm-detail-panel" data-ghrm-about-panel="filters" aria-label="Available filters">
           <div class="ghrm-about-heading">Available Filters</div>
           <div class="ghrm-detail-panel-body">
             <table class="ghrm-detail-table">
@@ -163,7 +194,7 @@
           </div>
         </section>
 {% endif %}
-{% if !details.paths.is_empty() %}        <section class="ghrm-detail-panel" data-ghrm-about-panel="paths" aria-label="Runtime paths">
+{% if !details.paths.is_empty() %}      <section class="ghrm-about-tile ghrm-detail-panel" data-ghrm-about-panel="paths" aria-label="Runtime paths">
           <div class="ghrm-about-heading">Paths</div>
           <div class="ghrm-detail-panel-body">
             <dl class="ghrm-detail-list">
@@ -175,7 +206,7 @@
           </div>
         </section>
 {% endif %}
-{% if !details.network.is_empty() %}        <section class="ghrm-detail-panel" data-ghrm-about-panel="network" aria-label="Runtime network">
+{% if !details.network.is_empty() %}      <section class="ghrm-about-tile ghrm-detail-panel" data-ghrm-about-panel="network" aria-label="Runtime network">
           <div class="ghrm-about-heading">Network</div>
           <div class="ghrm-detail-panel-body">
             <dl class="ghrm-detail-list">
@@ -186,7 +217,6 @@
 {% endfor %}            </dl>
           </div>
         </section>
-{% endif %}      </div>
 {% endif %}
     </div>
 {% if !local_path.is_empty() %}    <div class="ghrm-about-local-path" aria-label="Local path">
@@ -194,25 +224,5 @@
       <code>{{ local_path }}</code>
     </div>
 {% endif %}
-    <div class="ghrm-about-stamp-shell">
-      <div class="ghrm-about-footer" aria-label="ghrm app">
-        <span class="ghrm-about-footer-label">ghrm</span>
-        <a class="ghrm-about-project" href="{{ project_href }}" target="_blank" rel="noopener noreferrer">
-          <svg aria-hidden="true">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-github"></use>
-          </svg>
-          <span>brege/ghrm</span>
-        </a>
-        <a class="ghrm-about-project" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer">
-          <svg aria-hidden="true">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-fork"></use>
-          </svg>
-          <span>v{{ project_version }}</span>
-        </a>
-      </div>
-      <button class="ghrm-about-stamp-button" type="button" aria-label="Show runtime details" title="Show runtime details" aria-expanded="false">
-        <img class="ghrm-about-stamp" src="/_ghrm/assets/img/favicon.svg" alt="" aria-hidden="true">
-      </button>
-    </div>
   </div>
 </section>

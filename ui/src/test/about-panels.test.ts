@@ -5,17 +5,26 @@ function renderAboutPanels(): void {
   document.body.innerHTML = `
     <section id="ghrm-about-peek">
       <div id="ghrm-about-panel-menu">
-        <button class="ghrm-view-option is-active" data-ghrm-about-panel-option="scope" aria-checked="true"></button>
-        <button class="ghrm-view-option is-active" data-ghrm-about-panel-option="paths" aria-checked="true"></button>
-        <button class="ghrm-view-option is-active" data-ghrm-about-panel-option="network" aria-checked="true"></button>
-        <button class="ghrm-view-option is-active" data-ghrm-about-panel-option="filters" aria-checked="true"></button>
-      </div>
-      <div class="ghrm-about-details">
-        <section data-ghrm-about-panel="scope"></section>
-        <div class="ghrm-detail-grid">
-          <section data-ghrm-about-panel="paths"></section>
-          <section data-ghrm-about-panel="network"></section>
+        <div class="ghrm-about-menu-section" role="group">
+          <button class="ghrm-view-option is-active" data-ghrm-about-panel-option="about" aria-checked="true"></button>
+          <button class="ghrm-view-option is-active" data-ghrm-about-panel-option="history" aria-checked="true"></button>
         </div>
+        <div class="ghrm-about-menu-section" role="group">
+          <button class="ghrm-view-option is-active" data-ghrm-about-panel-option="directory" aria-checked="true"></button>
+          <button class="ghrm-view-option is-active" data-ghrm-about-panel-option="paths" aria-checked="true"></button>
+          <button class="ghrm-view-option is-active" data-ghrm-about-panel-option="network" aria-checked="true"></button>
+          <button class="ghrm-view-option is-active" data-ghrm-about-panel-option="filters" aria-checked="true"></button>
+        </div>
+        <div class="ghrm-about-menu-section" role="group">
+          <a class="ghrm-about-menu-link" href="/ghrm">ghrm</a>
+        </div>
+      </div>
+      <div class="ghrm-about-panel-grid">
+        <section data-ghrm-about-panel="about"></section>
+        <section data-ghrm-about-panel="directory"></section>
+        <section data-ghrm-about-panel="filters"></section>
+        <section data-ghrm-about-panel="paths"></section>
+        <section data-ghrm-about-panel="network"></section>
       </div>
     </section>
   `;
@@ -29,7 +38,7 @@ function must<T extends HTMLElement>(selector: string): T {
   return el;
 }
 
-describe('about detail panel chooser', () => {
+describe('about panel chooser', () => {
   beforeEach(() => {
     localStorage.clear();
     renderAboutPanels();
@@ -54,19 +63,34 @@ describe('about detail panel chooser', () => {
   });
 
   it('hides grid wrappers when every child panel is hidden', () => {
+    toggleAboutPanel('about');
+    toggleAboutPanel('directory');
+    toggleAboutPanel('filters');
     toggleAboutPanel('paths');
     toggleAboutPanel('network');
 
-    const grid = must<HTMLElement>('.ghrm-detail-grid');
+    const grid = must<HTMLElement>('.ghrm-about-panel-grid');
     expect(grid.hidden).toBe(true);
   });
 
   it('hides menu options for panels missing from the current view', () => {
-    document.querySelector('[data-ghrm-about-panel="scope"]')?.remove();
+    document.querySelector('[data-ghrm-about-panel="directory"]')?.remove();
 
     applyAboutPanelPrefs();
 
-    const option = must<HTMLElement>('[data-ghrm-about-panel-option="scope"]');
+    const option = must<HTMLElement>(
+      '[data-ghrm-about-panel-option="directory"]',
+    );
     expect(option.hidden).toBe(true);
+  });
+
+  it('hides empty chooser sections', () => {
+    document.querySelector('[data-ghrm-about-panel="about"]')?.remove();
+    document.querySelector('[data-ghrm-about-panel="history"]')?.remove();
+
+    applyAboutPanelPrefs();
+
+    const section = must<HTMLElement>('.ghrm-about-menu-section');
+    expect(section.hidden).toBe(true);
   });
 });
