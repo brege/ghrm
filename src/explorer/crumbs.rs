@@ -76,3 +76,199 @@ pub(crate) fn html(
 
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::explorer::column;
+    use crate::explorer::walk::{Sort, ViewOpts};
+    use std::path::PathBuf;
+
+    fn default_columns() -> column::Set {
+        column::Set::from_defaults(|def| def.default_visible)
+    }
+
+    fn default_view_config() -> ViewConfig {
+        ViewConfig {
+            default: ViewOpts::default(),
+            default_use_ignore: true,
+            default_groups: Vec::new(),
+            default_sort: Sort::Name,
+            default_columns: default_columns(),
+            can_toggle_excludes: false,
+        }
+    }
+
+    fn default_view_state() -> ViewState {
+        let cfg = default_view_config();
+        ViewState {
+            opts: cfg.default,
+            use_ignore: cfg.default_use_ignore,
+            groups: Vec::new(),
+            sort: cfg.default_sort,
+            sort_dir: cfg.default_sort.default_dir(),
+            columns: cfg.default_columns.clone(),
+            show_headers: false,
+        }
+    }
+
+    #[test]
+    fn crumbs_root_only() {
+        let target = PathBuf::from("/home/user/project");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(&target, Some(Path::new("/home/user")), "", &view, &cfg);
+
+        assert!(result.contains("ghrm-crumb-current"));
+        assert!(result.contains("project"));
+    }
+
+    #[test]
+    fn crumbs_nested_path() {
+        let target = PathBuf::from("/home/user/project");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(
+            &target,
+            Some(Path::new("/home/user")),
+            "src/lib",
+            &view,
+            &cfg,
+        );
+
+        assert!(result.contains("project"));
+        assert!(result.contains("src"));
+        assert!(result.contains("lib"));
+        let sep_count = result.matches("ghrm-crumb-sep").count();
+        assert_eq!(sep_count, 2);
+    }
+
+    #[test]
+    fn crumbs_current_is_strong() {
+        let target = PathBuf::from("/home/user/project");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(&target, Some(Path::new("/home/user")), "src", &view, &cfg);
+
+        assert!(result.contains(r#"<strong class="ghrm-crumb ghrm-crumb-current">src</strong>"#));
+    }
+
+    #[test]
+    fn crumbs_link_hrefs_correct() {
+        let target = PathBuf::from("/home/user/project");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(
+            &target,
+            Some(Path::new("/home/user")),
+            "src/lib/utils",
+            &view,
+            &cfg,
+        );
+
+        assert!(result.contains(r#"href="/""#));
+        assert!(result.contains(r#"href="/src/""#));
+        assert!(result.contains(r#"href="/src/lib/""#));
+    }
+
+    #[test]
+    fn crumbs_escapes_label_html() {
+        let target = PathBuf::from("/home/user/<script>");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(&target, Some(Path::new("/home/user")), "", &view, &cfg);
+
+        assert!(result.contains("&lt;script&gt;"));
+        assert!(!result.contains("<script>"));
+    }
+
+    #[test]
+    fn crumbs_static_before_root() {
+        let target = PathBuf::from("/home/user/code/project");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(&target, Some(Path::new("/home/user")), "", &view, &cfg);
+
+        assert!(result.contains(r#"<span class="ghrm-crumb ghrm-crumb-static">code</span>"#));
+        assert!(
+            result.contains(r#"<strong class="ghrm-crumb ghrm-crumb-current">project</strong>"#)
+        );
+    }
+
+    #[test]
+    fn crumbs_no_home_uses_full_path() {
+        let target = PathBuf::from("/data/project");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(&target, None, "", &view, &cfg);
+
+        assert!(result.contains("data"));
+        assert!(result.contains("project"));
+    }
+
+    #[test]
+    fn crumbs_preserves_view_state() {
+        let target = PathBuf::from("/home/user/project");
+        let cfg = default_view_config();
+        let mut view = default_view_state();
+        view.opts.show_hidden = true;
+
+        let result = html(&target, Some(Path::new("/home/user")), "src", &view, &cfg);
+
+        assert!(result.contains("hidden=1"));
+    }
+
+    #[test]
+    fn crumbs_empty_rel_shows_root() {
+        let target = PathBuf::from("/project");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(&target, None, "", &view, &cfg);
+
+        assert!(result.contains("ghrm-crumb-current"));
+        assert!(result.contains("project"));
+        assert!(!result.contains("ghrm-crumb-sep"));
+    }
+
+    #[test]
+    fn crumbs_single_rel_part() {
+        let target = PathBuf::from("/project");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(&target, None, "src", &view, &cfg);
+
+        assert!(result.contains(r#"href="/""#));
+        assert!(result.contains(r#"ghrm-crumb-link"#));
+        assert!(result.contains(r#"ghrm-crumb-current">src</strong>"#));
+    }
+
+    #[test]
+    fn crumbs_depth_math_with_nonzero_root_idx() {
+        let target = PathBuf::from("/home/user/code/project");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(
+            &target,
+            Some(Path::new("/home/user")),
+            "src/lib",
+            &view,
+            &cfg,
+        );
+
+        assert!(result.contains(r#"href="/""#), "project should link to /");
+        assert!(
+            result.contains(r#"href="/src/""#),
+            "src should link to /src/, got: {result}"
+        );
+    }
+}

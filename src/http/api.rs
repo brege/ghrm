@@ -360,7 +360,84 @@ fn not_found() -> Response {
 mod tests {
     use super::*;
     use crate::testutil::{TempDir, nav_entry};
+    use axum::body::to_bytes;
+    use serde::Serialize;
     use std::fs;
+
+    async fn response_text(response: Response) -> String {
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        String::from_utf8(bytes.to_vec()).unwrap()
+    }
+
+    #[derive(Serialize)]
+    struct TestJson {
+        ok: bool,
+        name: &'static str,
+    }
+
+    #[tokio::test]
+    async fn json_response_sets_json_headers_and_body() {
+        let response = json_response(
+            &TestJson {
+                ok: true,
+                name: "api",
+            },
+            "test",
+        );
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
+        assert_eq!(response_text(response).await, r#"{"ok":true,"name":"api"}"#);
+    }
+
+    #[tokio::test]
+    async fn bad_request_returns_json_error() {
+        let response = bad_request(r#"{"error":"missing query"}"#);
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
+        assert_eq!(
+            response_text(response).await,
+            r#"{"error":"missing query"}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn not_found_returns_no_store_response() {
+        let response = not_found();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
+        assert_eq!(response_text(response).await, "404");
+    }
+
+    #[test]
+    fn wants_html_accepts_hx_or_html_headers() {
+        let mut headers = HeaderMap::new();
+        assert!(!wants_html(&headers));
+
+        headers.insert("HX-Request", "true".parse().unwrap());
+        assert!(wants_html(&headers));
+
+        headers.insert("HX-Request", "false".parse().unwrap());
+        headers.insert(header::ACCEPT, "application/json".parse().unwrap());
+        assert!(!wants_html(&headers));
+
+        headers.insert(
+            header::ACCEPT,
+            "text/html,application/xhtml+xml".parse().unwrap(),
+        );
+        assert!(wants_html(&headers));
+    }
 
     #[test]
     fn path_search_uses_selected_sort() {
