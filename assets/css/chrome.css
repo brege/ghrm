@@ -30,6 +30,14 @@ body.ghrm-doc-flat #ghrm-source-slot {
   display: none;
 }
 
+body.ghrm-doc-flat .markdown-body {
+  padding-top: 16px;
+}
+
+body.ghrm-doc-flat .ghrm-raw-pane .ghrm-blob {
+  margin: 0;
+}
+
 .ghrm-topbar {
   padding-top: 0;
   background: transparent;
@@ -231,5 +239,36 @@ body.ghrm-doc-flat #doc-chrome-toggle .icon-flat {
   .ghrm-source-value {
     overflow: visible;
     text-overflow: clip;
+  }
+}
+
+body.ghrm-doc-flat .ghrm-topbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 180;
+  width: min(208px, 100vw);
+  padding: 8px 12px 16px 20px;
+}
+
+body.ghrm-doc-flat .ghrm-topbar-inner {
+  width: auto;
+  min-height: 32px;
+  padding: 0;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+body.ghrm-doc-flat .ghrm-topbar:hover .ghrm-topbar-inner,
+body.ghrm-doc-flat .ghrm-topbar:focus-within .ghrm-topbar-inner {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media print {
+  .ghrm-topbar {
+    display: none !important;
   }
 }
