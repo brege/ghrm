@@ -55,10 +55,8 @@ precommit:
 # check Rust and UI files
 check: rust ui
 
-# run the main crate and ghrm-stat test suites
-test:
-    cargo test --locked
-    cargo test --manifest-path ghrm-stat/Cargo.toml --locked
+# run Rust and UI test suites
+test: rust-test ui-test
 
 # remove build artifacts
 clean:
@@ -89,6 +87,11 @@ rust-lint:
     cargo clippy --all-targets --locked -- --deny warnings
     cargo clippy --manifest-path ghrm-stat/Cargo.toml --all-targets --locked -- --deny warnings
 
+# run Rust test suites
+rust-test:
+    cargo test --locked
+    cargo test --manifest-path ghrm-stat/Cargo.toml --locked
+
 # format Rust files
 rust-fmt:
     cargo fmt --all
@@ -115,6 +118,10 @@ ui-type:
 # run UI lint and format checks
 ui-lint:
     pre-commit run biome-check --all-files
+
+# run UI tests
+ui-test:
+    npm --prefix ui run test
 
 # format UI files
 ui-fmt:
