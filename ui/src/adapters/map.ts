@@ -1,5 +1,6 @@
 import type { LeafletMap } from '../../types/ghrm';
 import { icon } from '../dom';
+import { isPrintMode } from '../prefs';
 import { hasFeature } from '../vendor';
 import { clearError, getSource, setError, themeColors } from './common';
 
@@ -54,10 +55,11 @@ function renderMapBlock(block: MapBlock, kind: 'geojson' | 'topojson'): void {
   const data = JSON.parse(source);
   const geojson = kind === 'topojson' ? topojsonToGeojson(data) : data;
   const colors = themeColors();
+  const print = isPrintMode();
   const map = window.L!.map(canvas, {
     attributionControl: false,
-    zoomControl: true,
-    scrollWheelZoom: true,
+    zoomControl: !print,
+    scrollWheelZoom: !print,
   });
 
   if (navigator.onLine) {

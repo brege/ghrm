@@ -88,6 +88,13 @@
   display: block;
 }
 
+body.ghrm-print .ghrm-copy-button,
+body.ghrm-print .ghrm-render-actions,
+body.ghrm-print .ghrm-mermaid-controls,
+body.ghrm-print .leaflet-control-zoom {
+  display: none !important;
+}
+
 .ghrm-mermaid-diagram,
 .ghrm-map-canvas {
   background: var(--bgColor-default, #ffffff);

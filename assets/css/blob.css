@@ -99,38 +99,46 @@
   overflow-wrap: inherit;
 }
 
-body.ghrm-wrap .markdown-body .ghrm-blob-table {
+body:is(.ghrm-wrap, .ghrm-print) .markdown-body .ghrm-blob-table {
   width: 100%;
   max-width: 100%;
   table-layout: fixed;
 }
 
-body.ghrm-wrap .markdown-body td.ghrm-blob-line-no {
+body:is(.ghrm-wrap, .ghrm-print) .markdown-body td.ghrm-blob-line-no {
   width: calc(4ch + 24px);
 }
 
-body.ghrm-wrap .markdown-body td.ghrm-blob-line-code {
+body:is(.ghrm-wrap, .ghrm-print) .markdown-body td.ghrm-blob-line-code {
   width: auto;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
 
-body.ghrm-wrap .ghrm-blob-line-code code,
-body.ghrm-wrap .ghrm-blob-line-code .hljs {
+body:is(.ghrm-wrap, .ghrm-print) .ghrm-blob-line-code code,
+body:is(.ghrm-wrap, .ghrm-print) .ghrm-blob-line-code .hljs {
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
 
-body.ghrm-wrap .markdown-body [data-ghrm-preview-pane] pre,
-body.ghrm-wrap .markdown-body [data-ghrm-preview-pane] pre code {
+body:is(.ghrm-wrap, .ghrm-print) .markdown-body [data-ghrm-preview-pane] pre,
+body:is(.ghrm-wrap, .ghrm-print)
+  .markdown-body
+  [data-ghrm-preview-pane]
+  pre
+  code {
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
 
-body.ghrm-wrap .markdown-body [data-ghrm-preview-pane] pre .hljs {
+body:is(.ghrm-wrap, .ghrm-print)
+  .markdown-body
+  [data-ghrm-preview-pane]
+  pre
+  .hljs {
   white-space: inherit;
   word-break: inherit;
   overflow-wrap: inherit;

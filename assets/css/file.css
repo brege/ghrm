@@ -16,6 +16,10 @@
   gap: 8px;
 }
 
+body.ghrm-print .ghrm-file-tools {
+  display: none;
+}
+
 .ghrm-file-toggles {
   display: inline-flex;
   align-items: stretch;

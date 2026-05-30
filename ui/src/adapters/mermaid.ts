@@ -1,5 +1,6 @@
 import type { MermaidAPI, SvgPanZoomInstance } from '../../types/ghrm';
 import { icon, qselFrom } from '../dom';
+import { isPrintMode } from '../prefs';
 import { assetPlan, hasFeature } from '../vendor';
 import { clearError, getSource, isDarkTheme, setError } from './common';
 import { checkIcon, copyIcon, showCopied, writeClipboard } from './copy';
@@ -66,6 +67,11 @@ function mermaidControls(): string {
 }
 
 function setupMermaidControls(block: MermaidBlock, target: HTMLElement): void {
+  if (isPrintMode()) {
+    clearMermaidActions(block, target);
+    return;
+  }
+
   const svg = target.querySelector('svg');
   if (!(svg instanceof SVGElement) || typeof window.svgPanZoom !== 'function') {
     return;
@@ -174,6 +180,11 @@ function ensureMermaidActions(block: Element): HTMLElement {
   return actions;
 }
 
+function clearMermaidActions(block: Element, target: HTMLElement): void {
+  qselFrom(block, ':scope > .ghrm-render-actions')?.remove();
+  target.querySelector('.ghrm-mermaid-controls')?.remove();
+}
+
 async function getMermaidVersion(api: MermaidAPI): Promise<string> {
   if (typeof api.version === 'function') {
     return api.version();
@@ -234,6 +245,10 @@ export async function renderMermaid(): Promise<void> {
       target.innerHTML = result.svg;
       if (typeof result.bindFunctions === 'function') {
         result.bindFunctions(target);
+      }
+      if (isPrintMode()) {
+        clearMermaidActions(block, target);
+        continue;
       }
       ensureMermaidActions(block).hidden = false;
       setupMermaidControls(block as MermaidBlock, target);

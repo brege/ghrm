@@ -5,7 +5,7 @@ import {
   writeClipboard,
 } from './adapters/copy';
 import { icon, isHtmlFile } from './dom';
-import { applyWrapState, getWrapPref, setWrapPref } from './prefs';
+import { applyWrapState, getWrapPref, isPrintMode, setWrapPref } from './prefs';
 import { buildToc } from './toc';
 
 interface FileViewContainer extends HTMLElement {
@@ -61,6 +61,13 @@ function syncWrapToggle(container: FileViewContainer): void {
   ) as HTMLButtonElement | null;
   if (!wrapToggle) return;
 
+  if (isPrintMode()) {
+    wrapToggle.hidden = true;
+    wrapToggle.disabled = true;
+    applyWrapState(true);
+    return;
+  }
+
   const disabled = !wrapApplies(container);
   wrapToggle.disabled = disabled;
   wrapToggle.hidden = disabled;
@@ -92,6 +99,11 @@ function setupFileView(container: FileViewContainer): void {
   const downloadUrl = container.dataset.ghrmDownloadUrl;
   const host = fileActionsHost(container);
   if (!kind || !rawUrl || !downloadUrl || !host) return;
+  if (isPrintMode()) {
+    host.querySelector('.ghrm-file-tools')?.remove();
+    applyWrapState(true);
+    return;
+  }
   if (host.querySelector('.ghrm-file-tools')) return;
 
   const tools = document.createElement('div');

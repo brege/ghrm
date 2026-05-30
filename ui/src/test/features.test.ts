@@ -12,6 +12,7 @@ function featureNames(phase: LifecyclePhase): string[] {
 describe('browser features', () => {
   it('declares initial setup order', () => {
     expect(featureNames('initial')).toEqual([
+      'print-mode',
       'file-views',
       'search-close',
       'column-controls',
@@ -30,6 +31,7 @@ describe('browser features', () => {
 
   it('declares refresh setup order', () => {
     expect(featureNames('refresh')).toEqual([
+      'print-mode',
       'server-status',
       'file-views',
       'nav-links',

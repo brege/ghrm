@@ -16,6 +16,17 @@ function hasDocChrome(): boolean {
   return !!document.querySelector('.ghrm-page-shell[data-ghrm-view-kind]');
 }
 
+export function isPrintMode(): boolean {
+  const value = new URLSearchParams(window.location.search).get('print');
+  return hasDocChrome() && (value === '1' || value === 'true');
+}
+
+export function syncPrintMode(): void {
+  const print = isPrintMode();
+  document.body.classList.toggle('ghrm-print', print);
+  applyWrapState(print || getWrapPref());
+}
+
 function syncDocChromeToggle(): void {
   const btn = document.getElementById('doc-chrome-toggle');
   if (!btn) return;
