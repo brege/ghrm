@@ -92,7 +92,23 @@ body.ghrm-print .ghrm-copy-button,
 body.ghrm-print .ghrm-render-actions,
 body.ghrm-print .ghrm-mermaid-controls,
 body.ghrm-print .leaflet-control-zoom {
-  display: none !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+body.ghrm-print .ghrm-copy-host:hover > .ghrm-copy-button,
+body.ghrm-print .ghrm-copy-host:focus-within > .ghrm-copy-button,
+body.ghrm-print .ghrm-mermaid:hover > .ghrm-render-actions,
+body.ghrm-print .ghrm-mermaid:focus-within > .ghrm-render-actions,
+body.ghrm-print .ghrm-mermaid:hover .ghrm-mermaid-controls,
+body.ghrm-print .ghrm-mermaid:focus-within .ghrm-mermaid-controls,
+body.ghrm-print .ghrm-geojson:hover .leaflet-control-zoom,
+body.ghrm-print .ghrm-geojson:focus-within .leaflet-control-zoom,
+body.ghrm-print .ghrm-topojson:hover .leaflet-control-zoom,
+body.ghrm-print .ghrm-topojson:focus-within .leaflet-control-zoom {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .ghrm-mermaid-diagram,

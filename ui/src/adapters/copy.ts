@@ -1,5 +1,4 @@
 import { icon } from '../dom';
-import { isPrintMode } from '../prefs';
 
 export interface CopyButton extends HTMLButtonElement {
   _ghrmCopyReset?: number | null;
@@ -93,11 +92,6 @@ export function bindCopy(button: CopyButton, text: CopyText): void {
 }
 
 export function addCopyButtons(): void {
-  if (isPrintMode()) {
-    removeCopyButtons();
-    return;
-  }
-
   for (const pre of document.querySelectorAll('.markdown-body pre')) {
     if (!(pre instanceof HTMLPreElement)) continue;
     if (pre.closest('[data-ghrm-raw-pane]')) {
@@ -123,17 +117,5 @@ export function addCopyButtons(): void {
     bindCopy(button, () => getCopyText(pre));
 
     host.appendChild(button);
-  }
-}
-
-function removeCopyButtons(): void {
-  for (const button of document.querySelectorAll('.ghrm-copy-button')) {
-    button.remove();
-  }
-  for (const host of document.querySelectorAll('.ghrm-copy-host')) {
-    host.classList.remove('ghrm-copy-host');
-  }
-  for (const target of document.querySelectorAll('.ghrm-copy-target')) {
-    target.classList.remove('ghrm-copy-target');
   }
 }
