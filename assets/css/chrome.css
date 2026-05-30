@@ -197,11 +197,11 @@ body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-raw-pane .ghrm-blob {
   stroke-width: 0;
 }
 
-body.ghrm-doc-flat #doc-chrome-toggle .icon-framed {
+body:is(.ghrm-doc-flat, .ghrm-print) #doc-chrome-toggle .icon-framed {
   display: none;
 }
 
-body.ghrm-doc-flat #doc-chrome-toggle .icon-flat {
+body:is(.ghrm-doc-flat, .ghrm-print) #doc-chrome-toggle .icon-flat {
   display: block;
 }
 
