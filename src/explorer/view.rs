@@ -1,6 +1,7 @@
 use crate::explorer::column;
 use crate::explorer::filter;
 use crate::explorer::walk::{self, ViewOpts};
+use crate::query;
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -65,7 +66,7 @@ pub(crate) fn from_query(
     let filter_ext = q
         .filter
         .as_deref()
-        .and_then(parse_bool_param)
+        .and_then(query::parse_bool)
         .unwrap_or(cfg.default.filter_ext);
     let columns = columns_from_query(q, &cfg.default_columns);
     let sort = q
@@ -92,12 +93,12 @@ pub(crate) fn from_query(
             show_hidden: q
                 .hidden
                 .as_deref()
-                .and_then(parse_bool_param)
+                .and_then(query::parse_bool)
                 .unwrap_or(cfg.default.show_hidden),
             show_excludes: if cfg.can_toggle_excludes {
                 q.excludes
                     .as_deref()
-                    .and_then(parse_bool_param)
+                    .and_then(query::parse_bool)
                     .unwrap_or(cfg.default.show_excludes)
             } else {
                 false
@@ -107,7 +108,7 @@ pub(crate) fn from_query(
         use_ignore: q
             .ignore
             .as_deref()
-            .and_then(parse_bool_param)
+            .and_then(query::parse_bool)
             .unwrap_or(cfg.default_use_ignore),
         groups,
         sort,
@@ -116,7 +117,7 @@ pub(crate) fn from_query(
         show_headers: q
             .headers
             .as_deref()
-            .and_then(parse_bool_param)
+            .and_then(query::parse_bool)
             .unwrap_or(false),
     }
 }
@@ -213,7 +214,7 @@ pub(crate) fn toggle_headers(view: &ViewState) -> ViewState {
 fn columns_from_query(q: &ViewQuery, defaults: &column::Set) -> column::Set {
     let mut columns = defaults.clone();
     for def in column::DEFS {
-        let Some(visible) = q.extra.get(def.key).and_then(|raw| parse_bool_param(raw)) else {
+        let Some(visible) = q.extra.get(def.key).and_then(|raw| query::parse_bool(raw)) else {
             continue;
         };
         columns.set_visible(def, visible);
@@ -222,43 +223,25 @@ fn columns_from_query(q: &ViewQuery, defaults: &column::Set) -> column::Set {
 }
 
 fn parse_group_params(raw_query: Option<&str>, filters: &filter::Set) -> Option<Vec<String>> {
-    let mut groups = Vec::new();
     let mut found = false;
-    for pair in raw_query
-        .unwrap_or("")
-        .split('&')
-        .filter(|pair| !pair.is_empty())
-    {
-        let (key, value) = pair
-            .split_once('=')
-            .map_or((pair, ""), |(key, value)| (key, value));
-        if key == "group" {
-            found = true;
-            groups.push(decode_query_value(value));
-        }
-    }
+    let groups = query::parse_pairs(raw_query.unwrap_or(""))
+        .into_iter()
+        .filter_map(|(key, value)| {
+            if key == "group" {
+                found = true;
+                Some(value)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
     found.then(|| filters.normalize_groups(&groups))
-}
-
-fn decode_query_value(raw: &str) -> String {
-    let raw = raw.replace('+', " ");
-    percent_encoding::percent_decode_str(&raw)
-        .decode_utf8_lossy()
-        .into_owned()
-}
-
-fn parse_bool_param(raw: &str) -> Option<bool> {
-    match raw {
-        "1" | "true" => Some(true),
-        "0" | "false" => Some(false),
-        _ => None,
-    }
 }
 
 pub(crate) fn with_view(href: &str, view: &ViewState, cfg: &ViewConfig) -> String {
     let (base, fragment) = href.split_once('#').map_or((href, ""), |(a, b)| (a, b));
     let (path, query) = base.split_once('?').map_or((base, ""), |(a, b)| (a, b));
-    let mut pairs = parse_query_pairs(query);
+    let mut pairs = query::parse_pairs(query);
     set_bool_param(
         &mut pairs,
         "hidden",
@@ -313,34 +296,13 @@ pub(crate) fn with_view(href: &str, view: &ViewState, cfg: &ViewConfig) -> Strin
     let mut out = path.to_string();
     if !pairs.is_empty() {
         out.push('?');
-        out.push_str(
-            &pairs
-                .iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect::<Vec<_>>()
-                .join("&"),
-        );
+        out.push_str(&query::encode_pairs(&pairs));
     }
     if !fragment.is_empty() {
         out.push('#');
         out.push_str(fragment);
     }
     out
-}
-
-fn parse_query_pairs(query: &str) -> Vec<(String, String)> {
-    if query.is_empty() {
-        return Vec::new();
-    }
-    query
-        .split('&')
-        .filter(|pair| !pair.is_empty())
-        .map(|pair| {
-            pair.split_once('=')
-                .map_or((pair, ""), |(key, value)| (key, value))
-        })
-        .map(|(key, value)| (key.to_string(), value.to_string()))
-        .collect()
 }
 
 fn set_bool_param(pairs: &mut Vec<(String, String)>, key: &str, value: bool, default_value: bool) {
@@ -399,15 +361,43 @@ mod tests {
     #[test]
     fn parse_group_params_accepts_repeated_keys() {
         let filters = group_filters();
-        let groups = parse_group_params(Some("filter=1&group=docs&group=web"), &filters);
-        assert_eq!(groups, Some(vec!["docs".to_string(), "web".to_string()]));
+        let q = ViewQuery::default();
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: true,
+                filter_ext: false,
+            },
+            default_use_ignore: true,
+            default_groups: vec![],
+            default_sort: walk::Sort::Name,
+            default_columns: columns(true, true, true),
+            can_toggle_excludes: true,
+        };
+
+        let view = from_query(&q, Some("filter=1&group=docs&group=web"), &cfg, &filters);
+        assert_eq!(view.groups, vec!["docs".to_string(), "web".to_string()]);
     }
 
     #[test]
     fn parse_group_params_preserves_explicit_empty_groups() {
         let filters = group_filters();
-        let groups = parse_group_params(Some("group="), &filters);
-        assert_eq!(groups, Some(Vec::new()));
+        let q = ViewQuery::default();
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: true,
+                filter_ext: false,
+            },
+            default_use_ignore: true,
+            default_groups: vec!["docs".to_string()],
+            default_sort: walk::Sort::Name,
+            default_columns: columns(true, true, true),
+            can_toggle_excludes: true,
+        };
+
+        let view = from_query(&q, Some("group="), &cfg, &filters);
+        assert_eq!(view.groups, Vec::<String>::new());
     }
 
     #[test]

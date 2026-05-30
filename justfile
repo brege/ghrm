@@ -21,8 +21,8 @@ dev target=".":
 
 # run ghrm with ui rebuild watcher
 dev-ui target=".":
-    npx --prefix ui vite build --config ui/vite.config.js && { \
-        npx --prefix ui vite build --config ui/vite.config.js --watch & \
+    npm --prefix ui run build:runtime && { \
+        npm --prefix ui run build:watch & \
         VITE_PID=$!; \
         trap "kill $VITE_PID 2>/dev/null" EXIT; \
         cargo run --locked -- --no-browser "{{target}}"; \
@@ -55,10 +55,8 @@ precommit:
 # check Rust and UI files
 check: rust ui
 
-# run the main crate and ghrm-stat test suites
-test:
-    cargo test --locked
-    cargo test --manifest-path ghrm-stat/Cargo.toml --locked
+# run Rust and UI test suites
+test: rust-test ui-test
 
 # remove build artifacts
 clean:
@@ -89,18 +87,18 @@ rust-lint:
     cargo clippy --all-targets --locked -- --deny warnings
     cargo clippy --manifest-path ghrm-stat/Cargo.toml --all-targets --locked -- --deny warnings
 
+# run Rust test suites
+rust-test:
+    cargo test --locked
+    cargo test --manifest-path ghrm-stat/Cargo.toml --locked
+
 # format Rust files
 rust-fmt:
     cargo fmt --all
     cargo fmt --manifest-path ghrm-stat/Cargo.toml
 
 # run all UI checks
-ui: ui-fmt
-    pre-commit run biome-check --all-files
-    npm --prefix ui run typecheck
-    npm --prefix ui run test
-    npm --prefix ui run icons:check
-    npm --prefix ui run build:check
+ui: ui-lint ui-type ui-test ui-icons ui-build
 
 # refresh generated bundle when UI source changed - only on main
 ui-release:
@@ -112,9 +110,25 @@ ui-release:
 ui-type:
     npm --prefix ui run typecheck
 
-# run UI lint and format checks
+# run UI Biome lint, formatting, and style checks
 ui-lint:
     pre-commit run biome-check --all-files
+
+# run UI tests
+ui-test:
+    npm --prefix ui run test
+
+# validate UI icon assets
+ui-icons:
+    npm --prefix ui run icons:check
+
+# run UI build verification
+ui-build:
+    npm --prefix ui run build:check
+
+# watch UI runtime rebuilds for local dev
+ui-watch:
+    npm --prefix ui run build:watch
 
 # format UI files
 ui-fmt:

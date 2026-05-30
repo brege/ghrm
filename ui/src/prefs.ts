@@ -16,6 +16,27 @@ function hasDocChrome(): boolean {
   return !!document.querySelector('.ghrm-page-shell[data-ghrm-view-kind]');
 }
 
+function printHref(next: boolean): string {
+  const url = new URL(window.location.href);
+  if (next) {
+    url.searchParams.set('print', '1');
+  } else {
+    url.searchParams.delete('print');
+  }
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function isPrintMode(): boolean {
+  const value = new URLSearchParams(window.location.search).get('print');
+  return hasDocChrome() && (value === '1' || value === 'true');
+}
+
+export function syncPrintMode(): void {
+  const print = isPrintMode();
+  document.body.classList.toggle('ghrm-print', print);
+  applyWrapState(print || getWrapPref());
+}
+
 function syncDocChromeToggle(): void {
   const btn = document.getElementById('doc-chrome-toggle');
   if (!btn) return;
@@ -26,15 +47,14 @@ function syncDocChromeToggle(): void {
     btn.removeAttribute('aria-label');
     return;
   }
-  const flat = document.body.classList.contains('ghrm-doc-flat');
-  const label = flat ? 'Show document wrapper' : 'Hide document wrapper';
+  const print = isPrintMode();
+  const label = print ? 'Show document wrapper' : 'Hide document wrapper';
   btn.title = label;
   btn.setAttribute('aria-label', label);
 }
 
 export function applyDocChromePref(): void {
-  const flat = localStorage.getItem('ghrm-doc-flat') === '1';
-  document.body.classList.toggle('ghrm-doc-flat', flat && hasDocChrome());
+  document.body.classList.remove('ghrm-doc-flat');
   syncDocChromeToggle();
 }
 
@@ -42,10 +62,7 @@ export function setupDocChromeToggle(): void {
   const btn = document.getElementById('doc-chrome-toggle');
   if (!btn) return;
   btn.addEventListener('click', () => {
-    const next = !document.body.classList.contains('ghrm-doc-flat');
-    document.body.classList.toggle('ghrm-doc-flat', next && hasDocChrome());
-    localStorage.setItem('ghrm-doc-flat', next ? '1' : '0');
-    syncDocChromeToggle();
+    window.location.assign(printHref(!isPrintMode()));
   });
   applyDocChromePref();
 }

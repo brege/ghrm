@@ -5,6 +5,7 @@ mod gist;
 mod http;
 mod options;
 mod paths;
+mod query;
 mod render;
 mod repo;
 mod runtime;

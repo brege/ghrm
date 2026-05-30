@@ -75,6 +75,7 @@ tar = { version = "0.4", default-features = false }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 zstd = "0.13"
 hmac = "0.13"
+form_urlencoded = "1"
 percent-encoding = "2"
 sha2 = "0.11"
 ghrm-stat = { version = "0.4.5", path = "ghrm-stat" }

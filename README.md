@@ -108,6 +108,7 @@ cargo uninstall ghrm
 ## Reference
 
 - [Server](src/README.md)
+- [UI](ui/README.md)
 - [Benchmarks](bench/README.md)
 
 ## License

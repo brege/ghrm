@@ -1,40 +1,40 @@
-body.ghrm-doc-flat .ghrm-page-shell {
+body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-page-shell {
   border: 0;
   border-radius: 0;
   overflow: visible;
 }
 
-body.ghrm-doc-flat .ghrm-page-shell > .ghrm-explorer-header {
+body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-page-shell > .ghrm-explorer-header {
   display: none;
 }
 
-body.ghrm-doc-flat .ghrm-page-content {
+body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-page-content {
   padding: 0;
 }
 
-body.ghrm-doc-flat .ghrm-readme-box {
+body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-readme-box {
   border: 0;
   border-radius: 0;
   overflow: visible;
 }
 
-body.ghrm-doc-flat .ghrm-readme-header {
+body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-readme-header {
   display: none;
 }
 
-body.ghrm-doc-flat .ghrm-readme-content {
+body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-readme-content {
   padding: 0;
 }
 
-body.ghrm-doc-flat #ghrm-source-slot {
+body:is(.ghrm-doc-flat, .ghrm-print) #ghrm-source-slot {
   display: none;
 }
 
-body.ghrm-doc-flat .markdown-body {
+body:is(.ghrm-doc-flat, .ghrm-print) .markdown-body {
   padding-top: 16px;
 }
 
-body.ghrm-doc-flat .ghrm-raw-pane .ghrm-blob {
+body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-raw-pane .ghrm-blob {
   margin: 0;
 }
 
@@ -197,11 +197,11 @@ body.ghrm-doc-flat .ghrm-raw-pane .ghrm-blob {
   stroke-width: 0;
 }
 
-body.ghrm-doc-flat #doc-chrome-toggle .icon-framed {
+body:is(.ghrm-doc-flat, .ghrm-print) #doc-chrome-toggle .icon-framed {
   display: none;
 }
 
-body.ghrm-doc-flat #doc-chrome-toggle .icon-flat {
+body:is(.ghrm-doc-flat, .ghrm-print) #doc-chrome-toggle .icon-flat {
   display: block;
 }
 
@@ -247,7 +247,7 @@ body.ghrm-doc-flat #doc-chrome-toggle .icon-flat {
   }
 }
 
-body.ghrm-doc-flat .ghrm-topbar {
+body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-topbar {
   position: fixed;
   top: 0;
   right: 0;
@@ -256,7 +256,7 @@ body.ghrm-doc-flat .ghrm-topbar {
   padding: 8px 12px 16px 20px;
 }
 
-body.ghrm-doc-flat .ghrm-topbar-inner {
+body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-topbar-inner {
   width: auto;
   min-height: 32px;
   padding: 0;
@@ -266,8 +266,10 @@ body.ghrm-doc-flat .ghrm-topbar-inner {
   transition: opacity 120ms ease;
 }
 
-body.ghrm-doc-flat .ghrm-topbar:hover .ghrm-topbar-inner,
-body.ghrm-doc-flat .ghrm-topbar:focus-within .ghrm-topbar-inner {
+body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-topbar:hover .ghrm-topbar-inner,
+body:is(.ghrm-doc-flat, .ghrm-print)
+  .ghrm-topbar:focus-within
+  .ghrm-topbar-inner {
   opacity: 1;
   pointer-events: auto;
 }

@@ -3,11 +3,16 @@
 @README.md  
 @Cargo.toml
 
-For mixed changes to source code, always run all configured pre-commit hooks:
+[@README.md]: README.md  
+[@Cargo.toml]: Cargo.toml  
+
+For mixed changes, use the justfile recipe for all configured pre-commit hooks:
 
 ```bash
-pre-commit run --all-files
+just precommit
 ```
+
+Prefer `just` recipes before direct `npm`, `cargo`, `pre-commit`, `uv`, or ASV commands when a recipe exists. Run `just --list` when choosing a workflow.
 
 ## Repo Rules
 
@@ -36,7 +41,9 @@ that belonged in Rust.
 
 @src/README.md
 
-After main-crate Rust changes, run the configured Rust pre-commit hooks:
+[@src/README.md]: src/README.md
+
+After main-crate Rust changes, prefer `just rust` for the full Rust check path. Use the configured Rust pre-commit hooks when checking hook parity or when the change needs a scoped hook run:
 
 ```bash
 pre-commit run cargo-check --all-files
@@ -54,7 +61,7 @@ pre-commit run ghrm-stat-test --all-files
 pre-commit run ghrm-stat-clippy --all-files
 ```
 
-For repo-wide Rust changes, run both hook groups or `pre-commit run --all-files`.
+For repo-wide Rust changes, run `just rust` or `just precommit` depending on whether UI, benchmark, or generated-hook coverage is also needed.
 
 Keep `src/` organized by feature boundary. Do not turn root modules into
 catchall files. Preserve the current split between `http`, `explorer`,
@@ -68,26 +75,42 @@ behavior belongs under the feature boundary that owns it.
 
 ## UI
 
+@ui/README.md
+
+[@ui/README.md]: ui/README.md
+
 The frontend is organized by feature boundary:
 
 ```text
 assets/
 ├── config.json
 ├── css/
-├── js/
-├── templates/
-└── vendor/
+├── img/
+├── js.sha256.json
+├── js.tar.zst
+└── templates/
+ui/src/
 ```
 
-After UI changes, run the configured Biome pre-commit hook:
+After UI changes, prefer the justfile UI recipes:
 
 ```bash
-pre-commit run biome-check --all-files
+just ui
+just ui-test
+just ui-build
+just ui-watch
+just dev-ui <PATH>
+just ui-release
 ```
 
-Do not recreate catchall files in `assets/js/` or `assets/css/`. Keep CSS and
-JS changes within the existing feature files unless the feature boundary itself
-is being revised.
+`just ui` runs Biome, TypeScript, Vitest, icon validation, and Vite build verification. The Biome pre-commit hook only covers lint, formatting, and style checks for `assets/css/` and `ui/`.
+
+`just ui-build` only verifies a disposable Vite build. `just ui-release` on `main` is the normal path that refreshes `assets/js.tar.zst` and `assets/js.sha256.json`.
+
+Do not edit generated runtime JS under `assets/js/` by hand. Keep browser
+source changes under `ui/src/`, CSS changes under `assets/css/`, and runtime archive changes flowing through the UI build and release recipes.
+
+Use `just ui-release` to refresh tracked runtime assets on `main`. Do not refresh `assets/js.tar.zst` or `assets/js.sha256.json` through ad hoc `npm` commands unless intentionally debugging the release recipe itself.
 
 Template changes should preserve the Rust data contract. Do not move structure
 into JavaScript just to avoid changing a template or view model.
@@ -95,6 +118,8 @@ into JavaScript just to avoid changing a template or view model.
 ## Benchmarks
 
 @bench/README.md
+
+[@bench/README.md]: bench/README.md
 
 After benchmark Python changes, run the configured Ruff hooks:
 
@@ -118,14 +143,24 @@ when explicitly asked.
 
 ## Build / Install / Run
 
-Prefer the shared `justfile` recipes for common workflows:
+Prefer the shared `justfile` recipes for common workflows. Use `just --list` when the relevant recipe is not obvious:
 
 ```bash
+just check
+just test
+just fmt
+just precommit
 just build
 just dev <PATH>
+just dev-ui <PATH>
 just run <PATH>
 just dump-config <PATH>
 just install
+just ui
+just ui-build
+just ui-test
+just ui-watch
+just ui-release
 ```
 
 Use `just install` when an install is explicitly requested.
@@ -141,6 +176,10 @@ Three projects have shaped ghrm's search, file, and content retrieval:
 - fd: @refs/fd/README.md
 - ripgrep: @refs/ripgrep/README.md
 - tokei: @refs/tokei/README.md
+
+[@refs/fd/README.md]: refs/fd/README.md
+[@refs/ripgrep/README.md]: refs/ripgrep/README.md
+[@refs/tokei/README.md]: refs/tokei/README.md
 
 Onefetch has been inspirational for the `ghrm-stat` crate:
 

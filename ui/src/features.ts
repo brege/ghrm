@@ -12,6 +12,7 @@ import {
   applyDocChromePref,
   setupDocChromeToggle,
   setupThemeToggle,
+  syncPrintMode,
 } from './prefs';
 import { type FeatureEntry, registerFeatures } from './runtime';
 import { setSearchCloseHandler } from './search';
@@ -26,6 +27,7 @@ function setupSearchClose(): void {
 }
 
 export const browserFeatures: readonly FeatureEntry[] = [
+  { name: 'print-mode', phase: 'initial', order: 90, setup: syncPrintMode },
   { name: 'file-views', phase: 'initial', order: 100, setup: setupFileViews },
   {
     name: 'search-close',
@@ -73,6 +75,12 @@ export const browserFeatures: readonly FeatureEntry[] = [
     phase: 'initial',
     order: 240,
     setup: () => scrollToHash(location.hash),
+  },
+  {
+    name: 'print-mode',
+    phase: 'refresh',
+    order: 90,
+    setup: syncPrintMode,
   },
   {
     name: 'server-status',
