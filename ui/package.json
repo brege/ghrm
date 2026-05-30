@@ -9,7 +9,9 @@
   },
   "scripts": {
     "build": "vite build && node scripts/check.js pack",
+    "build:runtime": "vite build",
     "build:check": "vite build --outDir .vite-check && node scripts/check.js source",
+    "build:watch": "vite build --watch",
     "icons:check": "node scripts/icons.js check",
     "icons:review": "node scripts/icon-review.js",
     "icons:write": "node scripts/icons.js write",
