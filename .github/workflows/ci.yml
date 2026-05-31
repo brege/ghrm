@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, devel]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@just
+      - run: just rust
+
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: taiki-e/install-action@just
+      - run: npm --prefix ui ci
+      - run: just ui
+
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm --prefix ui ci
+      - run: npm --prefix ui run build
+      - run: git diff --exit-code assets/js.tar.zst assets/js.sha256.json
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo install --locked --path .
