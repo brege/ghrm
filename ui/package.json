@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "npm@11.16.0",
   "engines": {
-    "node": ">=20.0.0",
-    "npm": ">=11.10.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "build": "vite build && node scripts/check.js pack",
