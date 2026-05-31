@@ -3,6 +3,11 @@
   <h1 align="center">ghrm</h1>
 </p>
 
+<p align="center">
+  <a href="https://github.com/brege/ghrm/actions/workflows/ci.yml"><img src="https://github.com/brege/ghrm/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License"></a>
+</p>
+
 Explore your filesystem as if it were on GitHub.
 
 Ghrm supports all **G**it**H**ub-flavored Markdown features, **R**ead**m**e and source code viewing, detects repositories, has instant file retrieval, and works completely offline. It makes file browsing and file reading feel more continuous and much easier to work on projects mixing images, HTML, large tables and JSON and other assets in your browser. You get both the backend performance of Rust and the multimedia performance of your browser.

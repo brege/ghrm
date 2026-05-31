@@ -103,6 +103,8 @@ just dev-ui <PATH>
 just ui-release
 ```
 
+The UI contributor floor is Node 24+ with npm pinned via `packageManager`. This is contributor tooling only; end-user install remains Rust-only via `cargo install`.
+
 `just ui` runs Biome, TypeScript, Vitest, icon validation, and Vite build verification. The Biome pre-commit hook only covers lint, formatting, and style checks for `assets/css/` and `ui/`.
 
 `just ui-build` only verifies a disposable Vite build. `just ui-release` on `main` is the normal path that refreshes `assets/js.tar.zst` and `assets/js.sha256.json`.
