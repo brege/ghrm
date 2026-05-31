@@ -51,7 +51,6 @@ import {
   MdLogout,
   MdOutlineBorderClear,
   MdRepeat,
-  MdSort,
   MdUpdate,
   MdWrapText,
 } from 'react-icons/md';
@@ -106,7 +105,6 @@ export const icons: Icon[] = [
   { id: 'ghrm-icon-zoom-out', icon: <GoZoomOut /> },
   { id: 'ghrm-icon-reset', icon: <GoSync /> },
   { id: 'ghrm-icon-filter', icon: <GoFilter /> },
-  { id: 'ghrm-icon-sort-entity', icon: <MdSort /> },
   { id: 'ghrm-icon-columns', icon: <BsThreeDotsVertical /> },
   { id: 'ghrm-icon-chevron-up', icon: <FiChevronUp /> },
   { id: 'ghrm-icon-chevron-down', icon: <FiChevronDown /> },

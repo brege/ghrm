@@ -12,13 +12,6 @@ function createMenuFixture(): void {
         </div>
       </div>
       <div class="ghrm-menu-shell">
-        <button id="ghrm-sort-menu-toggle" aria-expanded="false">Sort</button>
-        <div id="ghrm-sort-menu" class="ghrm-view-menu" hidden>
-          <a class="ghrm-view-option" href="/sort">Sort A</a>
-        </div>
-      </div>
-      <a id="ghrm-sort-dir-toggle" href="/sort-dir">Dir</a>
-      <div class="ghrm-menu-shell">
         <button id="ghrm-archive-menu-toggle" aria-expanded="false">Archive</button>
         <div id="ghrm-archive-menu" class="ghrm-view-menu" hidden>
           <button class="ghrm-view-option" data-ghrm-archive-url="/_ghrm/archive/test">Download</button>
@@ -80,16 +73,16 @@ describe('ghrm-explorer-menus', () => {
     it('closes other menus when opening a new one', () => {
       const filterToggle = document.getElementById('ghrm-view-menu-toggle')!;
       const filterPanel = document.getElementById('ghrm-view-menu')!;
-      const sortToggle = document.getElementById('ghrm-sort-menu-toggle')!;
-      const sortPanel = document.getElementById('ghrm-sort-menu')!;
+      const columnToggle = document.getElementById('ghrm-column-menu-toggle')!;
+      const columnPanel = document.getElementById('ghrm-column-menu')!;
 
       filterToggle.click();
       expect(filterPanel.hidden).toBe(false);
-      expect(sortPanel.hidden).toBe(true);
+      expect(columnPanel.hidden).toBe(true);
 
-      sortToggle.click();
+      columnToggle.click();
       expect(filterPanel.hidden).toBe(true);
-      expect(sortPanel.hidden).toBe(false);
+      expect(columnPanel.hidden).toBe(false);
     });
   });
 
@@ -114,18 +107,6 @@ describe('ghrm-explorer-menus', () => {
 
       panel.click();
       expect(panel.hidden).toBe(false);
-    });
-
-    it('does not close menu when clicking sort dir toggle', () => {
-      const filterToggle = document.getElementById('ghrm-view-menu-toggle')!;
-      const filterPanel = document.getElementById('ghrm-view-menu')!;
-      const dirToggle = document.getElementById('ghrm-sort-dir-toggle')!;
-
-      filterToggle.click();
-      expect(filterPanel.hidden).toBe(false);
-
-      dirToggle.click();
-      expect(filterPanel.hidden).toBe(false);
     });
   });
 
@@ -285,11 +266,6 @@ describe('ghrm-explorer-menus', () => {
                 <a class="ghrm-view-option" href="/filter">Option 1</a>
               </div>
             </div>
-            <div class="ghrm-menu-shell">
-              <button id="ghrm-sort-menu-toggle" aria-expanded="false">Sort</button>
-              <div id="ghrm-sort-menu" class="ghrm-view-menu" hidden></div>
-            </div>
-            <a id="ghrm-sort-dir-toggle" href="/sort-dir">Dir</a>
             <div class="ghrm-menu-shell">
               <button id="ghrm-archive-menu-toggle" aria-expanded="false">Archive</button>
               <div id="ghrm-archive-menu" class="ghrm-view-menu" hidden></div>

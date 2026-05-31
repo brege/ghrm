@@ -20,11 +20,6 @@ const MENU_CONFIGS: MenuConfig[] = [
     panelId: 'ghrm-view-menu',
   },
   {
-    name: 'sort',
-    toggleId: 'ghrm-sort-menu-toggle',
-    panelId: 'ghrm-sort-menu',
-  },
-  {
     name: 'archive',
     toggleId: 'ghrm-archive-menu-toggle',
     panelId: 'ghrm-archive-menu',
@@ -129,12 +124,11 @@ export class GhrmExplorerMenus extends LitElement {
       if (!this.hasAllMenus()) return;
       const target = e.target instanceof Node ? e.target : null;
       if (!target) return;
-      const dirToggle = document.getElementById('ghrm-sort-dir-toggle');
       const insideMenu = this.getMenus().some(
         ({ toggle, panel }) =>
           toggle.contains(target) || panel.contains(target),
       );
-      if (insideMenu || dirToggle?.contains(target)) return;
+      if (insideMenu) return;
       this.closeAllMenus();
     };
 

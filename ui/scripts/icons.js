@@ -27,7 +27,7 @@ const obsoleteSourcePaths = [
 const refRoots = ['assets/templates', 'assets/css', 'src', 'ui/src'];
 const productionRoots = ['ui/src'];
 const skippedDirs = new Set(['.asset-check', '.vite-check', 'node_modules']);
-const expectedIconCount = 57;
+const expectedIconCount = 56;
 const spriteOpen = '<svg xmlns="http://www.w3.org/2000/svg">';
 const spriteClose = '</svg>';
 const dynamicAskamaContracts = [
@@ -37,8 +37,13 @@ const dynamicAskamaContracts = [
     provider: 'src/http/about.rs',
   },
   {
-    expression: 'sort_dir_control.icon',
-    template: 'assets/templates/fragments/explorer/header.html',
+    expression: 'name_header.icon',
+    template: 'assets/templates/explorer.html',
+    provider: 'src/explorer.rs',
+  },
+  {
+    expression: 'column.icon',
+    template: 'assets/templates/explorer.html',
     provider: 'src/explorer.rs',
   },
 ];
