@@ -3,7 +3,7 @@
   "algorithm": "sha256",
   "archive": {
     "path": "js.tar.zst",
-    "sha256": "37ab9e6ab95419770233dcda14ca77d27430633de29cf0feddbfba63ab820751"
+    "sha256": "c61496cb8414c886b8ac21472f450e1f6cecf3fc12250624d752683e843f9b2a"
   },
   "files": {
     "js/chunks/adapters.js": "07d06e834b2bd0131e4767d05b678c863dca6cd9398a2d1c3f770b66e6a00ce5",
@@ -11,8 +11,8 @@
     "js/chunks/gist.js": "5a513636b5eea14a5eb147e95cc69c938210eb4fe6ea7856b05151017154a279",
     "js/chunks/shared.js": "6c0790b651df360d151f7e3dfcc463bd4047b37ebe4718fd6f7edb01f1d812f2",
     "js/gist.js": "8b832d0ae5b7b3460d3465cc8db496e5a6e9c8e61c3f29c9e709a1507b510c5e",
-    "js/icons.svg": "14535e70a082bb78f5e2de660b3f9975b2ae40c2ea5e81375ec7b6fe6e5d2330",
-    "js/main.js": "2daa83a1ca10477c93c84819c7458e761e66f6b64b367861ee4c698360df5685",
+    "js/icons.svg": "c4eaf22402c9db14ef57d1a44a9e48c0ec86ed9c043dfafabce95bcdf057c299",
+    "js/main.js": "37d459538cef2cd7f371fcaa4f6a1c8c22202cd4aaefda1f20a35e2ecb6dc547",
     "js/preview.js": "b7b31743f21806358d0c08d5953ebd53e4a74007793b9225efbcac74776f84c2"
   }
 }

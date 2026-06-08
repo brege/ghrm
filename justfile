@@ -40,6 +40,7 @@ install:
 bump version:
     @sed -i 's/^\(version = \)"[^"]*"/\1"{{version}}"/' Cargo.toml && \
     sed -i 's/^\(ghrm-stat = { version = \)"[^"]*"/\1"{{version}}"/' Cargo.toml && \
+    cargo check --workspace --quiet && \
     echo "Workspace version set to {{version}}"
 
 # smoke-run release ASV without recording benchmark history
