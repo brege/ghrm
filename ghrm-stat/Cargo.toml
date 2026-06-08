@@ -1,9 +1,9 @@
 [package]
 name = "ghrm-stat"
-version = "0.4.5"
-edition = "2024"
-rust-version = "1.88"
-license = "GPL-3.0-only"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [[bin]]
