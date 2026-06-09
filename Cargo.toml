@@ -28,6 +28,7 @@ include = [
   "/README.md",
   "/askama.toml",
   "/assets/config.json",
+  "/assets/sri.json",
   "/assets/css/**",
   "/assets/img/**",
   "/assets/js.sha256.json",
@@ -90,6 +91,7 @@ hmac = "0.13"
 form_urlencoded = "1"
 percent-encoding = "2"
 sha2 = "0.11"
+base64 = "0.22"
 ghrm-stat.workspace = true
 
 [profile.release]

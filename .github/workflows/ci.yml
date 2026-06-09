@@ -36,6 +36,18 @@ jobs:
       - run: npm --prefix ui run build
       - run: git diff --exit-code assets/js.tar.zst assets/js.sha256.json
 
+  sri:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      - uses: taiki-e/install-action@just
+      - run: npm --prefix ui ci
+      - run: just sri
+      - run: git diff --exit-code assets/sri.json
+
   install:
     runs-on: ubuntu-latest
     steps:

@@ -131,3 +131,7 @@ ui-watch:
 # format UI files
 ui-fmt:
     npx @biomejs/biome@2.4.6 format --write ui/ assets/css
+
+# generate SRI hashes for vendor assets
+sri:
+    npm --prefix ui exec -- tsx ui/scripts/sri.ts

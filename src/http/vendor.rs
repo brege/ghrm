@@ -1,11 +1,14 @@
 use crate::render::Rendered;
 
 use anyhow::{Context, Result, bail};
+use base64::Engine;
 use serde::Deserialize;
 use serde_json::json;
+use sha2::{Digest, Sha384};
 use std::collections::{BTreeMap, BTreeSet};
 use std::{
-    fs, io,
+    fs,
+    io::Read,
     path::{Component, Path, PathBuf},
     sync::OnceLock,
 };
@@ -75,7 +78,7 @@ pub fn sync(refresh: bool) -> Result<()> {
             path.parent()
                 .ok_or_else(|| anyhow::anyhow!("missing parent"))?,
         )?;
-        download(&item.url, &path)?;
+        download(&item.url, &path, item.integrity.as_deref())?;
     }
     let mermaid = fs::read_to_string(vendor_dir.join(&manifest.mermaid_version.source))?;
     let version = mermaid
@@ -90,13 +93,29 @@ pub fn sync(refresh: bool) -> Result<()> {
     Ok(())
 }
 
-fn download(url: &str, path: &Path) -> Result<()> {
+fn download(url: &str, path: &Path, integrity: Option<&str>) -> Result<()> {
     let response = ureq::get(url)
         .call()
         .with_context(|| format!("download failed: {url}"))?;
-    let mut reader = response.into_parts().1.into_reader();
-    let mut file = fs::File::create(path)?;
-    io::copy(&mut reader, &mut file)?;
+    let mut data = Vec::new();
+    response
+        .into_parts()
+        .1
+        .into_reader()
+        .read_to_end(&mut data)?;
+
+    if let Some(expected) = integrity {
+        let hash = Sha384::digest(&data);
+        let actual = format!(
+            "sha384-{}",
+            base64::engine::general_purpose::STANDARD.encode(hash)
+        );
+        if actual != expected {
+            bail!("integrity mismatch for {url}: expected {expected}, got {actual}");
+        }
+    }
+
+    fs::write(path, data)?;
     Ok(())
 }
 
@@ -262,18 +281,27 @@ pub struct Assets {
 struct FileAsset {
     url: String,
     path: String,
+    #[serde(default)]
+    integrity: Option<String>,
 }
 
 fn manifest() -> &'static Manifest {
     static MANIFEST: OnceLock<Manifest> = OnceLock::new();
     MANIFEST.get_or_init(|| {
-        manifest_from_str(include_str!("../../assets/config.json"))
-            .expect("embedded vendor manifest is valid")
+        manifest_from_str(
+            include_str!("../../assets/config.json"),
+            include_str!("../../assets/sri.json"),
+        )
+        .expect("embedded vendor manifest is valid")
     })
 }
 
-fn manifest_from_str(raw: &str) -> Result<Manifest> {
-    let manifest: Manifest = serde_json::from_str(raw)?;
+fn manifest_from_str(config: &str, sri: &str) -> Result<Manifest> {
+    let mut manifest: Manifest = serde_json::from_str(config)?;
+    let integrity: BTreeMap<String, String> = serde_json::from_str(sri)?;
+    for file in &mut manifest.files {
+        file.integrity = integrity.get(&file.path).cloned();
+    }
     manifest.validate()?;
     Ok(manifest)
 }
@@ -388,7 +416,7 @@ mod tests {
             .remove("math");
 
         let raw = serde_json::to_string(&modified).unwrap();
-        match manifest_from_str(&raw) {
+        match manifest_from_str(&raw, "{}") {
             Ok(_) => panic!("expected validation to fail"),
             Err(e) => {
                 let msg = e.to_string();
