@@ -32,6 +32,8 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - os: macos-14
             target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -49,12 +51,16 @@ jobs:
         env:
           CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-      - name: Package binary
+      - name: Package binary (unix)
+        if: runner.os != 'Windows'
         run: tar czvf ghrm-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release ghrm
+      - name: Package binary (windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path target/${{ matrix.target }}/release/ghrm.exe -DestinationPath ghrm-${{ matrix.target }}.zip
       - uses: actions/upload-artifact@v5
         with:
           name: binary-${{ matrix.target }}
-          path: ghrm-${{ matrix.target }}.tar.gz
+          path: ghrm-${{ matrix.target }}.*
 
   release:
     needs: [js-bundle, build]
