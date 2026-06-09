@@ -1,7 +1,3 @@
-/**
- * Verify and package generated browser runtime assets.
- */
-
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
@@ -28,12 +24,22 @@ const expectedEntries = ['preview.js', 'main.js', 'gist.js'];
 const expectedChunks = ['adapters.js', 'explorer.js', 'shared.js'];
 const expectedAssets = ['icons.svg'];
 
-function fail(message, ...parts) {
+interface Manifest {
+  version: number;
+  algorithm: string;
+  archive: {
+    path: string;
+    sha256: string;
+  };
+  files: Record<string, string>;
+}
+
+function fail(message: string, ...parts: unknown[]): never {
   console.error(message, ...parts);
   process.exit(1);
 }
 
-function run(command, args) {
+function run(command: string, args: string[]): void {
   const result = spawnSync(command, args, { stdio: 'inherit' });
   if (result.error) {
     fail(`${command} failed:`, result.error.message);
@@ -43,21 +49,21 @@ function run(command, args) {
   }
 }
 
-function resetDir(dir) {
+function resetDir(dir: string): void {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
 }
 
-function toPosix(path) {
+function toPosix(path: string): string {
   return path.split(sep).join('/');
 }
 
-function collectFiles(dir, base = dir) {
+function collectFiles(dir: string, base: string = dir): string[] {
   if (!existsSync(dir)) {
     fail('Directory not found:', dir);
   }
 
-  const result = [];
+  const result: string[] = [];
   for (const name of readdirSync(dir)) {
     const path = join(dir, name);
     const stat = statSync(path);
@@ -70,7 +76,7 @@ function collectFiles(dir, base = dir) {
   return result.sort();
 }
 
-function checkExpectedFiles(dir) {
+function checkExpectedFiles(dir: string): void {
   const files = collectFiles(dir);
   const fileSet = new Set(files);
 
@@ -92,19 +98,19 @@ function checkExpectedFiles(dir) {
   }
 }
 
-function checkNoSourceJs() {
+function checkNoSourceJs(): void {
   const sourceJs = collectFiles(srcDir).filter((file) => file.endsWith('.js'));
   if (sourceJs.length > 0) {
     fail('JavaScript files remain under ui/src:', sourceJs.join(', '));
   }
 }
 
-function sha256File(path) {
+function sha256File(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
-function manifestFor(dir) {
-  const files = {};
+function manifestFor(dir: string): Manifest {
+  const files: Record<string, string> = {};
   for (const file of collectFiles(dir)) {
     files[`js/${file}`] = sha256File(join(dir, file));
   }
@@ -120,12 +126,12 @@ function manifestFor(dir) {
   };
 }
 
-function readManifest() {
-  let manifest;
+function readManifest(): Manifest {
+  let manifest: Manifest;
   try {
     manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   } catch (error) {
-    fail('Unable to read asset manifest:', error.message);
+    fail('Unable to read asset manifest:', (error as Error).message);
   }
 
   if (manifest.version !== 1) {
@@ -143,7 +149,7 @@ function readManifest() {
   return manifest;
 }
 
-function packArchive() {
+function packArchive(): void {
   if (!existsSync(runtimeDir)) {
     fail('Runtime asset directory not found:', runtimeDir);
   }
@@ -163,7 +169,7 @@ function packArchive() {
   ]);
 }
 
-function extractArchive() {
+function extractArchive(): void {
   resetDir(extractDir);
   run('tar', [
     '--extract',
@@ -175,7 +181,7 @@ function extractArchive() {
   ]);
 }
 
-function compareLists(label, left, right) {
+function compareLists(label: string, left: string[], right: string[]): void {
   const leftSet = new Set(left);
   const rightSet = new Set(right);
   const missing = right.filter((item) => !leftSet.has(item));
@@ -192,7 +198,7 @@ function compareLists(label, left, right) {
   }
 }
 
-function checkManifest(manifest) {
+function checkManifest(manifest: Manifest): void {
   if (!existsSync(archivePath)) {
     fail('Asset archive not found:', archivePath);
   }
@@ -215,12 +221,17 @@ function checkManifest(manifest) {
   }
 }
 
-function compareDirectories(leftDir, rightDir, leftName, rightName) {
+function compareDirectories(
+  leftDir: string,
+  rightDir: string,
+  leftName: string,
+  rightName: string,
+): void {
   const leftFiles = collectFiles(leftDir);
   const rightFiles = collectFiles(rightDir);
   compareLists(`${leftName} vs ${rightName}`, leftFiles, rightFiles);
 
-  const different = [];
+  const different: string[] = [];
   for (const file of leftFiles) {
     const leftContent = readFileSync(join(leftDir, file));
     const rightContent = readFileSync(join(rightDir, file));
@@ -234,7 +245,7 @@ function compareDirectories(leftDir, rightDir, leftName, rightName) {
   }
 }
 
-function calculateDirSize(dir) {
+function calculateDirSize(dir: string): number {
   let total = 0;
   for (const file of readdirSync(dir)) {
     const path = join(dir, file);
@@ -248,13 +259,13 @@ function calculateDirSize(dir) {
   return total;
 }
 
-function formatBytes(bytes) {
+function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function packBuild() {
+function packBuild(): void {
   checkNoSourceJs();
   checkExpectedFiles(runtimeDir);
   packArchive();
@@ -271,7 +282,7 @@ function packBuild() {
   console.log('Archive size:', formatBytes(statSync(archivePath).size));
 }
 
-function checkBuild() {
+function checkBuild(): void {
   checkNoSourceJs();
   checkExpectedFiles(buildDir);
   extractArchive();
@@ -292,7 +303,7 @@ function checkBuild() {
   console.log('Total output size:', formatBytes(calculateDirSize(buildDir)));
 }
 
-function checkSourceBuild() {
+function checkSourceBuild(): void {
   checkNoSourceJs();
   checkExpectedFiles(buildDir);
 

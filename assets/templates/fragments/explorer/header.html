@@ -17,29 +17,6 @@
 {% endfor %}
         </div>
       </div>
-      <div class="ghrm-sort-controls">
-        <div class="ghrm-menu-shell">
-          <button id="ghrm-sort-menu-toggle" class="ghrm-view-menu-toggle{% if sort_menu_active %} is-active{% endif %}" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Sort entries" title="Sort entries">
-            <svg aria-hidden="true" focusable="false">
-              <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-sort-entity"></use>
-            </svg>
-          </button>
-          <div id="ghrm-sort-menu" class="ghrm-view-menu" role="menu" aria-label="Sort entries" hidden>
-{% for sort in sort_controls %}            <a class="ghrm-view-option{% if sort.active %} is-active{% endif %}" href="{{ sort.href }}" role="menuitemradio" aria-checked="{% if sort.active %}true{% else %}false{% endif %}" title="{{ sort.title }}"{% if sort.hidden %} hidden{% endif %}>
-            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-              <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-            </svg>
-            <span class="ghrm-view-option-label">{{ sort.label }}</span>
-          </a>
-{% endfor %}
-          </div>
-        </div>
-        <a id="ghrm-sort-dir-toggle" class="ghrm-view-menu-toggle{% if sort_dir_control.active %} is-active{% endif %}" href="{{ sort_dir_control.href }}" aria-label="{{ sort_dir_control.label }}" title="{{ sort_dir_control.label }}">
-          <svg aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#{{ sort_dir_control.icon }}"></use>
-          </svg>
-        </a>
-      </div>
       <div class="ghrm-menu-shell">
         <button id="ghrm-archive-menu-toggle" class="ghrm-view-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Download directory" title="Download directory">
           <svg aria-hidden="true" focusable="false">

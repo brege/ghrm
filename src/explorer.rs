@@ -9,8 +9,8 @@ use crate::http::server::{AppState, HtmxContext};
 use crate::http::{shell, vendor};
 use crate::render::{self, Rendered};
 use crate::tmpl::{
-    self, ColumnControl, ExplorerCtx, ExplorerEntry, ExplorerReadme, FilterControl, SortControl,
-    SortDirControl,
+    self, ColumnControl, ColumnSortHeader, ExplorerCtx, ExplorerEntry, ExplorerReadme,
+    FilterControl, SortHeader,
 };
 use view::{ViewConfig, ViewState};
 
@@ -201,13 +201,11 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
         parent_href: &parent_href,
         filter_menu_active: controls.filter_menu_active,
         filter_controls: &controls.filter_controls,
-        sort_menu_active: controls.sort_menu_active,
-        sort_controls: &controls.sort_controls,
-        sort_dir_control: &controls.sort_dir_control,
         column_menu_active: controls.column_menu_active,
         column_controls: &controls.column_controls,
         headers_control: &controls.headers_control,
-        column_defs: column::DEFS,
+        name_header: &controls.name_header,
+        column_headers: &controls.column_headers,
         show_headers: view.show_headers,
         empty_cells: &empty_cells,
         entries: &entries,
@@ -276,12 +274,11 @@ fn cmp_commit_entries(
 struct Controls {
     filter_menu_active: bool,
     filter_controls: Vec<FilterControl>,
-    sort_menu_active: bool,
-    sort_controls: Vec<SortControl>,
-    sort_dir_control: SortDirControl,
     column_menu_active: bool,
     column_controls: Vec<ColumnControl>,
     headers_control: ColumnControl,
+    name_header: SortHeader,
+    column_headers: Vec<ColumnSortHeader>,
 }
 
 fn build_controls(
@@ -345,36 +342,6 @@ fn build_controls(
         });
     }
 
-    let sort_menu_active =
-        view.sort != cfg.default_sort || view.sort_dir != view.sort.default_dir();
-    let sort_controls = walk::SORT_DEFS
-        .iter()
-        .map(|def| SortControl {
-            href: view::with_view(href, &view::set_sort(view, def.sort), cfg),
-            label: def.label,
-            title: def.title,
-            active: view.sort == def.sort,
-            hidden: def
-                .column_key
-                .is_some_and(|key| !view.columns.is_visible_key(key)),
-        })
-        .collect();
-    let sort_dir_desc = view.sort_dir == walk::SortDir::Desc;
-    let sort_dir_control = SortDirControl {
-        href: view::with_view(href, &view::toggle_sort_dir(view), cfg),
-        label: if sort_dir_desc {
-            "Sort descending"
-        } else {
-            "Sort ascending"
-        },
-        icon: if sort_dir_desc {
-            "ghrm-icon-chevron-down"
-        } else {
-            "ghrm-icon-chevron-up"
-        },
-        active: view.sort_dir != view.sort.default_dir(),
-    };
-
     let column_menu_active = view.columns != cfg.default_columns || view.show_headers;
     let column_controls = column::DEFS
         .iter()
@@ -395,16 +362,70 @@ fn build_controls(
         active: view.show_headers,
         edge: false,
     };
+    let name_header = sort_header(href, view, cfg, walk::Sort::Name);
+    let column_headers = column::DEFS
+        .iter()
+        .map(|def| {
+            let sort = sort_for_column(def.key).expect("column sort definition exists");
+            let header = sort_header(href, view, cfg, sort);
+            ColumnSortHeader {
+                href: header.href,
+                key: def.key,
+                label: header.label,
+                title: header.title,
+                cell_class: def.cell_class,
+                hidden: !view.columns.is_visible(def),
+                active: header.active,
+                aria_sort: header.aria_sort,
+                icon: header.icon,
+            }
+        })
+        .collect();
 
     Controls {
         filter_menu_active,
         filter_controls,
-        sort_menu_active,
-        sort_controls,
-        sort_dir_control,
         column_menu_active,
         column_controls,
         headers_control,
+        name_header,
+        column_headers,
+    }
+}
+
+fn sort_header(href: &str, view: &ViewState, cfg: &ViewConfig, sort: walk::Sort) -> SortHeader {
+    SortHeader {
+        href: view::with_view(href, &view::toggle_sort(view, sort), cfg),
+        label: sort.label(),
+        title: sort.title(),
+        active: view.sort == sort,
+        aria_sort: sort_aria(view.sort_dir),
+        icon: sort_icon(view.sort_dir),
+    }
+}
+
+fn sort_for_column(key: &str) -> Option<walk::Sort> {
+    match key {
+        "commit" => Some(walk::Sort::CommitMessage),
+        "commit_date" => Some(walk::Sort::CommitDate),
+        "date" => Some(walk::Sort::Timestamp),
+        "size" => Some(walk::Sort::Size),
+        "lines" => Some(walk::Sort::Lines),
+        _ => None,
+    }
+}
+
+fn sort_aria(dir: walk::SortDir) -> &'static str {
+    match dir {
+        walk::SortDir::Asc => "ascending",
+        walk::SortDir::Desc => "descending",
+    }
+}
+
+fn sort_icon(dir: walk::SortDir) -> &'static str {
+    match dir {
+        walk::SortDir::Asc => "ghrm-icon-chevron-up",
+        walk::SortDir::Desc => "ghrm-icon-chevron-down",
     }
 }
 
@@ -471,21 +492,21 @@ mod tests {
             .find(|control| control.label == "Docs")
             .unwrap();
         let size = controls
-            .sort_controls
+            .column_headers
             .iter()
-            .find(|control| control.label == "Sort by size")
+            .find(|control| control.key == "size")
             .unwrap();
         let lines = controls
-            .sort_controls
+            .column_headers
             .iter()
-            .find(|control| control.label == "Sort by lines")
+            .find(|control| control.key == "lines")
             .unwrap();
 
         assert!(controls.filter_menu_active);
         assert!(hidden.active);
         assert!(docs.active);
-        assert!(controls.sort_menu_active);
         assert!(size.active);
+        assert_eq!(size.aria_sort, "descending");
         assert!(!size.hidden);
         assert!(lines.hidden);
         assert!(controls.column_menu_active);

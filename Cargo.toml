@@ -1,10 +1,22 @@
-[package]
-name = "ghrm"
-version = "0.4.12"
+[workspace]
+members = ["ghrm-stat"]
+
+[workspace.package]
+version = "0.4.13"
 edition = "2024"
 rust-version = "1.88"
-description = "Fast local GitHub-flavored Markdown and repository browser"
 license = "GPL-3.0-only"
+
+[workspace.dependencies]
+ghrm-stat = { version = "0.4.13", path = "ghrm-stat" }
+
+[package]
+name = "ghrm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Fast local GitHub-flavored Markdown and repository browser"
 repository = "https://github.com/brege/ghrm"
 readme = "README.md"
 keywords = ["github", "markdown", "preview", "offline"]
@@ -16,6 +28,7 @@ include = [
   "/README.md",
   "/askama.toml",
   "/assets/config.json",
+  "/assets/sri.json",
   "/assets/css/**",
   "/assets/img/**",
   "/assets/js.sha256.json",
@@ -78,7 +91,8 @@ hmac = "0.13"
 form_urlencoded = "1"
 percent-encoding = "2"
 sha2 = "0.11"
-ghrm-stat = { version = "0.4.5", path = "ghrm-stat" }
+base64 = "0.22"
+ghrm-stat.workspace = true
 
 [profile.release]
 lto = "thin"

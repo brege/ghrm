@@ -4,17 +4,20 @@
   "private": true,
   "type": "module",
   "packageManager": "npm@11.16.0",
+  "trustedDependencies": [
+    "esbuild",
+    "rollup"
+  ],
   "engines": {
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "vite build && node scripts/check.js pack",
+    "build": "vite build && tsx scripts/check.ts pack",
     "build:runtime": "vite build",
-    "build:check": "vite build --outDir .vite-check && node scripts/check.js source",
+    "build:check": "vite build --outDir .vite-check && tsx scripts/check.ts source",
     "build:watch": "vite build --watch",
-    "icons:check": "node scripts/icons.js check",
-    "icons:review": "node scripts/icon-review.js",
-    "icons:write": "node scripts/icons.js write",
+    "icons:check": "tsx scripts/icons.ts check",
+    "icons:write": "tsx scripts/icons.ts write",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -28,8 +31,9 @@
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-icons": "5.6.0",
+    "tsx": "4.20.3",
     "typescript": "5.8.3",
     "vite": "6.4.2",
-    "vitest": "3.2.2"
+    "vitest": "^3.2.6"
   }
 }

@@ -125,13 +125,11 @@ pub struct ExplorerCtx<'a> {
     pub parent_href: &'a str,
     pub filter_menu_active: bool,
     pub filter_controls: &'a [FilterControl],
-    pub sort_menu_active: bool,
-    pub sort_controls: &'a [SortControl],
-    pub sort_dir_control: &'a SortDirControl,
     pub column_menu_active: bool,
     pub column_controls: &'a [ColumnControl],
     pub headers_control: &'a ColumnControl,
-    pub column_defs: &'a [column::Def],
+    pub name_header: &'a SortHeader,
+    pub column_headers: &'a [ColumnSortHeader],
     pub show_headers: bool,
     pub empty_cells: &'a [column::Cell],
     pub entries: &'a [ExplorerEntry],
@@ -148,19 +146,25 @@ pub struct FilterControl {
     pub separator: bool,
 }
 
-pub struct SortControl {
+pub struct SortHeader {
     pub href: String,
     pub label: &'static str,
     pub title: &'static str,
     pub active: bool,
-    pub hidden: bool,
+    pub aria_sort: &'static str,
+    pub icon: &'static str,
 }
 
-pub struct SortDirControl {
+pub struct ColumnSortHeader {
     pub href: String,
+    pub key: &'static str,
     pub label: &'static str,
-    pub icon: &'static str,
+    pub title: &'static str,
+    pub cell_class: &'static str,
+    pub hidden: bool,
     pub active: bool,
+    pub aria_sort: &'static str,
+    pub icon: &'static str,
 }
 
 pub struct ColumnControl {
@@ -302,18 +306,20 @@ mod tests {
     }
 
     struct ExplorerFixture {
-        sort_dir_control: SortDirControl,
+        name_header: SortHeader,
         headers_control: ColumnControl,
     }
 
     impl ExplorerFixture {
         fn new() -> Self {
             Self {
-                sort_dir_control: SortDirControl {
-                    href: "?sort_dir=desc".to_string(),
-                    label: "Sort ascending",
+                name_header: SortHeader {
+                    href: "?dir=desc".to_string(),
+                    label: "Name",
+                    title: "Sort explorer entries by name",
+                    active: true,
+                    aria_sort: "ascending",
                     icon: "ghrm-icon-chevron-up",
-                    active: false,
                 },
                 headers_control: ColumnControl {
                     href: "?headers=1".to_string(),
@@ -328,8 +334,8 @@ mod tests {
 
         fn ctx(&self) -> ExplorerCtx<'_> {
             static EMPTY_FILTER: &[FilterControl] = &[];
-            static EMPTY_SORT: &[SortControl] = &[];
             static EMPTY_COLUMN: &[ColumnControl] = &[];
+            static EMPTY_COLUMN_HEADER: &[ColumnSortHeader] = &[];
             static EMPTY_CELLS: &[column::Cell] = &[];
 
             ExplorerCtx {
@@ -343,13 +349,11 @@ mod tests {
                 parent_href: "",
                 filter_menu_active: false,
                 filter_controls: EMPTY_FILTER,
-                sort_menu_active: false,
-                sort_controls: EMPTY_SORT,
-                sort_dir_control: &self.sort_dir_control,
                 column_menu_active: false,
                 column_controls: EMPTY_COLUMN,
                 headers_control: &self.headers_control,
-                column_defs: column::DEFS,
+                name_header: &self.name_header,
+                column_headers: EMPTY_COLUMN_HEADER,
                 show_headers: true,
                 empty_cells: EMPTY_CELLS,
                 entries: &[],
@@ -572,20 +576,20 @@ mod tests {
         }
 
         #[test]
-        fn sort_menu_elements() {
+        fn sort_menu_elements_removed() {
             let fix = ExplorerFixture::new();
             let html = explorer(fix.ctx()).unwrap();
             assert!(
-                html.contains("id=\"ghrm-sort-menu-toggle\""),
-                "missing #ghrm-sort-menu-toggle"
+                !html.contains("id=\"ghrm-sort-menu-toggle\""),
+                "obsolete #ghrm-sort-menu-toggle rendered"
             );
             assert!(
-                html.contains("id=\"ghrm-sort-menu\""),
-                "missing #ghrm-sort-menu"
+                !html.contains("id=\"ghrm-sort-menu\""),
+                "obsolete #ghrm-sort-menu rendered"
             );
             assert!(
-                html.contains("id=\"ghrm-sort-dir-toggle\""),
-                "missing #ghrm-sort-dir-toggle"
+                !html.contains("id=\"ghrm-sort-dir-toggle\""),
+                "obsolete #ghrm-sort-dir-toggle rendered"
             );
         }
 
@@ -674,6 +678,40 @@ mod tests {
             assert!(
                 html.contains("class=\"ghrm-column-headers\""),
                 "missing .ghrm-column-headers"
+            );
+        }
+
+        #[test]
+        fn column_headers_are_sort_links() {
+            let fix = ExplorerFixture::new();
+            let date = ColumnSortHeader {
+                href: "?sort=timestamp".to_string(),
+                key: "date",
+                label: "Modified date",
+                title: "Sort explorer entries by modified date",
+                cell_class: "ghrm-nav-meta ghrm-nav-meta-time",
+                hidden: false,
+                active: false,
+                aria_sort: "descending",
+                icon: "ghrm-icon-chevron-down",
+            };
+            let ctx = ExplorerCtx {
+                has_parent: true,
+                column_headers: std::slice::from_ref(&date),
+                ..fix.ctx()
+            };
+            let html = explorer(ctx).unwrap();
+            assert!(
+                html.contains("href=\"?dir"),
+                "name header missing sort href"
+            );
+            assert!(
+                html.contains("aria-sort=\"ascending\""),
+                "active header missing aria-sort"
+            );
+            assert!(
+                html.contains("href=\"?sort"),
+                "metadata header missing sort href"
             );
         }
 

@@ -1,9 +1,3 @@
-.ghrm-sort-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-}
-
 .ghrm-menu-shell {
   position: relative;
   display: inline-flex;
@@ -54,30 +48,6 @@
 
 .ghrm-view-menu-toggle use[href$="#ghrm-icon-filter"] {
   stroke: currentColor;
-}
-
-#ghrm-sort-menu-toggle {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-#ghrm-sort-dir-toggle {
-  margin-left: -1px;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-}
-
-#ghrm-sort-menu-toggle,
-#ghrm-sort-dir-toggle {
-  position: relative;
-}
-
-#ghrm-sort-menu-toggle:hover,
-#ghrm-sort-menu-toggle.is-active,
-#ghrm-sort-menu-toggle[aria-expanded="true"],
-#ghrm-sort-dir-toggle:hover,
-#ghrm-sort-dir-toggle.is-active {
-  z-index: 1;
 }
 
 .ghrm-view-menu {
@@ -200,6 +170,27 @@ hr.ghrm-menu-separator {
   color: var(--fgColor-muted, #656d76);
   border: none !important;
   background: var(--bgColor-muted, #f6f8fa);
+}
+
+.markdown-body .ghrm-nav-table .ghrm-column-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.markdown-body .ghrm-nav-table .ghrm-column-sort:hover,
+.markdown-body .ghrm-nav-table .ghrm-column-sort.is-active {
+  color: var(--fgColor-default, #1f2328);
+  text-decoration: none;
+}
+
+.ghrm-column-sort-icon {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  flex: 0 0 auto;
 }
 
 .ghrm-nav-icon-col,

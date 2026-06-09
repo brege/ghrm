@@ -170,7 +170,7 @@ pub(crate) fn toggle_group(view: &ViewState, group: &str) -> ViewState {
     next
 }
 
-pub(crate) fn set_sort(view: &ViewState, sort: walk::Sort) -> ViewState {
+pub(crate) fn toggle_sort(view: &ViewState, sort: walk::Sort) -> ViewState {
     let mut next = view.clone();
     if sort
         .column_key()
@@ -178,17 +178,15 @@ pub(crate) fn set_sort(view: &ViewState, sort: walk::Sort) -> ViewState {
     {
         return next;
     }
+    if view.sort == sort {
+        next.sort_dir = match view.sort_dir {
+            walk::SortDir::Asc => walk::SortDir::Desc,
+            walk::SortDir::Desc => walk::SortDir::Asc,
+        };
+        return next;
+    }
     next.sort = sort;
     next.sort_dir = sort.default_dir();
-    next
-}
-
-pub(crate) fn toggle_sort_dir(view: &ViewState) -> ViewState {
-    let mut next = view.clone();
-    next.sort_dir = match view.sort_dir {
-        walk::SortDir::Asc => walk::SortDir::Desc,
-        walk::SortDir::Desc => walk::SortDir::Asc,
-    };
     next
 }
 
@@ -555,6 +553,103 @@ mod tests {
         assert_eq!(next.sort, walk::Sort::Name);
         assert_eq!(next.sort_dir, walk::Sort::Name.default_dir());
         assert_eq!(with_view("/docs/", &next, &cfg), "/docs/?date=0");
+    }
+
+    #[test]
+    fn sort_toggle_selects_default_direction() {
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: false,
+            },
+            default_use_ignore: true,
+            default_groups: Vec::new(),
+            default_sort: walk::Sort::Name,
+            default_columns: columns(true, true, false),
+            can_toggle_excludes: false,
+        };
+        let view = ViewState {
+            opts: cfg.default,
+            use_ignore: true,
+            groups: Vec::new(),
+            sort: walk::Sort::Name,
+            sort_dir: walk::Sort::Name.default_dir(),
+            columns: cfg.default_columns.clone(),
+            show_headers: true,
+        };
+
+        let next = toggle_sort(&view, walk::Sort::Timestamp);
+
+        assert_eq!(next.sort, walk::Sort::Timestamp);
+        assert_eq!(next.sort_dir, walk::Sort::Timestamp.default_dir());
+        assert_eq!(
+            with_view("/docs/", &next, &cfg),
+            "/docs/?sort=timestamp&headers=1"
+        );
+    }
+
+    #[test]
+    fn sort_toggle_reverses_active_header() {
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: false,
+            },
+            default_use_ignore: true,
+            default_groups: Vec::new(),
+            default_sort: walk::Sort::Name,
+            default_columns: columns(true, true, false),
+            can_toggle_excludes: false,
+        };
+        let view = ViewState {
+            opts: cfg.default,
+            use_ignore: true,
+            groups: Vec::new(),
+            sort: walk::Sort::Timestamp,
+            sort_dir: walk::SortDir::Desc,
+            columns: cfg.default_columns.clone(),
+            show_headers: true,
+        };
+
+        let next = toggle_sort(&view, walk::Sort::Timestamp);
+
+        assert_eq!(next.sort, walk::Sort::Timestamp);
+        assert_eq!(next.sort_dir, walk::SortDir::Asc);
+        assert_eq!(
+            with_view("/docs/", &next, &cfg),
+            "/docs/?sort=timestamp&dir=asc&headers=1"
+        );
+    }
+
+    #[test]
+    fn sort_toggle_ignores_hidden_column() {
+        let cfg = ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: false,
+            },
+            default_use_ignore: true,
+            default_groups: Vec::new(),
+            default_sort: walk::Sort::Name,
+            default_columns: columns(false, true, false),
+            can_toggle_excludes: false,
+        };
+        let view = ViewState {
+            opts: cfg.default,
+            use_ignore: true,
+            groups: Vec::new(),
+            sort: walk::Sort::Name,
+            sort_dir: walk::Sort::Name.default_dir(),
+            columns: cfg.default_columns.clone(),
+            show_headers: true,
+        };
+
+        let next = toggle_sort(&view, walk::Sort::Timestamp);
+
+        assert_eq!(next, view);
     }
 
     #[test]

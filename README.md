@@ -8,9 +8,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License"></a>
 </p>
 
-Explore your filesystem as if it were on GitHub.
-
-Ghrm supports all **G**it**H**ub-flavored Markdown features, **R**ead**m**e and source code viewing, detects repositories, has instant file retrieval, and works completely offline. It makes file browsing and file reading feel more continuous and much easier to work on projects mixing images, HTML, large tables and JSON and other assets in your browser. You get both the backend performance of Rust and the multimedia performance of your browser.
+Ghrm supports all **G**it**H**ub-flavored Markdown features, **R**ead**m**e and source code viewing, detects repositories, has instant file retrieval, and works completely offline. It makes file browsing and file reading feel more continuous and much easier to work on projects that mix images, HTML, large tables, JSON, and other assets your browser handles well. You get both the backend performance of Rust and the multimedia performance of your browser.
 
 ## Supported Features
 
@@ -18,6 +16,7 @@ Ghrm supports all **G**it**H**ub-flavored Markdown features, **R**ead**m**e and 
 - Live reloading
 - Preview Markdown, source code, and images
 - Light-and-dark theme
+- Chromeless PDF printing
 
 ### File explorer
 
@@ -48,17 +47,29 @@ ghrm .
 
 ## Ethos
 
-I made Ghrm because when I lose internet/power, I often turn toward documentation and repo-gardening to stay occupied while online resources are unavailable. On first run, ghrm locally downloads the browser libraries from CDNs and, outside of sources or maps you may already have in your Markdown, never touches the internet again. It renders Markdown and file trees the exact same way as GitHub does. There's zero mystery what your docs are going to look like after you push.
+I made Ghrm because when I lose internet/power, I often turn toward documentation and repo-gardening to stay occupied while online resources are unavailable. There's zero mystery what your docs are going to look like after you push.
 
-Ghrm is non-mutating. It's not meant to be a general git repo manager.
+> [!IMPORTANT]
+> On first run, ghrm locally downloads the browser libraries from CDNs and (outside of sources or maps you may already have embedded in your Markdown file) never touches the internet again. It renders Markdown and file trees the way GitHub does.
+
+> [!NOTE]
+> Ghrm is non-mutating. It's not meant to be a general git repo manager.
 
 You can use `--bind 0.0.0.0` to connect to a ghrm instance from other devices in your network. It's automatically password protected, set via [`config.toml`](config.example.toml).
 
 ## Install
 
+### Binary (recommended)
+
+Download from the [releases page](https://github.com/brege/ghrm/releases/latest), extract, and add to PATH.
+
+### From source
+
 ```bash
 cargo install --git https://github.com/brege/ghrm ghrm
 ```
+
+crates.io coming soon.
 
 ## Usage
 
@@ -79,7 +90,7 @@ Opens a live-reloading preview in your browser. Edits to the file in your editor
 Add to your lazy.nvim config:
 
 ```lua
-{ "brege/ghrm" end }
+{ "brege/ghrm" }
 ```
 
 Commands: `:Ghrm` to start, `:GhrmStop` to stop, or just exit nvim.

@@ -44,7 +44,7 @@ pub(crate) const SORT_DEFS: &[SortDef] = &[
     SortDef {
         sort: Sort::Name,
         key: "name",
-        label: "Sort by name",
+        label: "Name",
         title: "Sort explorer entries by name",
         default_dir: SortDir::Asc,
         column_key: None,
@@ -52,7 +52,7 @@ pub(crate) const SORT_DEFS: &[SortDef] = &[
     SortDef {
         sort: Sort::Type,
         key: "type",
-        label: "Sort by type",
+        label: "Type",
         title: "Sort explorer entries by type",
         default_dir: SortDir::Asc,
         column_key: None,
@@ -60,7 +60,7 @@ pub(crate) const SORT_DEFS: &[SortDef] = &[
     SortDef {
         sort: Sort::Timestamp,
         key: "timestamp",
-        label: "Sort by modified date",
+        label: "Modified date",
         title: "Sort explorer entries by modified date",
         default_dir: SortDir::Desc,
         column_key: Some("date"),
@@ -68,7 +68,7 @@ pub(crate) const SORT_DEFS: &[SortDef] = &[
     SortDef {
         sort: Sort::Size,
         key: "size",
-        label: "Sort by size",
+        label: "Size",
         title: "Sort explorer entries by file size",
         default_dir: SortDir::Desc,
         column_key: Some("size"),
@@ -76,7 +76,7 @@ pub(crate) const SORT_DEFS: &[SortDef] = &[
     SortDef {
         sort: Sort::Lines,
         key: "lines",
-        label: "Sort by lines",
+        label: "Lines",
         title: "Sort explorer entries by line count",
         default_dir: SortDir::Desc,
         column_key: Some("lines"),
@@ -84,7 +84,7 @@ pub(crate) const SORT_DEFS: &[SortDef] = &[
     SortDef {
         sort: Sort::CommitMessage,
         key: "commit",
-        label: "Sort by commit message",
+        label: "Commit message",
         title: "Sort explorer entries by commit message",
         default_dir: SortDir::Asc,
         column_key: Some("commit"),
@@ -92,7 +92,7 @@ pub(crate) const SORT_DEFS: &[SortDef] = &[
     SortDef {
         sort: Sort::CommitDate,
         key: "commit_date",
-        label: "Sort by commit date",
+        label: "Commit date",
         title: "Sort explorer entries by commit date",
         default_dir: SortDir::Desc,
         column_key: Some("commit_date"),
@@ -124,6 +124,14 @@ impl Sort {
 
     pub(crate) fn column_key(self) -> Option<&'static str> {
         self.def().column_key
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        self.def().label
+    }
+
+    pub(crate) fn title(self) -> &'static str {
+        self.def().title
     }
 
     fn def(self) -> &'static SortDef {

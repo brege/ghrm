@@ -1,7 +1,3 @@
-/**
- * Verify and generate the browser icon sprite contract.
- */
-
 import {
   existsSync,
   mkdirSync,
@@ -12,6 +8,7 @@ import {
 } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import type { ReactElement } from 'react';
 import { transformWithEsbuild } from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,45 +24,80 @@ const obsoleteSourcePaths = [
 const refRoots = ['assets/templates', 'assets/css', 'src', 'ui/src'];
 const productionRoots = ['ui/src'];
 const skippedDirs = new Set(['.asset-check', '.vite-check', 'node_modules']);
-const expectedIconCount = 57;
+const expectedIconCount = 56;
 const spriteOpen = '<svg xmlns="http://www.w3.org/2000/svg">';
 const spriteClose = '</svg>';
-const dynamicAskamaContracts = [
+
+interface DynamicAskamaContract {
+  expression: string;
+  template: string;
+  provider: string;
+}
+
+const dynamicAskamaContracts: DynamicAskamaContract[] = [
   {
     expression: 'row.icon',
     template: 'assets/templates/fragments/about.html',
     provider: 'src/http/about.rs',
   },
   {
-    expression: 'sort_dir_control.icon',
-    template: 'assets/templates/fragments/explorer/header.html',
+    expression: 'name_header.icon',
+    template: 'assets/templates/explorer.html',
+    provider: 'src/explorer.rs',
+  },
+  {
+    expression: 'column.icon',
+    template: 'assets/templates/explorer.html',
     provider: 'src/explorer.rs',
   },
 ];
 
-function fail(message, ...parts) {
+interface IconEntry {
+  id: string;
+  icon: ReactElement;
+}
+
+interface IconSource {
+  icons: IconEntry[];
+}
+
+interface ParsedIcon {
+  id: string;
+  symbol: string;
+}
+
+interface IconData {
+  icons: ParsedIcon[];
+}
+
+interface DynamicRef {
+  expression: string;
+  file: string;
+}
+
+function fail(message: string, ...parts: unknown[]): never {
   console.error(message, ...parts);
   process.exit(1);
 }
 
-function toPosix(path) {
+function toPosix(path: string): string {
   return path.split(sep).join('/');
 }
 
-function readText(path) {
+function readText(path: string): string {
   try {
     return readFileSync(path, 'utf8');
   } catch (error) {
-    fail('Unable to read file:', path, error.message);
+    fail('Unable to read file:', path, (error as Error).message);
   }
 }
 
-function writeText(path, text) {
+function writeText(path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text);
 }
 
-function checkSourceText(text) {
+function checkSourceText(text: string): void {
   // Reject copied SVG payload in the reviewed icon declaration source.
   const svgPayloadPattern = /<\s*(?:path|svg|symbol)\b|d="/i;
   if (svgPayloadPattern.test(text)) {
@@ -73,7 +105,7 @@ function checkSourceText(text) {
   }
 }
 
-async function loadSourceModule() {
+async function loadSourceModule(): Promise<IconSource> {
   const sourceText = readText(sourcePath);
   checkSourceText(sourceText);
 
@@ -88,24 +120,28 @@ async function loadSourceModule() {
   writeText(compiledSourcePath, result.code);
 
   try {
-    return await import(
+    return (await import(
       `${pathToFileURL(compiledSourcePath).href}?t=${Date.now()}`
-    );
+    )) as IconSource;
   } catch (error) {
-    fail('Unable to load icon declaration source:', error.message);
+    fail('Unable to load icon declaration source:', (error as Error).message);
   }
 }
 
-async function loadRenderer() {
+interface ReactDOMServer {
+  renderToStaticMarkup: (element: ReactElement) => string;
+}
+
+async function loadRenderer(): Promise<ReactDOMServer> {
   try {
-    return await import('react-dom/server');
+    return (await import('react-dom/server')) as ReactDOMServer;
   } catch (error) {
-    fail('Unable to load React static renderer:', error.message);
+    fail('Unable to load React static renderer:', (error as Error).message);
   }
 }
 
-function parseAttrs(rawAttrs) {
-  const attrs = new Map();
+function parseAttrs(rawAttrs: string): Map<string, string> {
+  const attrs = new Map<string, string>();
 
   // Matches XML attribute assignments in the rendered SVG opening tag.
   const attrPattern = /\s([A-Za-z_:][A-Za-z0-9_.:-]*)="([^"]*)"/g;
@@ -119,11 +155,11 @@ function parseAttrs(rawAttrs) {
   return attrs;
 }
 
-function formatAttrs(attrs) {
+function formatAttrs(attrs: [string, string][]): string {
   return attrs.map(([name, value]) => `${name}="${value}"`).join(' ');
 }
 
-function renderSymbol(id, rendered) {
+function renderSymbol(id: string, rendered: string): string {
   const trimmed = rendered.trim();
 
   // Captures the rendered SVG opening attributes and child markup.
@@ -140,7 +176,7 @@ function renderSymbol(id, rendered) {
   }
 
   const ignoredAttrs = new Set(['height', 'role', 'width', 'xmlns']);
-  const symbolAttrs = [];
+  const symbolAttrs: [string, string][] = [];
   for (const [name, value] of attrs) {
     if (ignoredAttrs.has(name) || name === 'viewBox') continue;
     symbolAttrs.push([name, value]);
@@ -151,7 +187,7 @@ function renderSymbol(id, rendered) {
   return `    <symbol ${formatAttrs(symbolAttrs)}>${match[2]}</symbol>`;
 }
 
-async function readSource() {
+async function readSource(): Promise<IconData> {
   const source = await loadSourceModule();
   const { renderToStaticMarkup } = await loadRenderer();
 
@@ -165,8 +201,8 @@ async function readSource() {
     );
   }
 
-  const ids = new Set();
-  const icons = [];
+  const ids = new Set<string>();
+  const icons: ParsedIcon[] = [];
   for (const icon of source.icons) {
     if (typeof icon.id !== 'string' || !icon.id.startsWith('ghrm-icon-')) {
       fail('Invalid icon id:', String(icon.id));
@@ -188,22 +224,22 @@ async function readSource() {
   return { icons };
 }
 
-function renderSprite(data) {
+function renderSprite(data: IconData): string {
   return `${spriteOpen}\n${data.icons.map((icon) => icon.symbol).join('\n')}\n${spriteClose}\n`;
 }
 
-export async function generateSprite() {
+export async function generateSprite(): Promise<string> {
   return renderSprite(await readSource());
 }
 
-function checkSpriteShape(data) {
+function checkSpriteShape(data: IconData): void {
   const sprite = renderSprite(data);
   if (!sprite.startsWith(`${spriteOpen}\n`) || !sprite.endsWith('\n</svg>\n')) {
     fail('Generated icon sprite has an unexpected SVG wrapper.');
   }
 
   const expectedIds = sourceIds(data);
-  const symbolIds = [];
+  const symbolIds: string[] = [];
 
   // Matches generated symbol opening tags and extracts their normalized attrs.
   const symbolPattern = /<symbol\b([^>]*)>/g;
@@ -242,8 +278,8 @@ function checkSpriteShape(data) {
   }
 }
 
-function walkFiles(dir) {
-  const files = [];
+function walkFiles(dir: string): string[] {
+  const files: string[] = [];
   if (!existsSync(dir)) return files;
 
   for (const name of readdirSync(dir)) {
@@ -261,9 +297,12 @@ function walkFiles(dir) {
   return files;
 }
 
-function collectIconRefs() {
-  const refs = new Map();
-  const dynamicRefs = [];
+function collectIconRefs(): {
+  refs: Map<string, Set<string>>;
+  dynamicRefs: DynamicRef[];
+} {
+  const refs = new Map<string, Set<string>>();
+  const dynamicRefs: DynamicRef[] = [];
 
   // Matches literal ghrm sprite IDs in Rust, templates, CSS, and TS.
   const iconRefPattern = /ghrm-icon-[A-Za-z0-9-]+/g;
@@ -278,9 +317,9 @@ function collectIconRefs() {
   // Matches Askama icon expressions whose concrete IDs are supplied by Rust.
   const askamaIconPattern = /href="[^"]*#\{\{\s*([A-Za-z0-9_.]+)\s*\}\}"/g;
 
-  function addRef(id, file, kind) {
+  function addRef(id: string, file: string, kind: string): void {
     if (!refs.has(id)) refs.set(id, new Set());
-    refs.get(id).add(`${toPosix(relative(repoRoot, file))} [${kind}]`);
+    refs.get(id)!.add(`${toPosix(relative(repoRoot, file))} [${kind}]`);
   }
 
   for (const root of refRoots) {
@@ -311,12 +350,15 @@ function collectIconRefs() {
   return { refs, dynamicRefs };
 }
 
-function sourceIds(data) {
+function sourceIds(data: IconData): Set<string> {
   return new Set(data.icons.map((icon) => icon.id));
 }
 
-function refsByProvider(refs, provider) {
-  const matches = [];
+function refsByProvider(
+  refs: Map<string, Set<string>>,
+  provider: string,
+): string[] {
+  const matches: string[] = [];
   for (const [id, files] of refs) {
     for (const file of files) {
       if (file.startsWith(`${provider} `)) {
@@ -327,8 +369,11 @@ function refsByProvider(refs, provider) {
   return [...new Set(matches)].sort();
 }
 
-function checkDynamicRefs(refs, dynamicRefs) {
-  const missing = [];
+function checkDynamicRefs(
+  refs: Map<string, Set<string>>,
+  dynamicRefs: DynamicRef[],
+): void {
+  const missing: string[] = [];
 
   for (const contract of dynamicAskamaContracts) {
     const hasTemplateUse = dynamicRefs.some(
@@ -354,16 +399,20 @@ function checkDynamicRefs(refs, dynamicRefs) {
   }
 }
 
-function checkRefs(data, refs, dynamicRefs) {
+function checkRefs(
+  data: IconData,
+  refs: Map<string, Set<string>>,
+  dynamicRefs: DynamicRef[],
+): void {
   const iconIds = sourceIds(data);
   const refIds = new Set(refs.keys());
-  const missing = [];
-  const unreferenced = [];
+  const missing: string[] = [];
+  const unreferenced: string[] = [];
 
   for (const id of refIds) {
     if (!iconIds.has(id)) {
       missing.push(
-        `${id} referenced by ${[...refs.get(id)].sort().join(', ')}`,
+        `${id} referenced by ${[...refs.get(id)!].sort().join(', ')}`,
       );
     }
   }
@@ -385,10 +434,13 @@ function checkRefs(data, refs, dynamicRefs) {
   checkDynamicRefs(refs, dynamicRefs);
 }
 
-function reportRefs(refs, dynamicRefs) {
+function reportRefs(
+  refs: Map<string, Set<string>>,
+  dynamicRefs: DynamicRef[],
+): void {
   console.log('Icon reference report:');
   for (const id of [...refs.keys()].sort()) {
-    console.log(`- ${id}: ${[...refs.get(id)].sort().join(', ')}`);
+    console.log(`- ${id}: ${[...refs.get(id)!].sort().join(', ')}`);
   }
   console.log('Dynamic icon contracts:');
   for (const contract of dynamicAskamaContracts) {
@@ -409,11 +461,11 @@ function reportRefs(refs, dynamicRefs) {
   }
 }
 
-function writeGenerated(data) {
+function writeGenerated(data: IconData): void {
   writeText(runtimeSpritePath, renderSprite(data));
 }
 
-function checkNoObsoleteSources() {
+function checkNoObsoleteSources(): void {
   const obsolete = obsoleteSourcePaths
     .filter((path) => existsSync(path))
     .map((path) => toPosix(relative(repoRoot, path)));
@@ -422,8 +474,8 @@ function checkNoObsoleteSources() {
   }
 }
 
-function checkProductionImports() {
-  const offenders = [];
+function checkProductionImports(): void {
+  const offenders: string[] = [];
 
   // Matches static and dynamic imports of the icon source packages.
   const forbiddenImportPattern =
@@ -445,7 +497,7 @@ function checkProductionImports() {
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   const mode = process.argv[2] ?? 'check';
   if (mode === 'write') {
     writeGenerated(await readSource());
@@ -465,6 +517,6 @@ async function main() {
 
 if (resolve(process.argv[1] ?? '') === __filename) {
   main().catch((error) => {
-    fail('Icon command failed:', error.message);
+    fail('Icon command failed:', (error as Error).message);
   });
 }

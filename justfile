@@ -11,14 +11,6 @@ default:
 build:
     cargo build --locked
 
-# build and run ghrm against a target path
-run target=".":
-    cargo run --locked -- "{{target}}"
-
-# run ghrm without opening a browser
-dev target=".":
-    cargo run --locked -- --no-browser "{{target}}"
-
 # run ghrm with ui rebuild watcher
 dev-ui target=".":
     npm --prefix ui run build:runtime && { \
@@ -28,22 +20,22 @@ dev-ui target=".":
         cargo run --locked -- --no-browser "{{target}}"; \
     }
 
-# print the resolved ghrm configuration
-dump-config target=".":
-    cargo run --locked -- --dump-config "{{target}}"
-
 # install ghrm from this checkout
 install:
     cargo install --locked --path .
+
+# set workspace version (does not commit or tag)
+bump version:
+    @sed -i 's/^\(version = \)"[^"]*"/\1"{{version}}"/' Cargo.toml && \
+    sed -i 's/^\(ghrm-stat = { version = \)"[^"]*"/\1"{{version}}"/' Cargo.toml && \
+    cargo check --workspace --quiet && \
+    echo "Workspace version set to {{version}}"
 
 # smoke-run release ASV without recording benchmark history
 bench: benchfile::run
 
 # validate ASV benchmark discovery
 bench-check: benchfile::check
-
-# alias for the ASV smoke run
-bench-dry: benchfile::dry
 
 # record the latest commit benchmark and print the report
 bench-record: benchfile::record
@@ -61,7 +53,6 @@ test: rust-test ui-test
 # remove build artifacts
 clean:
     cargo clean
-    cargo clean --manifest-path ghrm-stat/Cargo.toml
 
 # format Rust and UI files
 fmt: rust-fmt ui-fmt
@@ -69,33 +60,25 @@ fmt: rust-fmt ui-fmt
 # run all Rust checks
 rust:
     cargo fmt --all --check
-    cargo fmt --manifest-path ghrm-stat/Cargo.toml --check
-    cargo check --locked
-    cargo check --manifest-path ghrm-stat/Cargo.toml --locked
-    cargo clippy --all-targets --locked -- --deny warnings
-    cargo clippy --manifest-path ghrm-stat/Cargo.toml --all-targets --locked -- --deny warnings
-    cargo test --locked
-    cargo test --manifest-path ghrm-stat/Cargo.toml --locked
+    cargo check --workspace --locked
+    cargo clippy --workspace --all-targets --locked -- --deny warnings
+    cargo test --workspace --locked
 
 # run Rust type checks
 rust-type:
-    cargo check --locked
-    cargo check --manifest-path ghrm-stat/Cargo.toml --locked
+    cargo check --workspace --locked
 
 # run Rust lint checks
 rust-lint:
-    cargo clippy --all-targets --locked -- --deny warnings
-    cargo clippy --manifest-path ghrm-stat/Cargo.toml --all-targets --locked -- --deny warnings
+    cargo clippy --workspace --all-targets --locked -- --deny warnings
 
 # run Rust test suites
 rust-test:
-    cargo test --locked
-    cargo test --manifest-path ghrm-stat/Cargo.toml --locked
+    cargo test --workspace --locked
 
 # format Rust files
 rust-fmt:
     cargo fmt --all
-    cargo fmt --manifest-path ghrm-stat/Cargo.toml
 
 # run all UI checks
 ui: ui-lint ui-type ui-test ui-icons ui-build
@@ -133,3 +116,7 @@ ui-watch:
 # format UI files
 ui-fmt:
     npx @biomejs/biome@2.4.6 format --write ui/ assets/css
+
+# generate SRI hashes for vendor assets
+sri:
+    npm --prefix ui exec -- tsx ui/scripts/sri.ts

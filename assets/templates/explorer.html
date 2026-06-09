@@ -12,8 +12,22 @@
 {% endfor %}    </colgroup>
     <thead class="ghrm-column-headers"{% if !show_headers %} hidden{% endif %}>
       <tr>
-        <th class="ghrm-nav-name" colspan="2">Name</th>
-{% for column in column_defs %}        <th class="{{ column.cell_class }}" data-column-key="{{ column.key }}">{{ column.label }}</th>
+        <th class="ghrm-nav-name" colspan="2"{% if name_header.active %} aria-sort="{{ name_header.aria_sort }}"{% endif %}>
+          <a class="ghrm-column-sort{% if name_header.active %} is-active{% endif %}" href="{{ name_header.href }}" title="{{ name_header.title }}">
+            <span>{{ name_header.label }}</span>
+{% if name_header.active %}            <svg class="ghrm-column-sort-icon" aria-hidden="true" focusable="false">
+              <use href="/_ghrm/assets/js/icons.svg#{{ name_header.icon }}"></use>
+            </svg>
+{% endif %}          </a>
+        </th>
+{% for column in column_headers %}        <th class="{{ column.cell_class }}" data-column-key="{{ column.key }}"{% if column.hidden %} hidden{% endif %}{% if column.active %} aria-sort="{{ column.aria_sort }}"{% endif %}>
+          <a class="ghrm-column-sort{% if column.active %} is-active{% endif %}" href="{{ column.href }}" title="{{ column.title }}">
+            <span>{{ column.label }}</span>
+{% if column.active %}            <svg class="ghrm-column-sort-icon" aria-hidden="true" focusable="false">
+              <use href="/_ghrm/assets/js/icons.svg#{{ column.icon }}"></use>
+            </svg>
+{% endif %}          </a>
+        </th>
 {% endfor %}
       </tr>
     </thead>
