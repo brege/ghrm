@@ -15,6 +15,7 @@ use tracing::warn;
 pub(crate) fn full_page(
     r: &Rendered,
     body: &str,
+    explorer_path: Option<&str>,
     source: SourceState,
     show_logout: bool,
     runtime_paths: &runtime::Paths,
@@ -27,59 +28,17 @@ pub(crate) fn full_page(
     };
     let stats = AboutStats::default();
     let about = about::html(runtime_paths, &stats, false);
+    let (layout_class, sidebar) = match explorer_path {
+        Some(path) => ("ghrm-layout-explorer", explorer_sidebar_html(path, false)),
+        None => ("", String::new()),
+    };
     let source = source_html(&source);
     let gist_nav = gist_nav_html(runtime_paths.has_gist(), gist_active, false);
     let assets = vendor::plan(r);
     let shell = PageShell {
         title,
         body,
-        layout_class: "",
-        source: &source,
-        about: &about,
-        sidebar: "",
-        show_logout,
-        gist_nav: &gist_nav,
-        asset_json: vendor::client_json(),
-        vendor_styles: &assets.styles,
-        vendor_scripts: &assets.scripts,
-    };
-    let html = match tmpl::base(shell) {
-        Ok(h) => h,
-        Err(e) => {
-            warn!("template error: {}", e);
-            return not_found();
-        }
-    };
-    let mut res = Html(html).into_response();
-    res.headers_mut()
-        .insert(header::VARY, HeaderValue::from_static("HX-Request"));
-    res
-}
-
-pub(crate) fn explorer_full_page(
-    r: &Rendered,
-    body: &str,
-    current_path: &str,
-    source: SourceState,
-    show_logout: bool,
-    runtime_paths: &runtime::Paths,
-    gist_active: bool,
-) -> Response {
-    let title = if r.title.is_empty() {
-        "Preview"
-    } else {
-        &r.title
-    };
-    let stats = AboutStats::default();
-    let about = about::html(runtime_paths, &stats, false);
-    let sidebar = explorer_sidebar_html(current_path, false);
-    let source = source_html(&source);
-    let gist_nav = gist_nav_html(runtime_paths.has_gist(), gist_active, false);
-    let assets = vendor::plan(r);
-    let shell = PageShell {
-        title,
-        body,
-        layout_class: "ghrm-layout-explorer",
+        layout_class,
         source: &source,
         about: &about,
         sidebar: &sidebar,
@@ -105,34 +64,17 @@ pub(crate) fn explorer_full_page(
 pub(crate) fn fragment(
     body: &str,
     title: &str,
+    explorer_path: Option<&str>,
     source: SourceState,
     runtime_paths: &runtime::Paths,
     gist_active: bool,
 ) -> Response {
     let source_oob = source_oob_html(&source);
     let gist_oob = gist_nav_html(runtime_paths.has_gist(), gist_active, true);
-    let sidebar_oob = hidden_sidebar_html(true);
-    let html = format!("{body}{source_oob}{gist_oob}{sidebar_oob}");
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .header(header::VARY, "HX-Request")
-        .header("HX-Title", hx_title(title))
-        .body(Body::from(html))
-        .unwrap()
-}
-
-pub(crate) fn explorer_fragment(
-    body: &str,
-    title: &str,
-    current_path: &str,
-    source: SourceState,
-    runtime_paths: &runtime::Paths,
-    gist_active: bool,
-) -> Response {
-    let source_oob = source_oob_html(&source);
-    let gist_oob = gist_nav_html(runtime_paths.has_gist(), gist_active, true);
-    let sidebar_oob = explorer_sidebar_html(current_path, true);
+    let sidebar_oob = match explorer_path {
+        Some(path) => explorer_sidebar_html(path, true),
+        None => hidden_sidebar_html(true),
+    };
     let html = format!("{body}{source_oob}{gist_oob}{sidebar_oob}");
     Response::builder()
         .status(StatusCode::OK)
@@ -289,10 +231,11 @@ fn has_sidebar_stats(stats: &AboutStats) -> bool {
         || !stats.activity.is_empty()
 }
 
-pub(crate) fn sidebar_html(stats: &AboutStats) -> String {
+pub(crate) fn sidebar_html(stats: &AboutStats, oob: bool) -> String {
     let sidebar = AboutSidebar {
         stats,
         has_stats: has_sidebar_stats(stats),
+        oob,
     };
     match tmpl::sidebar(sidebar) {
         Ok(html) => html,
@@ -359,7 +302,7 @@ mod tests {
     #[test]
     fn fragment_response_varies_on_hx_request() {
         let paths = runtime_paths(false);
-        let response = fragment("body", "Test", SourceState::NoRepo, &paths, false);
+        let response = fragment("body", "Test", None, SourceState::NoRepo, &paths, false);
         assert_eq!(response.headers().get(header::VARY).unwrap(), "HX-Request");
         assert_eq!(response.headers().get("HX-Title").unwrap(), "Test");
     }
@@ -367,7 +310,14 @@ mod tests {
     #[test]
     fn fragment_response_encodes_title_header() {
         let paths = runtime_paths(false);
-        let response = fragment("body", "Test Title\nλ", SourceState::NoRepo, &paths, false);
+        let response = fragment(
+            "body",
+            "Test Title\nλ",
+            None,
+            SourceState::NoRepo,
+            &paths,
+            false,
+        );
         assert_eq!(
             response.headers().get("HX-Title").unwrap(),
             "Test%20Title%0A%CE%BB"

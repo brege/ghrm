@@ -225,19 +225,19 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
     };
     let source = s.repos.source_for(&current);
     if hx.is_htmx {
-        return shell::explorer_fragment(
+        return shell::fragment(
             &body,
             &combined.title,
-            &current_href,
+            Some(&current_href),
             source,
             &s.runtime_paths,
             false,
         );
     }
-    shell::explorer_full_page(
+    shell::full_page(
         &combined,
         &body,
-        &current_href,
+        Some(&current_href),
         source,
         s.auth.is_some(),
         &s.runtime_paths,

@@ -265,6 +265,7 @@ pub fn about(p: AboutPeek) -> Result<String> {
 pub struct AboutSidebar<'a> {
     pub stats: &'a AboutStats,
     pub has_stats: bool,
+    pub oob: bool,
 }
 
 pub fn sidebar(p: AboutSidebar) -> Result<String> {

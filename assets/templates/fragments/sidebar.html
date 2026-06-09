@@ -1,4 +1,4 @@
-<aside id="ghrm-sidebar" class="ghrm-sidebar" data-loaded="{% if has_stats %}true{% else %}false{% endif %}"{% if !has_stats %} hidden{% endif %}>
+<aside id="ghrm-sidebar" class="ghrm-sidebar" data-loaded="{% if has_stats %}true{% else %}false{% endif %}"{% if oob %} hx-swap-oob="outerHTML"{% endif %}{% if !has_stats %} hidden{% endif %}>
 {% if !stats.metadata.is_empty() %}  <section class="ghrm-about-tile ghrm-about-stats" data-ghrm-sidebar-panel="about" aria-label="Repository metadata">
     <div class="ghrm-about-heading">About</div>
     <dl class="ghrm-stat-list">

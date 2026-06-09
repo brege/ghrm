@@ -602,13 +602,18 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   display: none;
 }
 
-.ghrm-sidebar[hidden] {
-  display: none;
-}
-
 @media (min-width: 1400px) {
+  :root {
+    --ghrm-layout-max: 1360px;
+    --ghrm-layout-pad: 24px;
+    --ghrm-sidebar-width: 320px;
+  }
+
   body.ghrm-layout-explorer .ghrm-about-peek {
-    width: min(calc(1360px - 48px), calc(100% - 48px));
+    width: min(
+      calc(var(--ghrm-layout-max) - var(--ghrm-layout-pad) * 2),
+      calc(100% - var(--ghrm-layout-pad) * 2)
+    );
     margin-bottom: 18px;
     border-right: 1px solid var(--borderColor-default, #d0d7de);
     border-bottom: 1px solid var(--borderColor-default, #d0d7de);
@@ -636,10 +641,10 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   .ghrm-layout.ghrm-layout-explorer {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 24px;
-    max-width: 1360px;
+    gap: var(--ghrm-layout-pad);
+    max-width: var(--ghrm-layout-max);
     margin: 0 auto;
-    padding: 0 24px;
+    padding: 0 var(--ghrm-layout-pad);
   }
 
   .ghrm-layout.ghrm-layout-explorer > article.markdown-body {
@@ -653,7 +658,7 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
     display: flex;
     flex-direction: column;
     gap: 14px;
-    width: 320px;
+    width: var(--ghrm-sidebar-width);
     grid-column: 2;
     align-self: start;
   }

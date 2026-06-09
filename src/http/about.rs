@@ -244,7 +244,7 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
         AboutStats::default()
     };
     if q.sidebar {
-        return Ok(html_response(&shell::sidebar_html(&stats)));
+        return Ok(html_response(&shell::sidebar_html(&stats, false)));
     }
     let local_path = if source == SourceState::NoRepo {
         stats_path.display().to_string()
@@ -254,7 +254,7 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     let details = details_model(&s, &stats_input, &view, &source, raw_query.as_deref()).await?;
 
     let peek_html = html_with_details(&details, &stats, true, &local_path);
-    let sidebar_html = sidebar_oob_html(&stats);
+    let sidebar_html = shell::sidebar_html(&stats, true);
     Ok(html_response(&format!("{peek_html}{sidebar_html}")))
 }
 
@@ -500,14 +500,6 @@ fn served_root(s: &AppState) -> PathBuf {
         Mode::File => s.target.parent().unwrap_or(&s.target).to_path_buf(),
         Mode::Dir => s.target.clone(),
     }
-}
-
-fn sidebar_oob_html(stats: &AboutStats) -> String {
-    shell::sidebar_html(stats).replacen(
-        "id=\"ghrm-sidebar\"",
-        "id=\"ghrm-sidebar\" hx-swap-oob=\"outerHTML\"",
-        1,
-    )
 }
 
 fn html_response(html: &str) -> Response {

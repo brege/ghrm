@@ -637,11 +637,12 @@ async fn render_file(
         &rendered.title
     };
     if hx.is_htmx {
-        return shell::fragment(&body, title, source, &s.runtime_paths, false);
+        return shell::fragment(&body, title, None, source, &s.runtime_paths, false);
     }
     shell::full_page(
         &rendered,
         &body,
+        None,
         source,
         s.auth.is_some(),
         &s.runtime_paths,
@@ -728,11 +729,12 @@ async fn render_source_file(
         &rendered.title
     };
     if hx.is_htmx {
-        return shell::fragment(&body, title, source, &s.runtime_paths, false);
+        return shell::fragment(&body, title, None, source, &s.runtime_paths, false);
     }
     shell::full_page(
         &rendered,
         &body,
+        None,
         source,
         s.auth.is_some(),
         &s.runtime_paths,
@@ -792,11 +794,19 @@ async fn render_dual_file(
     };
     let source = s.repos.source_for(path);
     if hx.is_htmx {
-        return shell::fragment(&body, &rendered.title, source, &s.runtime_paths, false);
+        return shell::fragment(
+            &body,
+            &rendered.title,
+            None,
+            source,
+            &s.runtime_paths,
+            false,
+        );
     }
     shell::full_page(
         &rendered,
         &body,
+        None,
         source,
         s.auth.is_some(),
         &s.runtime_paths,
