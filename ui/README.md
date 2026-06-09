@@ -6,7 +6,7 @@ The UI workspace owns maintained browser source, icon declarations, and the vali
 
 | Path | Purpose |
 | --- | --- |
-| package.json | workspace scripts and Node `>=20` and npm `>=11.10` engine floor |
+| package.json | workspace scripts and Node `>=24` and npm `>=11.10` engine floor |
 | tsconfig.json | TypeScript config for source, icons, and tests |
 | vite.config.js | build graph from `ui/src/` to `assets/js/` plus chunk layout and sprite emission |
 | vitest.config.ts | Happy DOM test harness |
