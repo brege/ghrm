@@ -88,6 +88,7 @@ assets/
 ├── img/
 ├── js.sha256.json
 ├── js.tar.zst
+├── sri.json
 └── templates/
 ui/src/
 ```
@@ -153,16 +154,14 @@ just test
 just fmt
 just precommit
 just build
-just dev <PATH>
 just dev-ui <PATH>
-just run <PATH>
-just dump-config <PATH>
 just install
 just ui
 just ui-build
 just ui-test
 just ui-watch
 just ui-release
+just sri
 ```
 
 Use `just install` when an install is explicitly requested.

@@ -11,14 +11,6 @@ default:
 build:
     cargo build --locked
 
-# build and run ghrm against a target path
-run target=".":
-    cargo run --locked -- "{{target}}"
-
-# run ghrm without opening a browser
-dev target=".":
-    cargo run --locked -- --no-browser "{{target}}"
-
 # run ghrm with ui rebuild watcher
 dev-ui target=".":
     npm --prefix ui run build:runtime && { \
@@ -27,10 +19,6 @@ dev-ui target=".":
         trap "kill $VITE_PID 2>/dev/null" EXIT; \
         cargo run --locked -- --no-browser "{{target}}"; \
     }
-
-# print the resolved ghrm configuration
-dump-config target=".":
-    cargo run --locked -- --dump-config "{{target}}"
 
 # install ghrm from this checkout
 install:
@@ -48,9 +36,6 @@ bench: benchfile::run
 
 # validate ASV benchmark discovery
 bench-check: benchfile::check
-
-# alias for the ASV smoke run
-bench-dry: benchfile::dry
 
 # record the latest commit benchmark and print the report
 bench-record: benchfile::record

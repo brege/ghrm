@@ -29,9 +29,6 @@ run:
     cd .. && cargo build --release --locked
     ASV_BUILD_DIR="$PWD/.." uv run asv run --python=same --quick --show-stderr --dry-run
 
-# alias for the ASV smoke run
-dry: run
-
 # record the latest commit benchmark and print the report
 record:
     uv run asv run HEAD^!
