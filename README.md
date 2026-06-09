@@ -4,6 +4,7 @@
 </p>
 
 <p align="center">
+  <a href="https://crates.io/crates/ghrm"><img src="https://img.shields.io/crates/v/ghrm" alt="crates.io"></a>
   <a href="https://github.com/brege/ghrm/actions/workflows/ci.yml"><img src="https://github.com/brege/ghrm/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License"></a>
 </p>
@@ -59,17 +60,15 @@ You can use `--bind 0.0.0.0` to connect to a ghrm instance from other devices in
 
 ## Install
 
-### Binary (recommended)
-
-Download from the [releases page](https://github.com/brege/ghrm/releases/latest), extract, and add to PATH.
-
-### From source
+### Cargo
 
 ```bash
-cargo install --git https://github.com/brege/ghrm ghrm
+cargo install ghrm
 ```
 
-crates.io coming soon.
+### Binary
+
+Download from the [releases page](https://github.com/brege/ghrm/releases/latest), extract, and add to PATH.
 
 ## Usage
 
