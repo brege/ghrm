@@ -1,6 +1,7 @@
 use crate::explorer::view::ViewQuery;
 use crate::explorer::{view, walk};
 use crate::http::server::{AppState, Mode};
+use crate::http::shell;
 use crate::paths;
 use crate::repo::SourceState;
 use crate::runtime;
@@ -190,6 +191,8 @@ fn stat_display(tool: ghrm_stat::Tool) -> &'static StatDisplay {
 #[derive(Default, Deserialize)]
 pub(crate) struct AboutQuery {
     path: Option<String>,
+    #[serde(default)]
+    sidebar: bool,
     #[serde(flatten)]
     view: ViewQuery,
 }
@@ -240,6 +243,9 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     } else {
         AboutStats::default()
     };
+    if q.sidebar {
+        return Ok(html_response(&shell::sidebar_html(&stats)));
+    }
     let local_path = if source == SourceState::NoRepo {
         stats_path.display().to_string()
     } else {
@@ -247,12 +253,9 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     };
     let details = details_model(&s, &stats_input, &view, &source, raw_query.as_deref()).await?;
 
-    Ok(html_response(&html_with_details(
-        &details,
-        &stats,
-        true,
-        &local_path,
-    )))
+    let peek_html = html_with_details(&details, &stats, true, &local_path);
+    let sidebar_html = sidebar_oob_html(&stats);
+    Ok(html_response(&format!("{peek_html}{sidebar_html}")))
 }
 
 async fn details_model(
@@ -497,6 +500,14 @@ fn served_root(s: &AppState) -> PathBuf {
         Mode::File => s.target.parent().unwrap_or(&s.target).to_path_buf(),
         Mode::Dir => s.target.clone(),
     }
+}
+
+fn sidebar_oob_html(stats: &AboutStats) -> String {
+    shell::sidebar_html(stats).replacen(
+        "id=\"ghrm-sidebar\"",
+        "id=\"ghrm-sidebar\" hx-swap-oob=\"outerHTML\"",
+        1,
+    )
 }
 
 fn html_response(html: &str) -> Response {

@@ -261,6 +261,17 @@ async function loadAboutPeek(): Promise<void> {
     }
     const template = document.createElement('template');
     template.innerHTML = (await response.text()).trim();
+
+    const sidebarEl = template.content.querySelector('#ghrm-sidebar');
+    if (sidebarEl instanceof HTMLElement) {
+      const currentSidebar = document.getElementById('ghrm-sidebar');
+      if (currentSidebar) {
+        sidebarEl.removeAttribute('hx-swap-oob');
+        populateAboutTitles(sidebarEl);
+        currentSidebar.replaceWith(sidebarEl);
+      }
+    }
+
     const nextEl = template.content.firstElementChild;
     if (!(nextEl instanceof HTMLElement) || nextEl.id !== 'ghrm-about-peek') {
       return;

@@ -8,8 +8,10 @@ use askama::Template;
 pub struct PageShell<'a> {
     pub title: &'a str,
     pub body: &'a str,
+    pub layout_class: &'a str,
     pub source: &'a str,
     pub about: &'a str,
+    pub sidebar: &'a str,
     pub show_logout: bool,
     pub gist_nav: &'a str,
     pub asset_json: &'a str,
@@ -258,6 +260,17 @@ pub fn about(p: AboutPeek) -> Result<String> {
     Ok(p.render()?)
 }
 
+#[derive(Template)]
+#[template(path = "fragments/sidebar.html")]
+pub struct AboutSidebar<'a> {
+    pub stats: &'a AboutStats,
+    pub has_stats: bool,
+}
+
+pub fn sidebar(p: AboutSidebar) -> Result<String> {
+    Ok(p.render()?)
+}
+
 pub fn page(ctx: PageCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
@@ -295,8 +308,10 @@ mod tests {
         PageShell {
             title: "Test",
             body: "<article class=\"markdown-body\">content</article>",
+            layout_class: "",
             source: "",
             about: "",
+            sidebar: "",
             show_logout: false,
             gist_nav: "",
             asset_json: "{}",
@@ -513,6 +528,17 @@ mod tests {
                 html.contains("id=\"ghrm-toc-panel\""),
                 "missing #ghrm-toc-panel nav"
             );
+        }
+
+        #[test]
+        fn layout_class_applies_to_header_and_main() {
+            let mut shell = empty_shell();
+            shell.layout_class = "ghrm-layout-explorer";
+            let html = base(shell).unwrap();
+
+            assert!(html.contains("<body class=\"ghrm-layout-explorer\""));
+            assert!(html.contains("<header class=\"ghrm-topbar ghrm-layout-explorer\">"));
+            assert!(html.contains("<main class=\"ghrm-layout ghrm-layout-explorer\">"));
         }
     }
 

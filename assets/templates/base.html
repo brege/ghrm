@@ -37,12 +37,12 @@
   <link rel="stylesheet" href="/_ghrm/assets/css/features.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/admonitions.css">
 </head>
-<body
+<body{% if !layout_class.is_empty() %} class="{{ layout_class }}"{% endif %}
   hx-boost="true"
   hx-target="article.markdown-body"
   hx-swap="outerHTML show:none"
   hx-push-url="true">
-  <header class="ghrm-topbar">
+  <header class="ghrm-topbar{% if !layout_class.is_empty() %} {{ layout_class }}{% endif %}">
     <div class="ghrm-topbar-inner">
 {{ source|safe }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
         <div class="ghrm-search-field">
@@ -91,7 +91,9 @@
   </header>
 {{ about|safe }}
   <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
-{{ body|safe }}{% for src in vendor_scripts %}  <script defer src="{{ src }}"></script>
+  <main class="ghrm-layout{% if !layout_class.is_empty() %} {{ layout_class }}{% endif %}">
+{{ body|safe }}{{ sidebar|safe }}  </main>
+{% for src in vendor_scripts %}  <script defer src="{{ src }}"></script>
 {% endfor %}
   <script type="module" src="/_ghrm/assets/js/preview.js"></script>
   <script type="module" src="/_ghrm/assets/js/main.js"></script>
