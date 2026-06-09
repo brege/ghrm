@@ -111,7 +111,7 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   position: absolute;
   top: 7px;
   right: 8px;
-  z-index: 3;
+  z-index: 50;
 }
 
 .ghrm-about-panel-menu {
