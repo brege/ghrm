@@ -217,18 +217,39 @@ function renderBlob(block: Element): void {
 
   highlightBlobCode(code);
 
+  const source = code.textContent ?? '';
+  if (source === '') {
+    body.innerHTML = '';
+    return;
+  }
+
   const lines = [''];
   for (const child of code.childNodes) {
     pushHighlightedNode(child, lines, []);
   }
 
-  body.innerHTML = lines
-    .map((line, idx) => {
-      const content = line || '&#8203;';
-      const lineNo = idx + 1;
-      return `<tr><td class="ghrm-blob-line-no" data-line-number="${lineNo}"><span class="ghrm-blob-line-no-text">${lineNo}</span></td><td class="ghrm-blob-line-code"><code class="ghrm-blob-line-text">${content}</code></td></tr>`;
-    })
-    .join('');
+  // A terminating newline closes the last line; the empty segment it leaves
+  // behind is not a line of its own. Drop exactly that segment, and mark files
+  // that lack the terminator the way git does, so the line model stays faithful
+  // either way.
+  const terminated = source.endsWith('\n');
+  if (terminated && lines.length > 1 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+
+  const rows = lines.map((line, idx) => {
+    const content = line || '&#8203;';
+    const lineNo = idx + 1;
+    return `<tr><td class="ghrm-blob-line-no" data-line-number="${lineNo}"><span class="ghrm-blob-line-no-text">${lineNo}</span></td><td class="ghrm-blob-line-code"><code class="ghrm-blob-line-text">${content}</code></td></tr>`;
+  });
+
+  if (!terminated) {
+    rows.push(
+      '<tr class="ghrm-blob-eof-row"><td class="ghrm-blob-line-no" aria-hidden="true"></td><td class="ghrm-blob-line-code"><span class="ghrm-blob-eof" title="No newline at end of file">No newline at end of file</span></td></tr>',
+    );
+  }
+
+  body.innerHTML = rows.join('');
 }
 
 export function renderBlobs(): void {

@@ -93,6 +93,15 @@
   overflow-wrap: normal;
 }
 
+.ghrm-blob-eof {
+  display: inline-block;
+  font: inherit;
+  line-height: 20px;
+  color: var(--fgColor-muted, #636c76);
+  font-style: italic;
+  user-select: none;
+}
+
 .ghrm-blob-line-code .hljs span {
   white-space: inherit;
   word-break: inherit;
