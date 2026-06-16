@@ -13,8 +13,6 @@
   >
     {%- if !row.items.is_empty() -%}
     {{- stat_sublist(row.items.as_slice()) -}}
-    {%- else if !row.parts.is_empty() -%}
-    {{- stat_parts(row.parts.as_slice()) -}}
     {%- else if !row.href.is_empty() -%}
     <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
     {%- else -%}
@@ -57,16 +55,6 @@
   ><span>{{ metric.value }}</span>
     {%- if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif -%}
   </span>
-  {%- endfor %}
-</span>
-{%- endmacro %}
-
-{# Slash-separated value segments, e.g. branch / tag or hash / refs #}
-{% macro stat_parts(parts) -%}
-<span class="ghrm-stat-parts">
-  {%- for part in parts %}
-  {%- if part.separator %}<span class="ghrm-stat-separator" aria-hidden="true">/</span>{% endif -%}
-  <span>{{ part.value }}</span>
   {%- endfor %}
 </span>
 {%- endmacro %}

@@ -28,10 +28,11 @@ import {
   GoLightBulb,
   GoLocation,
   GoPeople,
-  GoRepoForked,
   GoScreenFull,
   GoStop,
   GoSync,
+  GoTag,
+  GoVersions,
   GoZoomIn,
   GoZoomOut,
 } from 'react-icons/go';
@@ -54,6 +55,7 @@ import {
   MdUpdate,
   MdWrapText,
 } from 'react-icons/md';
+import { PiGitBranch } from 'react-icons/pi';
 import { RxExternalLink } from 'react-icons/rx';
 import { SiCodeberg, SiSourcehut } from 'react-icons/si';
 import { TbEdit, TbEggCracked, TbListSearch, TbScale } from 'react-icons/tb';
@@ -76,7 +78,9 @@ export const icons: Icon[] = [
   { id: 'ghrm-icon-doc-framed', icon: <MdBorderOuter /> },
   { id: 'ghrm-icon-doc-flat', icon: <MdOutlineBorderClear /> },
   { id: 'ghrm-icon-github', icon: <BsGithub /> },
-  { id: 'ghrm-icon-fork', icon: <GoRepoForked /> },
+  { id: 'ghrm-icon-branch', icon: <PiGitBranch /> },
+  { id: 'ghrm-icon-tag', icon: <GoTag /> },
+  { id: 'ghrm-icon-version', icon: <GoVersions /> },
   { id: 'ghrm-icon-bitbucket', icon: <FaBitbucket /> },
   { id: 'ghrm-icon-gitlab', icon: <FaGitlab /> },
   { id: 'ghrm-icon-codeberg', icon: <SiCodeberg /> },

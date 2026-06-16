@@ -45,15 +45,9 @@ pub struct AboutStatRow {
     pub value: String,
     pub title: String,
     pub title_ts: Option<u64>,
-    pub parts: Vec<AboutStatPart>,
     pub icon: &'static str,
     pub href: String,
     pub items: Vec<AboutStatItem>,
-}
-
-pub struct AboutStatPart {
-    pub value: String,
-    pub separator: bool,
 }
 
 pub struct AboutStatItem {

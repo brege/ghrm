@@ -24,7 +24,7 @@ const obsoleteSourcePaths = [
 const refRoots = ['assets/templates', 'assets/css', 'src', 'ui/src'];
 const productionRoots = ['ui/src'];
 const skippedDirs = new Set(['.asset-check', '.vite-check', 'node_modules']);
-const expectedIconCount = 56;
+const expectedIconCount = 58;
 const spriteOpen = '<svg xmlns="http://www.w3.org/2000/svg">';
 const spriteClose = '</svg>';
 
@@ -37,7 +37,7 @@ interface DynamicAskamaContract {
 const dynamicAskamaContracts: DynamicAskamaContract[] = [
   {
     expression: 'row.icon',
-    template: 'assets/templates/fragments/about.html',
+    template: 'assets/templates/macros/stat.html',
     provider: 'src/http/about.rs',
   },
   {
