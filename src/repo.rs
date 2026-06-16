@@ -13,6 +13,7 @@ pub struct RepoSet {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommitInfo {
     pub subject: String,
+    pub author: String,
     pub timestamp: u64,
 }
 

@@ -50,6 +50,18 @@ pub(crate) const DEFS: &[Def] = &[
         render: render_commit_subject,
     },
     Def {
+        key: "commit_author",
+        config_key: "commit_author",
+        label: "Commit author",
+        title: "Show commit authors",
+        cell_class: "ghrm-nav-meta ghrm-nav-meta-text ghrm-nav-middle-meta",
+        text_class: Some("ghrm-nav-meta-text-value"),
+        edge: false,
+        default_visible: false,
+        requires: MetaReq::COMMIT,
+        render: render_commit_author,
+    },
+    Def {
         key: "commit_date",
         config_key: "commit_date",
         label: "Commit date",
@@ -105,6 +117,7 @@ pub(crate) struct RowMeta<'a> {
     pub(crate) size: Option<u64>,
     pub(crate) lines: Option<u64>,
     pub(crate) commit_subject: Option<&'a str>,
+    pub(crate) commit_author: Option<&'a str>,
     pub(crate) commit_timestamp: Option<u64>,
 }
 
@@ -138,6 +151,10 @@ impl CellValue {
 
 fn render_commit_subject(meta: &RowMeta<'_>) -> CellValue {
     CellValue::text(meta.commit_subject.map(str::to_string))
+}
+
+fn render_commit_author(meta: &RowMeta<'_>) -> CellValue {
+    CellValue::text(meta.commit_author.map(str::to_string))
 }
 
 fn render_commit_timestamp(meta: &RowMeta<'_>) -> CellValue {

@@ -97,7 +97,7 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
     let mut entry_order: Vec<_> = dir.entries.iter().enumerate().collect();
     if matches!(
         view.sort,
-        walk::Sort::CommitMessage | walk::Sort::CommitDate
+        walk::Sort::CommitMessage | walk::Sort::CommitAuthor | walk::Sort::CommitDate
     ) {
         entry_order.sort_by(|(a_idx, a), (b_idx, b)| {
             let a_commit = entry_paths.get(*a_idx).and_then(|path| commits.get(path));
@@ -122,6 +122,7 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
                 size: e.size,
                 lines: e.lines,
                 commit_subject: commit.map(|commit| commit.subject.as_str()),
+                commit_author: commit.map(|commit| commit.author.as_str()),
                 commit_timestamp: commit.map(|commit| commit.timestamp),
             };
             ExplorerEntry {
@@ -266,6 +267,10 @@ fn cmp_commit_entries(
         walk::Sort::CommitMessage => a_commit
             .map(|commit| commit.subject.to_lowercase())
             .cmp(&b_commit.map(|commit| commit.subject.to_lowercase()))
+            .then_with(|| a_name.to_lowercase().cmp(&b_name.to_lowercase())),
+        walk::Sort::CommitAuthor => a_commit
+            .map(|commit| commit.author.to_lowercase())
+            .cmp(&b_commit.map(|commit| commit.author.to_lowercase()))
             .then_with(|| a_name.to_lowercase().cmp(&b_name.to_lowercase())),
         walk::Sort::CommitDate => a_commit
             .map(|commit| commit.timestamp)
@@ -415,6 +420,7 @@ fn sort_header(href: &str, view: &ViewState, cfg: &ViewConfig, sort: walk::Sort)
 fn sort_for_column(key: &str) -> Option<walk::Sort> {
     match key {
         "commit" => Some(walk::Sort::CommitMessage),
+        "commit_author" => Some(walk::Sort::CommitAuthor),
         "commit_date" => Some(walk::Sort::CommitDate),
         "date" => Some(walk::Sort::Timestamp),
         "size" => Some(walk::Sort::Size),

@@ -238,6 +238,7 @@ fn load_path_search_commits(
     for (row, path) in rows.iter_mut().zip(paths) {
         if let Some(commit) = commits.get(&path) {
             row.commit_subject = Some(commit.subject.clone());
+            row.commit_author = Some(commit.author.clone());
             row.commit_timestamp = Some(commit.timestamp);
         }
     }
