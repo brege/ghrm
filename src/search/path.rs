@@ -15,6 +15,7 @@ pub(crate) struct Row {
     pub(crate) lines: Option<u64>,
     pub(crate) commit_subject: Option<String>,
     pub(crate) commit_author: Option<String>,
+    pub(crate) commit_email: Option<String>,
     pub(crate) commit_timestamp: Option<u64>,
 }
 
@@ -173,6 +174,7 @@ fn visit_tree_rows(spec: &TreeSpec<'_>, needle: &str, mut visit: impl FnMut(Row)
                 lines: entry.lines,
                 commit_subject: None,
                 commit_author: None,
+                commit_email: None,
                 commit_timestamp: None,
             });
         }
@@ -236,6 +238,7 @@ fn visit_nav_rows(nav: &NavSet, spec: &NavSpec<'_>, needle: &str, mut visit: imp
             },
             commit_subject: None,
             commit_author: None,
+            commit_email: None,
             commit_timestamp: None,
         });
     }

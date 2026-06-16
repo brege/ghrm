@@ -118,6 +118,7 @@ pub(crate) struct RowMeta<'a> {
     pub(crate) lines: Option<u64>,
     pub(crate) commit_subject: Option<&'a str>,
     pub(crate) commit_author: Option<&'a str>,
+    pub(crate) commit_email: Option<&'a str>,
     pub(crate) commit_timestamp: Option<u64>,
 }
 
@@ -131,6 +132,7 @@ impl RowMeta<'_> {
 struct CellValue {
     text: Option<String>,
     timestamp: Option<u64>,
+    title: Option<String>,
 }
 
 impl CellValue {
@@ -138,6 +140,7 @@ impl CellValue {
         Self {
             text,
             timestamp: None,
+            title: None,
         }
     }
 
@@ -145,7 +148,13 @@ impl CellValue {
         Self {
             text: None,
             timestamp,
+            title: None,
         }
+    }
+
+    fn with_title(mut self, title: Option<String>) -> Self {
+        self.title = title;
+        self
     }
 }
 
@@ -155,6 +164,7 @@ fn render_commit_subject(meta: &RowMeta<'_>) -> CellValue {
 
 fn render_commit_author(meta: &RowMeta<'_>) -> CellValue {
     CellValue::text(meta.commit_author.map(str::to_string))
+        .with_title(meta.commit_email.map(str::to_string))
 }
 
 fn render_commit_timestamp(meta: &RowMeta<'_>) -> CellValue {
@@ -194,6 +204,7 @@ pub(crate) struct Cell {
     pub(crate) text_class: Option<&'static str>,
     pub(crate) text: Option<String>,
     pub(crate) timestamp: Option<u64>,
+    pub(crate) title: Option<String>,
     pub(crate) hidden: bool,
 }
 
@@ -247,6 +258,7 @@ impl Set {
             text_class: def.text_class,
             text: value.text,
             timestamp: value.timestamp,
+            title: value.title,
             hidden: !self.is_visible(def),
         }
     }

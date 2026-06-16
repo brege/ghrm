@@ -123,6 +123,7 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
                 lines: e.lines,
                 commit_subject: commit.map(|commit| commit.subject.as_str()),
                 commit_author: commit.map(|commit| commit.author.as_str()),
+                commit_email: commit.map(|commit| commit.email.as_str()),
                 commit_timestamp: commit.map(|commit| commit.timestamp),
             };
             ExplorerEntry {

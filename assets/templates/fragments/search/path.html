@@ -7,7 +7,7 @@
     </svg>
   </td>
   <td class="ghrm-nav-name"><a class="ghrm-search-path" href="{{ row.href }}">{{ row.html|safe }}</a></td>
-{% for cell in row.cells %}  <td class="{{ cell.class }}" data-column-key="{{ cell.key }}"{% if cell.hidden %} hidden{% endif %}{% if let Some(ts) = cell.timestamp %} data-ts="{{ ts }}"{% endif %}>{% if let Some(text) = cell.text %}{% if let Some(class) = cell.text_class %}<span class="{{ class }}">{{ text }}</span>{% else %}{{ text }}{% endif %}{% endif %}</td>
+{% for cell in row.cells %}  <td class="{{ cell.class }}" data-column-key="{{ cell.key }}"{% if cell.hidden %} hidden{% endif %}{% if let Some(ts) = cell.timestamp %} data-ts="{{ ts }}"{% endif %}{% if let Some(title) = cell.title %} title="{{ title }}"{% endif %}>{% if let Some(text) = cell.text %}{% if let Some(class) = cell.text_class %}<span class="{{ class }}">{{ text }}</span>{% else %}{{ text }}{% endif %}{% endif %}</td>
 {% endfor %}
 </tr>
 {% endfor %}{% endif %}

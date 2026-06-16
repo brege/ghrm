@@ -751,6 +751,7 @@ mod tests {
                 text_class: None,
                 text: None,
                 timestamp: Some(1700000000),
+                title: None,
                 hidden: false,
             }];
             let entries = [ExplorerEntry {
@@ -990,6 +991,7 @@ mod tests {
                 text_class: None,
                 text: None,
                 timestamp: Some(1700000000),
+                title: None,
                 hidden: false,
             }];
             static ROWS: [PathSearchRow<'static>; 1] = [PathSearchRow {
