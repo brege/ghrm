@@ -1,72 +1,110 @@
 <article class="markdown-body ghrm-has-edge-meta" hx-history-elt data-ghrm-features="" data-ghrm-gist-stash>
   <ghrm-gist-stash>
-  <section class="ghrm-explorer-shell">
-    <div class="ghrm-explorer-header">
-      <nav class="ghrm-breadcrumbs" aria-label="Path">
-        <a href="/_ghrm/gist">gist</a>
-        <span class="ghrm-crumb-sep">/</span>
-        <span class="ghrm-crumb-current">stash</span>
-      </nav>
-      <div class="ghrm-header-actions">
-        <div class="ghrm-file-tools">
-          <div class="ghrm-file-toggles">
-            <a class="ghrm-file-toggle" href="/_ghrm/gist" aria-label="Open current paste" title="Open current paste">
-              <svg class="ghrm-file-icon" aria-hidden="true" focusable="false" height="16" width="16">
-                <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-note"></use>
-              </svg>
-            </a>
+    <section class="ghrm-explorer-shell">
+      <div class="ghrm-explorer-header">
+        <nav class="ghrm-breadcrumbs" aria-label="Path">
+          <a href="/_ghrm/gist">gist</a>
+          <span class="ghrm-crumb-sep">/</span>
+          <span class="ghrm-crumb-current">stash</span>
+        </nav>
+        <div class="ghrm-header-actions">
+          <div class="ghrm-file-tools">
+            <div class="ghrm-file-toggles">
+              <a
+                class="ghrm-file-toggle"
+                href="/_ghrm/gist"
+                aria-label="Open current paste"
+                title="Open current paste"
+              >
+                <svg
+                  class="ghrm-file-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-note"></use>
+                </svg>
+              </a>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-{% if entries.is_empty() %}    <p class="ghrm-nav-empty">No pastes found.</p>
-{% else %}    <table class="ghrm-nav-table">
-      <colgroup>
-        <col class="ghrm-nav-icon-col">
-        <col class="ghrm-nav-name-col">
-        <col class="ghrm-nav-col" data-column-key="date">
-        <col class="ghrm-nav-col" data-column-key="size">
-        <col class="ghrm-nav-col" data-column-key="lines">
-      </colgroup>
-      <thead class="ghrm-column-headers">
-        <tr>
-          <th class="ghrm-nav-name" colspan="2">Name</th>
-          <th class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta" data-column-key="date">Modified date</th>
-          <th class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="size">Size</th>
-          <th class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="lines">Lines</th>
-        </tr>
-      </thead>
-      <tbody>
-{% for e in entries %}        <tr data-ghrm-gist-row data-ghrm-gist-id="{{ e.id }}">
-          <td class="ghrm-nav-icon">
-            <svg aria-hidden="true" focusable="false" class="octicon">
-              <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-file"></use>
-            </svg>
-          </td>
-          <td class="ghrm-nav-name ghrm-gist-name-cell">
-            <a href="{{ e.href }}" data-ghrm-gist-row-link>{{ e.name }}</a>
-            <span class="ghrm-gist-row-seat">
-{% if e.current %}              <span class="ghrm-gist-current-badge" aria-label="Current paste" title="Current paste">
-                <svg aria-hidden="true" focusable="false">
-                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-right"></use>
-                </svg>
-                <svg aria-hidden="true" focusable="false">
-                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-right"></use>
-                </svg>
+      {% if entries.is_empty() %}
+      <p class="ghrm-nav-empty">No pastes found.</p>
+      {% else %}
+      <table class="ghrm-nav-table">
+        <colgroup>
+          <col class="ghrm-nav-icon-col">
+          <col class="ghrm-nav-name-col">
+          <col class="ghrm-nav-col" data-column-key="date">
+          <col class="ghrm-nav-col" data-column-key="size">
+          <col class="ghrm-nav-col" data-column-key="lines">
+        </colgroup>
+        <thead class="ghrm-column-headers">
+          <tr>
+            <th class="ghrm-nav-name" colspan="2">Name</th>
+            <th class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta" data-column-key="date">
+              Modified date
+            </th>
+            <th class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="size">
+              Size
+            </th>
+            <th class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="lines">
+              Lines
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          <tr data-ghrm-gist-row data-ghrm-gist-id="{{ e.id }}">
+            <td class="ghrm-nav-icon">
+              <svg aria-hidden="true" focusable="false" class="octicon">
+                <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-file"></use>
+              </svg>
+            </td>
+            <td class="ghrm-nav-name ghrm-gist-name-cell">
+              <a href="{{ e.href }}" data-ghrm-gist-row-link>{{ e.name }}</a>
+              <span class="ghrm-gist-row-seat">
+                {% if e.current %}
+                <span class="ghrm-gist-current-badge" aria-label="Current paste" title="Current paste">
+                  <svg aria-hidden="true" focusable="false">
+                    <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-right"></use>
+                  </svg>
+                  <svg aria-hidden="true" focusable="false">
+                    <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-right"></use>
+                  </svg>
+                </span>
+                {% endif %}
+                <button
+                  type="button"
+                  class="ghrm-gist-row-edit"
+                  data-ghrm-gist-rename-start
+                  aria-label="Rename paste"
+                  title="Rename paste"
+                >
+                  <svg aria-hidden="true" focusable="false">
+                    <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-edit"></use>
+                  </svg>
+                </button>
               </span>
-{% endif %}              <button type="button" class="ghrm-gist-row-edit" data-ghrm-gist-rename-start aria-label="Rename paste" title="Rename paste">
-                <svg aria-hidden="true" focusable="false">
-                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-edit"></use>
-                </svg>
-              </button>
-            </span>
-          </td>
-          <td class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta" data-column-key="date"{% if let Some(ts) = e.modified %} data-ts="{{ ts }}"{% endif %}></td>
-          <td class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="size">{{ e.size }}</td>
-          <td class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="lines">{{ e.lines }}</td>
-        </tr>
-{% endfor %}      </tbody>
-    </table>
-{% endif %}  </section>
+            </td>
+            <td
+              class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta"
+              data-column-key="date"
+              {%- if let Some(ts) = e.modified %} data-ts="{{ ts }}"{% endif %}
+            ></td>
+            <td class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="size">
+              {{ e.size }}
+            </td>
+            <td class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="lines">
+              {{ e.lines }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </section>
   </ghrm-gist-stash>
 </article>

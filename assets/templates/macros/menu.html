@@ -1,0 +1,80 @@
+{% macro check_icon() -%}
+<svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
+  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+</svg>
+{%- endmacro %}
+
+{% macro filter_option(option) -%}
+<a
+  class="ghrm-view-option{% if option.active %} is-active{% endif %}{% if option.group %} ghrm-view-group{% endif %}{% if option.separator %} ghrm-view-separated{% endif %}"
+  href="{{ option.href }}"
+  role="menuitemcheckbox"
+  aria-checked="{% if option.active %}true{% else %}false{% endif %}"
+  title="{{ option.title }}"
+  {%- if option.hidden %} hidden{% endif %}
+>
+  {{- check_icon() -}}
+  <span class="ghrm-view-option-label">{{ option.label }}</span>
+</a>
+{%- endmacro %}
+
+{% macro column_option(column) -%}
+<a
+  class="ghrm-view-option{% if column.active %} is-active{% endif %}"
+  href="{{ column.href }}"
+  data-column-toggle="{{ column.key }}"
+  data-column-edge="{% if column.edge %}1{% else %}0{% endif %}"
+  role="menuitemcheckbox"
+  aria-checked="{% if column.active %}true{% else %}false{% endif %}"
+  title="{{ column.title }}"
+>
+  {{- check_icon() -}}
+  <span class="ghrm-view-option-label">{{ column.label }}</span>
+</a>
+{%- endmacro %}
+
+{% macro panel_option(key, label, title) -%}
+<button
+  class="ghrm-view-option is-active"
+  type="button"
+  data-ghrm-about-panel-option="{{ key }}"
+  role="menuitemcheckbox"
+  aria-checked="true"
+  title="{{ title }}"
+>
+  {{- check_icon() -}}
+  <span class="ghrm-view-option-label">{{ label }}</span>
+</button>
+{%- endmacro %}
+
+{% macro menu_link(href, icon, label, title) -%}
+<a
+  class="ghrm-view-option ghrm-about-menu-link"
+  href="{{ href }}"
+  target="_blank"
+  rel="noopener noreferrer"
+  role="menuitem"
+  title="{{ title }}"
+>
+  <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
+    <use href="/_ghrm/assets/js/icons.svg#{{ icon }}"></use>
+  </svg>
+  <span class="ghrm-view-option-label">{{ label }}</span>
+</a>
+{%- endmacro %}
+
+{% macro release_link(href, version) -%}
+<a
+  class="ghrm-view-option ghrm-about-menu-link"
+  href="{{ href }}"
+  target="_blank"
+  rel="noopener noreferrer"
+  role="menuitem"
+  title="Open ghrm v{{ version }}"
+>
+  <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
+    <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-version"></use>
+  </svg>
+  <span class="ghrm-view-option-label">v{{ version }}</span>
+</a>
+{%- endmacro %}

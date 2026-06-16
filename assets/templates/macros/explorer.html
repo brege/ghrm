@@ -1,0 +1,31 @@
+{% macro empty_row(message, colspan) -%}
+<tr class="ghrm-search-empty">
+  <td colspan="{{ colspan }}">{{ message }}</td>
+</tr>
+{%- endmacro %}
+
+{% macro icon_cell(is_dir) -%}
+<td class="ghrm-nav-icon">
+  <svg aria-hidden="true" focusable="false" class="octicon">
+    <use href="/_ghrm/assets/js/icons.svg#{% if is_dir %}ghrm-icon-dir{% else %}ghrm-icon-file{% endif %}"></use>
+  </svg>
+</td>
+{%- endmacro %}
+
+{% macro data_cell(cell) -%}
+<td
+  class="{{ cell.class }}"
+  data-column-key="{{ cell.key }}"
+  {%- if cell.hidden %} hidden{% endif -%}
+  {%- if let Some(ts) = cell.timestamp %} data-ts="{{ ts }}"{% endif -%}
+  {%- if let Some(title) = cell.title %} title="{{ title }}"{% endif -%}
+>
+  {%- if let Some(text) = cell.text %}
+    {%- if let Some(class) = cell.text_class %}
+    <span class="{{ class }}">{{ text }}</span>
+    {%- else -%}
+    {{ text }}
+    {%- endif %}
+  {%- endif %}
+</td>
+{%- endmacro %}
