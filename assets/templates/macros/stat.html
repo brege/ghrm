@@ -5,7 +5,7 @@
 <dd{% if !row.title.is_empty() %} title="{{ row.title }}"{% endif %}{% if let Some(ts) = row.title_ts %} data-ghrm-title-ts="{{ ts }}"{% endif %}>
 {% if !row.items.is_empty() %}<dl class="ghrm-stat-sublist">
 {% for item in row.items %}<div>
-<dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
+<dt title="{{ item.label }}">{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
 <dd>{% if !item.metrics.is_empty() %}<span class="ghrm-stat-metrics">{% for metric in item.metrics %}<span class="ghrm-stat-metric"{% if !metric.title.is_empty() %} title="{{ metric.title }}"{% endif %}><span>{{ metric.value }}</span>{% if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif %}</span>{% endfor %}</span>{% else %}{{ item.value }}{% endif %}</dd>
 </div>
 {% endfor %}</dl>

@@ -227,7 +227,7 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   margin: 0;
   display: grid;
   grid-template-columns: minmax(92px, max-content) minmax(0, 1fr);
-  gap: 5px 24px;
+  gap: 5px 12px;
 }
 
 .ghrm-stat-row {
@@ -272,13 +272,22 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 }
 
 .ghrm-stat-parts {
-  display: inline-flex;
-  flex-wrap: wrap;
+  display: flex;
+  min-width: 0;
+  flex-wrap: nowrap;
   gap: 0 8px;
   align-items: baseline;
 }
 
+.ghrm-stat-parts > span:not(.ghrm-stat-separator) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ghrm-stat-separator {
+  flex: 0 0 auto;
   color: var(--fgColor-muted, #636c76);
 }
 
@@ -287,7 +296,7 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   margin: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;
-  gap: 4px 18px;
+  gap: 4px 12px;
   align-items: baseline;
 }
 
@@ -300,8 +309,9 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   grid-column: 1;
   color: var(--fgColor-default, #1f2328);
   font-weight: 500;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .ghrm-stat-sublist dt a {
