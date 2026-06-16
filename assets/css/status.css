@@ -649,7 +649,9 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 
   .ghrm-layout.ghrm-layout-explorer > article.markdown-body {
     grid-column: 1;
+    min-width: 0;
     max-width: none;
+    margin-inline: 0;
     padding-left: 0;
     padding-right: 0;
   }
