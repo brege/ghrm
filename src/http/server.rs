@@ -764,17 +764,19 @@ async fn render_dual_file(
     let ext = path.extension().and_then(|s| s.to_str());
     let native_url = format!("/{}", rel.trim_matches('/'));
     let preview_html = dual_preview_html(ext, &native_url, filename);
+    let raw_rendered = render::render_text(filename, &text);
     let rendered = Rendered {
         html: preview_html.clone(),
         title: filename.to_string(),
-        lang: ext.map(String::from),
+        langs: raw_rendered.langs,
+        lang: raw_rendered.lang,
         has_mermaid: false,
         has_math: false,
         has_map: false,
     };
     let features = vendor::feature_list(&rendered);
     let crumbs = page_crumbs(s, path, root, rel, &view);
-    let raw_html = delivery::raw_blob_html(&text, ext);
+    let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
     let file_view = delivery::FileView::dual();
     let view_attrs = delivery::file_view_attrs(rel, file_view);
     let body = match tmpl::page(tmpl::PageCtx {

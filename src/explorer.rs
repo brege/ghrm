@@ -179,13 +179,14 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
     let archive_zip_href = archive_href("zip", rel, &view, &s.view_cfg);
     let archive_tar_zst_href = archive_href("tar.zst", rel, &view, &s.view_cfg);
     let controls = build_controls(&current_href, &view, &s.view_cfg, &s.filters);
-    let (has_mermaid, has_math, has_map) = readme_rendered
+    let (has_mermaid, has_math, has_map, langs) = readme_rendered
         .as_ref()
-        .map(|r| (r.has_mermaid, r.has_math, r.has_map))
-        .unwrap_or_default();
+        .map(|r| (r.has_mermaid, r.has_math, r.has_map, r.langs.clone()))
+        .unwrap_or_else(|| (false, false, false, Vec::new()));
     let combined = Rendered {
         html: String::new(),
         title,
+        langs,
         lang: None,
         has_mermaid,
         has_math,

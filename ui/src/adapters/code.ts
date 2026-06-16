@@ -62,11 +62,13 @@ const SHELL_BUILTINS = new Set([
   'unset',
   'wait',
 ]);
+let customLanguagesRegistered = false;
 
 export function renderCode(): void {
   if (typeof window.hljs?.highlightElement !== 'function') {
     return;
   }
+  registerCustomLanguages();
 
   for (const code of qselAll('.markdown-body pre code')) {
     const hasLanguage = [...code.classList].some((name) =>
@@ -96,9 +98,69 @@ function highlightBlobCode(code: HTMLElement): void {
     return;
   }
 
+  registerCustomLanguages();
   window.hljs.highlightElement(code);
   normalizeShellHighlight(code);
   code.dataset.ghrmHighlighted = '1';
+}
+
+function registerCustomLanguages(): void {
+  if (customLanguagesRegistered) {
+    return;
+  }
+  if (typeof window.hljs?.registerLanguage !== 'function') {
+    return;
+  }
+  window.hljs.registerLanguage('just', justLanguage);
+  customLanguagesRegistered = true;
+}
+
+function justLanguage(): Record<string, unknown> {
+  return {
+    name: 'Just',
+    aliases: ['justfile'],
+    keywords: {
+      keyword: 'alias export if import mod set shell tempfile unstable',
+      literal: 'false true',
+    },
+    contains: [
+      { className: 'comment', begin: /#/, end: /$/ },
+      {
+        className: 'section',
+        begin:
+          /^[A-Za-z_][\w-]*(?:::[A-Za-z_][\w-]*)*(?:\s+[A-Za-z_][\w-]*)*\s*:/,
+      },
+      {
+        className: 'attr',
+        begin: /^[A-Za-z_][\w-]*\s*(?::=|\+=|=\s)/,
+      },
+      {
+        className: 'variable',
+        begin: /\{\{/,
+        end: /\}\}/,
+      },
+      {
+        begin: /^[ \t]+/,
+        end: /$/,
+        subLanguage: 'shell',
+      },
+      {
+        className: 'string',
+        variants: [
+          {
+            begin: /"/,
+            end: /"/,
+            contains: [{ begin: /\\./ }],
+          },
+          {
+            begin: /'/,
+            end: /'/,
+            contains: [{ begin: /\\./ }],
+          },
+        ],
+      },
+    ],
+  };
 }
 
 function openTag(node: Element): string {

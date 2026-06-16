@@ -93,6 +93,24 @@ fn code_block_plain_no_inline_style() {
 }
 
 #[test]
+fn fenced_language_aliases_normalize() {
+    let md = "```ps1\nGet-ChildItem\n```\n```justfile\nbuild:\n  cargo test\n```\n";
+    let r = render_at(md, None);
+    assert!(
+        r.html
+            .contains(r#"class="language-powershell" data-lang="powershell""#),
+        "{}",
+        r.html
+    );
+    assert!(
+        r.html.contains(r#"class="language-just" data-lang="just""#),
+        "{}",
+        r.html
+    );
+    assert_eq!(r.langs, vec!["just".to_string(), "powershell".to_string()]);
+}
+
+#[test]
 fn local_image_url_rewrites_from_source_dir() {
     let md = "![img](./assets/diagram.png)\n";
     let root = Path::new("/repo");
@@ -159,15 +177,19 @@ fn shebang_detection() {
     let cases = [
         ("#!/bin/bash\n", "bash"),
         ("#!/bin/sh\n", "sh"),
-        ("#!/bin/zsh\n", "zsh"),
+        ("#!/bin/zsh\n", "bash"),
+        ("#!/bin/ksh\n", "bash"),
         ("#!/usr/bin/env python3\n", "python"),
         ("#!/usr/bin/env python3 -u\n", "python"),
         ("#!/usr/bin/env node\n", "javascript"),
         ("#!/usr/bin/env ruby\n", "ruby"),
         ("#!/usr/bin/perl\n", "perl"),
         ("#!/bin/awk -f\n", "awk"),
+        ("#!/usr/bin/env fish\n", "shell"),
         ("#!/usr/bin/env lua\n", "lua"),
         ("#!/usr/bin/env deno run\n", "javascript"),
+        ("#!/usr/bin/env escript\n", "erlang"),
+        ("#!/usr/bin/env racket\n", "scheme"),
         ("#!/usr/local/bin/bash\n", "bash"),
     ];
     for (shebang, expected) in cases {
@@ -189,5 +211,42 @@ fn shebang_detection() {
     assert!(
         !r.html.contains("language-"),
         "no shebang or extension means no lang"
+    );
+}
+
+#[test]
+fn filename_and_extension_detection_normalize() {
+    let cases = [
+        ("Justfile", "just"),
+        ("Dockerfile", "dockerfile"),
+        ("Makefile", "makefile"),
+        ("CMakeLists.txt", "cmake"),
+        ("Rakefile", "ruby"),
+        ("Gemfile", "ruby"),
+        ("build.ps1", "powershell"),
+        ("mix.exs", "elixir"),
+        ("Main.hs", "haskell"),
+        ("icon.svg", "xml"),
+        ("script.zsh", "bash"),
+        ("script.ksh", "bash"),
+        ("main.ml", "ocaml"),
+        ("deps.edn", "clojure"),
+        ("flake.nix", "nix"),
+        ("script.just", "just"),
+    ];
+
+    for (filename, expected) in cases {
+        let r = render_text(filename, "body\n");
+        let needle = format!(r#"class="language-{expected}""#);
+        assert!(
+            r.html.contains(&needle),
+            "filename {filename:?} should detect {expected}"
+        );
+    }
+
+    let r = render_text("cleanup.sed", "s/foo/bar/\n");
+    assert!(
+        !r.html.contains("language-"),
+        "sed should stay plaintext without a supported grammar"
     );
 }
