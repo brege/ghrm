@@ -122,6 +122,7 @@ fn show_paste(
     let rendered = Rendered {
         html: String::new(),
         title: title.to_string(),
+        langs: Vec::new(),
         lang: None,
         has_mermaid: false,
         has_math: false,
@@ -216,6 +217,7 @@ pub(crate) async fn stash(State(s): State<AppState>, headers: HeaderMap) -> Resp
     let rendered = Rendered {
         html: String::new(),
         title: title.to_string(),
+        langs: Vec::new(),
         lang: None,
         has_mermaid: false,
         has_math: false,

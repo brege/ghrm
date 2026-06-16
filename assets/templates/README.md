@@ -6,13 +6,13 @@ The template tree owns document structure for server rendered pages and fragment
 
 | Path | Purpose |
 | --- | --- |
-| base.html | full document shell and shared page chrome |
-| page.html | rendered file page shell |
-| explorer.html | explorer table and README layout |
-| gist.html | gist editor page |
-| gist_stash.html | gist stash listing |
-| fragments/ | partial responses and shared template fragments |
-| macros/ | shared Askama macros grouped by feature |
+| [base.html](base.html) | full document shell and shared page chrome |
+| [page.html](page.html) | rendered file page shell |
+| [explorer.html](explorer.html) | explorer table and README layout |
+| [gist.html](gist.html) | gist editor page |
+| [gist_stash.html](gist_stash.html) | gist stash listing |
+| [fragments/](fragments/) | partial responses and shared template fragments |
+| [macros/](macros/) | shared Askama macros grouped by feature |
 
 ## Formatting
 
@@ -26,7 +26,7 @@ The template tree owns document structure for server rendered pages and fragment
 ## Macros
 
 - extract a macro when the same structural HTML pattern appears 3 or more times
-- group related macros in one file under `macros/`, not one file per macro
+- group related macros in one file under [macros/](macros/), not one file per macro
 - keep guard conditions inside the macro when callers should be able to invoke it unconditionally
 - prefer macros for repeated server rendered structure, not browser code
 
@@ -35,4 +35,4 @@ The template tree owns document structure for server rendered pages and fragment
 - preserve existing class names, data attributes, and DOM structure unless the change is intentionally structural
 - keep Rust view models and Askama templates aligned, do not shift data shaping into JavaScript to avoid template work
 - keep Lit islands and runtime modules focused on behavior after render
-- do not hand edit generated runtime files under `assets/js/`
+- do not hand edit generated runtime files under [assets/js/](../js/)

@@ -14,6 +14,28 @@ use std::{
 };
 
 const COMMON_FEATURE: &str = "common";
+const HIGHLIGHT_FEATURES: &[(&str, &str)] = &[
+    ("applescript", "hljs-applescript"),
+    ("awk", "hljs-awk"),
+    ("clojure", "hljs-clojure"),
+    ("cmake", "hljs-cmake"),
+    ("crystal", "hljs-crystal"),
+    ("dart", "hljs-dart"),
+    ("dockerfile", "hljs-dockerfile"),
+    ("elixir", "hljs-elixir"),
+    ("erlang", "hljs-erlang"),
+    ("groovy", "hljs-groovy"),
+    ("haskell", "hljs-haskell"),
+    ("julia", "hljs-julia"),
+    ("lisp", "hljs-lisp"),
+    ("nim", "hljs-nim"),
+    ("nix", "hljs-nix"),
+    ("ocaml", "hljs-ocaml"),
+    ("powershell", "hljs-powershell"),
+    ("scheme", "hljs-scheme"),
+    ("scala", "hljs-scala"),
+    ("tcl", "hljs-tcl"),
+];
 
 struct RenderedFeature {
     vendor_feature: &'static str,
@@ -51,10 +73,25 @@ pub fn client_json() -> &'static str {
 }
 
 fn feature_names(r: &Rendered) -> Vec<&'static str> {
-    RENDERED_FEATURES
+    let mut names: Vec<_> = RENDERED_FEATURES
         .iter()
         .filter_map(|f| (f.flag)(r).then_some(f.vendor_feature))
-        .collect()
+        .collect();
+    let mut seen = BTreeSet::new();
+    for lang in &r.langs {
+        if let Some(feature) = highlight_feature(lang)
+            && seen.insert(feature)
+        {
+            names.push(feature);
+        }
+    }
+    names
+}
+
+fn highlight_feature(lang: &str) -> Option<&'static str> {
+    HIGHLIGHT_FEATURES
+        .iter()
+        .find_map(|(name, feature)| (*name == lang).then_some(*feature))
 }
 
 pub fn dir() -> Result<PathBuf> {
@@ -331,6 +368,7 @@ mod tests {
         Rendered {
             html: String::new(),
             title: String::new(),
+            langs: Vec::new(),
             lang: None,
             has_mermaid,
             has_math,
@@ -385,6 +423,42 @@ mod tests {
                 "flags ({mermaid}, {math}, {map}) should produce {expected:?}"
             );
         }
+    }
+
+    #[test]
+    fn feature_list_maps_highlight_languages_to_vendor_keys() {
+        let rendered = Rendered {
+            html: String::new(),
+            title: String::new(),
+            langs: vec!["powershell".to_string(), "just".to_string()],
+            lang: None,
+            has_mermaid: false,
+            has_math: false,
+            has_map: false,
+        };
+        assert_eq!(feature_list(&rendered), "hljs-powershell");
+    }
+
+    #[test]
+    fn plan_includes_highlight_language_assets() {
+        let rendered = Rendered {
+            html: String::new(),
+            title: String::new(),
+            langs: vec!["dockerfile".to_string(), "powershell".to_string()],
+            lang: None,
+            has_mermaid: false,
+            has_math: false,
+            has_map: false,
+        };
+        let plan = plan(&rendered);
+        assert!(
+            plan.scripts
+                .contains(&manifest().public_url("highlightjs/languages/dockerfile.min.js"))
+        );
+        assert!(
+            plan.scripts
+                .contains(&manifest().public_url("highlightjs/languages/powershell.min.js"))
+        );
     }
 
     #[test]
