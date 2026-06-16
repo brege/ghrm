@@ -9,6 +9,7 @@ let active = 0;
 let connected = false;
 let peekOpen = false;
 let aboutPanelMenuSetup = false;
+let statusPeekSetup = false;
 
 const ABOUT_PANEL_PREF = 'ghrm-about-hidden-panels';
 const ABOUT_PANELS = new Set([
@@ -350,17 +351,21 @@ export function syncServerStatus(): void {
 
 export function setupStatusPeek(): void {
   setupAboutPanelMenu();
+  populateAboutTitles();
+  sync();
+  if (statusPeekSetup) return;
+  statusPeekSetup = true;
+
   document.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
     if (!target.closest('.ghrm-source-badge')) return;
     event.preventDefault();
+    event.stopImmediatePropagation();
     peekOpen = !peekOpen;
     if (peekOpen) {
       void loadAboutPeek();
     }
     sync();
   });
-  populateAboutTitles();
-  sync();
 }

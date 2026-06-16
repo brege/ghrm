@@ -1,8 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { applyAboutPanelPrefs, toggleAboutPanel } from '../status';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  applyAboutPanelPrefs,
+  setupStatusPeek,
+  toggleAboutPanel,
+} from '../status';
 
 function renderAboutPanels(): void {
   document.body.innerHTML = `
+    <span id="ghrm-source-slot" class="ghrm-source-link is-muted">
+      <button type="button" class="ghrm-source-badge" aria-expanded="false" aria-controls="ghrm-about-peek"></button>
+      <span class="ghrm-source-text"><span class="ghrm-source-value">git repo / no remote</span></span>
+    </span>
     <section id="ghrm-about-peek">
       <div id="ghrm-about-panel-menu">
         <div class="ghrm-about-menu-section" role="group">
@@ -42,6 +50,12 @@ describe('about panel chooser', () => {
   beforeEach(() => {
     localStorage.clear();
     renderAboutPanels();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
   });
 
   it('toggles panel visibility and option check state', () => {
@@ -92,5 +106,28 @@ describe('about panel chooser', () => {
 
     const section = must<HTMLElement>('.ghrm-about-menu-section');
     expect(section.hidden).toBe(true);
+  });
+
+  it('does not double-toggle the status peek when setup runs twice', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+        }),
+      ),
+    );
+
+    setupStatusPeek();
+    setupStatusPeek();
+
+    const button = must<HTMLElement>('.ghrm-source-badge');
+    const peek = must<HTMLElement>('#ghrm-about-peek');
+
+    button.click();
+
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(peek.hidden).toBe(false);
+    expect(document.body.classList.contains('ghrm-about-open')).toBe(true);
   });
 });

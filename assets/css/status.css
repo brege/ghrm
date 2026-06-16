@@ -165,21 +165,20 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 .ghrm-about-scope dl {
   min-width: 0;
   margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 24px;
+  display: grid;
+  grid-template-columns: minmax(88px, max-content) minmax(0, 1fr);
+  gap: 6px 12px;
 }
 
 .ghrm-about-scope div {
   min-width: 0;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
+  display: contents;
 }
 
 .ghrm-about-scope dt {
   color: var(--fgColor-muted, #636c76);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .ghrm-about-scope dd {
