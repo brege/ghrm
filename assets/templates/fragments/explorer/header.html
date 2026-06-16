@@ -1,64 +1,114 @@
-  <div class="ghrm-explorer-header">
-    <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs|safe }}</nav>
-    <div class="ghrm-header-actions">
-      <div class="ghrm-menu-shell">
-        <button id="ghrm-view-menu-toggle" class="ghrm-view-menu-toggle{% if filter_menu_active %} is-active{% endif %}" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Filter files" title="Filter files">
-          <svg aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-filter"></use>
-          </svg>
-        </button>
-        <div id="ghrm-view-menu" class="ghrm-view-menu" role="menu" aria-label="Filter files" hidden>
-{% for option in filter_controls %}          <a class="ghrm-view-option{% if option.active %} is-active{% endif %}{% if option.group %} ghrm-view-group{% endif %}{% if option.separator %} ghrm-view-separated{% endif %}" href="{{ option.href }}" role="menuitemcheckbox" aria-checked="{% if option.active %}true{% else %}false{% endif %}" title="{{ option.title }}"{% if option.hidden %} hidden{% endif %}>
-            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-              <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-            </svg>
-            <span class="ghrm-view-option-label">{{ option.label }}</span>
-          </a>
-{% endfor %}
-        </div>
+{% import "macros/menu.html" as menu %}
+<div class="ghrm-explorer-header">
+  <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs|safe }}</nav>
+  <div class="ghrm-header-actions">
+    <div class="ghrm-menu-shell">
+      <button
+        id="ghrm-view-menu-toggle"
+        class="ghrm-view-menu-toggle{% if filter_menu_active %} is-active{% endif %}"
+        type="button"
+        aria-expanded="false"
+        aria-haspopup="menu"
+        aria-label="Filter files"
+        title="Filter files"
+      >
+        <svg aria-hidden="true" focusable="false">
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-filter"></use>
+        </svg>
+      </button>
+      <div id="ghrm-view-menu" class="ghrm-view-menu" role="menu" aria-label="Filter files" hidden>
+        {%- for option in filter_controls %}
+        {{- menu::filter_option(option) -}}
+        {%- endfor %}
       </div>
-      <div class="ghrm-menu-shell">
-        <button id="ghrm-archive-menu-toggle" class="ghrm-view-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Download directory" title="Download directory">
-          <svg aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-download"></use>
+    </div>
+
+    <div class="ghrm-menu-shell">
+      <button
+        id="ghrm-archive-menu-toggle"
+        class="ghrm-view-menu-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-haspopup="menu"
+        aria-label="Download directory"
+        title="Download directory"
+      >
+        <svg aria-hidden="true" focusable="false">
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-download"></use>
+        </svg>
+      </button>
+      <div
+        id="ghrm-archive-menu"
+        class="ghrm-view-menu"
+        role="menu"
+        aria-label="Download directory"
+        hidden
+      >
+        <button
+          class="ghrm-view-option ghrm-archive-option"
+          type="button"
+          data-ghrm-archive-url="{{ archive_tar_zst_href }}"
+          role="menuitem"
+          title="Download directory as tar.zst"
+        >
+          <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-zst"></use>
           </svg>
+          <span class="ghrm-view-option-label">Download .tar.zst</span>
         </button>
-        <div id="ghrm-archive-menu" class="ghrm-view-menu" role="menu" aria-label="Download directory" hidden>
-          <button class="ghrm-view-option ghrm-archive-option" type="button" data-ghrm-archive-url="{{ archive_tar_zst_href }}" role="menuitem" title="Download directory as tar.zst">
-            <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
-              <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-zst"></use>
-            </svg>
-            <span class="ghrm-view-option-label">Download .tar.zst</span>
-          </button>
-          <button class="ghrm-view-option ghrm-archive-option" type="button" data-ghrm-archive-url="{{ archive_zip_href }}" role="menuitem" title="Download directory as zip">
-            <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
-              <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-zip"></use>
-            </svg>
-            <span class="ghrm-view-option-label">Download .zip</span>
-          </button>
-        </div>
+        <button
+          class="ghrm-view-option ghrm-archive-option"
+          type="button"
+          data-ghrm-archive-url="{{ archive_zip_href }}"
+          role="menuitem"
+          title="Download directory as zip"
+        >
+          <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-zip"></use>
+          </svg>
+          <span class="ghrm-view-option-label">Download .zip</span>
+        </button>
       </div>
-      <div class="ghrm-menu-shell">
-        <button id="ghrm-column-menu-toggle" class="ghrm-view-menu-toggle{% if column_menu_active %} is-active{% endif %}" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Display columns" title="Display columns">
-          <svg aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-columns"></use>
-          </svg>
-        </button>
-        <div id="ghrm-column-menu" class="ghrm-view-menu" role="menu" aria-label="Display columns" hidden>
-{% for column in column_controls %}          <a class="ghrm-view-option{% if column.active %} is-active{% endif %}" href="{{ column.href }}" data-column-toggle="{{ column.key }}" data-column-edge="{% if column.edge %}1{% else %}0{% endif %}" role="menuitemcheckbox" aria-checked="{% if column.active %}true{% else %}false{% endif %}" title="{{ column.title }}">
-            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-              <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-            </svg>
-            <span class="ghrm-view-option-label">{{ column.label }}</span>
-          </a>
-{% endfor %}          <hr class="ghrm-menu-separator" />
-          <a class="ghrm-view-option{% if headers_control.active %} is-active{% endif %}" href="{{ headers_control.href }}" data-column-toggle="{{ headers_control.key }}" data-column-edge="0" role="menuitemcheckbox" aria-checked="{% if headers_control.active %}true{% else %}false{% endif %}" title="{{ headers_control.title }}">
-            <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-              <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-            </svg>
-            <span class="ghrm-view-option-label">Show column headers</span>
-          </a>
-        </div>
+    </div>
+
+    <div class="ghrm-menu-shell">
+      <button
+        id="ghrm-column-menu-toggle"
+        class="ghrm-view-menu-toggle{% if column_menu_active %} is-active{% endif %}"
+        type="button"
+        aria-expanded="false"
+        aria-haspopup="menu"
+        aria-label="Display columns"
+        title="Display columns"
+      >
+        <svg aria-hidden="true" focusable="false">
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-columns"></use>
+        </svg>
+      </button>
+      <div
+        id="ghrm-column-menu"
+        class="ghrm-view-menu"
+        role="menu"
+        aria-label="Display columns"
+        hidden
+      >
+        {%- for column in column_controls %}
+        {{- menu::column_option(column) -}}
+        {%- endfor %}
+        <hr class="ghrm-menu-separator" />
+        <a
+          class="ghrm-view-option{% if headers_control.active %} is-active{% endif %}"
+          href="{{ headers_control.href }}"
+          data-column-toggle="{{ headers_control.key }}"
+          data-column-edge="0"
+          role="menuitemcheckbox"
+          aria-checked="{% if headers_control.active %}true{% else %}false{% endif %}"
+          title="{{ headers_control.title }}"
+        >
+          {{- menu::check_icon() -}}
+          <span class="ghrm-view-option-label">Show column headers</span>
+        </a>
       </div>
     </div>
   </div>
+</div>

@@ -1,39 +1,39 @@
 {% import "macros/stat.html" as stat %}
-<aside id="ghrm-sidebar" class="ghrm-sidebar" data-loaded="{% if has_stats %}true{% else %}false{% endif %}"{% if oob %} hx-swap-oob="outerHTML"{% endif %}{% if !has_stats %} hidden{% endif %}>
-{% if !stats.metadata.is_empty() %}<section class="ghrm-about-tile ghrm-about-stats" data-ghrm-sidebar-panel="about" aria-label="Repository metadata">
-<div class="ghrm-about-heading">About</div>
-<dl class="ghrm-stat-list">
-{% for row in stats.metadata %}{{ stat::stat_row(row) }}
-{% endfor %}</dl>
-</section>
-{% endif %}
-{% if !stats.history.is_empty() %}<section class="ghrm-about-tile ghrm-about-stats" data-ghrm-sidebar-panel="history" aria-label="Repository history">
-<div class="ghrm-about-heading">History</div>
-<dl class="ghrm-stat-list">
-{% for row in stats.history %}{{ stat::stat_row(row) }}
-{% endfor %}</dl>
-</section>
-{% endif %}
-{% if !stats.languages.is_empty() %}<section class="ghrm-about-tile ghrm-languages" data-ghrm-sidebar-panel="languages" aria-label="Languages">
-<div class="ghrm-about-heading">Languages</div>
-<div class="ghrm-lang-bar" aria-hidden="true">
-{% for lang in stats.languages %}<span title="{{ lang.title }}" style="{{ lang.style }}"></span>
-{% endfor %}</div>
-<dl class="ghrm-lang-list">
-{% for lang in stats.languages %}{{ stat::lang_row(lang) }}
-{% endfor %}
-{% if !stats.language_total.is_empty() %}<div class="ghrm-lang-row ghrm-lang-total">
-<dt>Total</dt>
-<dd><span class="ghrm-lang-lines" title="{{ stats.language_total }} lines of code">{{ stats.language_total }}</span><span class="ghrm-lang-percent">LOC</span></dd>
-</div>
-{% endif %}</dl>
-</section>
-{% endif %}
-{% if !stats.activity.is_empty() %}<section class="ghrm-about-tile ghrm-about-stats" data-ghrm-sidebar-panel="activity" aria-label="Repository activity">
-<div class="ghrm-about-heading">Activity</div>
-<dl class="ghrm-stat-list">
-{% for row in stats.activity %}{{ stat::stat_row(row) }}
-{% endfor %}</dl>
-</section>
-{% endif %}
+<aside
+  id="ghrm-sidebar"
+  class="ghrm-sidebar"
+  data-loaded="{% if has_stats %}true{% else %}false{% endif %}"
+  {%- if oob %} hx-swap-oob="outerHTML"{% endif -%}
+  {%- if !has_stats %} hidden{% endif %}
+>
+  {{- stat::stat_section(
+    "about",
+    "About",
+    "Repository metadata",
+    "ghrm-about-stats",
+    stats.metadata.as_slice(),
+  ) -}}
+
+  {{- stat::stat_section(
+    "history",
+    "History",
+    "Repository history",
+    "ghrm-about-stats",
+    stats.history.as_slice(),
+  ) -}}
+
+  {{- stat::language_section(
+    "languages",
+    "ghrm-languages",
+    stats.languages.as_slice(),
+    stats.language_total.as_str(),
+  ) -}}
+
+  {{- stat::stat_section(
+    "activity",
+    "Activity",
+    "Repository activity",
+    "ghrm-about-stats",
+    stats.activity.as_slice(),
+  ) -}}
 </aside>

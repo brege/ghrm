@@ -1,9 +1,50 @@
-{# Stat row: label cell plus a value that is a sublist, parts, link, or text #}
+{% macro stat_section(panel, heading, aria_label, panel_class, rows) -%}
+{%- if !rows.is_empty() %}
+<section
+  class="ghrm-about-tile {{ panel_class }}"
+  data-ghrm-about-panel="{{ panel }}"
+  aria-label="{{ aria_label }}"
+>
+  <div class="ghrm-about-heading">{{ heading }}</div>
+  <dl class="ghrm-stat-list">
+    {%- for row in rows %}
+    {{- stat_row(row) -}}
+    {%- endfor %}
+  </dl>
+</section>
+{%- endif %}
+{%- endmacro %}
+
+{% macro language_section(panel, panel_class, languages, total) -%}
+{%- if !languages.is_empty() %}
+<section
+  class="ghrm-about-tile {{ panel_class }}"
+  data-ghrm-about-panel="{{ panel }}"
+  aria-label="Languages"
+>
+  <div class="ghrm-about-heading">Languages</div>
+  <div class="ghrm-lang-bar" aria-hidden="true">
+    {%- for lang in languages %}
+    <span title="{{ lang.title }}" style="{{ lang.style }}"></span>
+    {%- endfor %}
+  </div>
+  <dl class="ghrm-lang-list">
+    {%- for lang in languages %}
+    {{- lang_row(lang) -}}
+    {%- endfor %}
+    {{- language_total_row(total) -}}
+  </dl>
+</section>
+{%- endif %}
+{%- endmacro %}
+
 {% macro stat_row(row) -%}
 <div class="ghrm-stat-row">
   <dt>
     {%- if !row.icon.is_empty() %}
-    <svg aria-hidden="true"><use href="/_ghrm/assets/js/icons.svg#{{ row.icon }}"></use></svg>
+    <svg aria-hidden="true">
+      <use href="/_ghrm/assets/js/icons.svg#{{ row.icon }}"></use>
+    </svg>
     {%- endif %}
     <span>{{ row.label }}</span>
   </dt>
@@ -14,7 +55,9 @@
     {%- if !row.items.is_empty() -%}
     {{- stat_sublist(row.items.as_slice()) -}}
     {%- else if !row.href.is_empty() -%}
-    <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
+    <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">
+      {{ row.value }}
+    </a>
     {%- else -%}
     {{ row.value }}
     {%- endif -%}
@@ -22,7 +65,6 @@
 </div>
 {%- endmacro %}
 
-{# Author and churn rows: truncating name plus right-aligned metrics or value #}
 {% macro stat_sublist(items) -%}
 <dl class="ghrm-stat-sublist">
   {%- for item in items %}
@@ -46,20 +88,22 @@
 </dl>
 {%- endmacro %}
 
-{# Right-aligned metric pairs, e.g. a count and a percentage #}
 {% macro stat_metrics(metrics) -%}
 <span class="ghrm-stat-metrics">
   {%- for metric in metrics %}
-  <span class="ghrm-stat-metric"
+  <span
+    class="ghrm-stat-metric"
     {%- if !metric.title.is_empty() %} title="{{ metric.title }}"{% endif -%}
-  ><span>{{ metric.value }}</span>
-    {%- if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif -%}
+  >
+    <span>{{ metric.value }}</span>
+    {%- if !metric.label.is_empty() %}
+    <span>{{ metric.label }}</span>
+    {%- endif %}
   </span>
   {%- endfor %}
 </span>
 {%- endmacro %}
 
-{# Language row: colored name plus line count and percentage #}
 {% macro lang_row(lang) -%}
 <div class="ghrm-lang-row">
   <dt>
@@ -67,8 +111,24 @@
     <span>{{ lang.name }}</span>
   </dt>
   <dd>
-    <span class="ghrm-lang-lines" title="{{ lang.lines }} lines of code">{{ lang.lines }}</span>
+    <span class="ghrm-lang-lines" title="{{ lang.lines }} lines of code">
+      {{ lang.lines }}
+    </span>
     <span class="ghrm-lang-percent">{{ lang.value }}</span>
   </dd>
 </div>
+{%- endmacro %}
+
+{% macro language_total_row(total) -%}
+{%- if !total.is_empty() %}
+<div class="ghrm-lang-row ghrm-lang-total">
+  <dt>Total</dt>
+  <dd>
+    <span class="ghrm-lang-lines" title="{{ total }} lines of code">
+      {{ total }}
+    </span>
+    <span class="ghrm-lang-percent">LOC</span>
+  </dd>
+</div>
+{%- endif %}
 {%- endmacro %}

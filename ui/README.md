@@ -88,6 +88,8 @@ The UI workspace owns maintained browser source, icon declarations, and the vali
 
 `assets/templates/` and Rust view models still own document structure and data contracts. TypeScript runtime modules and Lit islands enhance behavior after render, so structural changes should move through templates and Rust data providers instead of shifting markup into browser code.
 
+Template authoring rules for Askama formatting and macro extraction live in `assets/templates/README.md`.
+
 ## Icons
 
 - `ui/icons.tsx` is the reviewed declaration source for runtime icons.
