@@ -383,8 +383,8 @@ fn source_row(source: &SourceState) -> Option<AboutDetailRow> {
 
 fn scope_rows(s: &AppState, report: &ghrm_stat::filesystem::FsReport) -> Vec<AboutDetailRow> {
     vec![
-        detail_row("ghrm root", served_root(s).display().to_string()),
-        detail_row("currently", display_fs_path(s, &report.root)),
+        detail_row("served root", served_root(s).display().to_string()),
+        detail_row("scan root", display_fs_path(s, &report.root)),
     ]
 }
 

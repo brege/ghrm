@@ -252,6 +252,22 @@ mod tests {
     }
 
     #[test]
+    fn crumbs_file_target_keeps_parent_static() {
+        let target = PathBuf::from("/home/user/code/project/README.md");
+        let view = default_view_state();
+        let cfg = default_view_config();
+
+        let result = html(&target, Some(Path::new("/home/user")), "", &view, &cfg);
+
+        assert!(result.contains(r#"<span class="ghrm-crumb ghrm-crumb-static">project</span>"#));
+        assert!(
+            result.contains(r#"<strong class="ghrm-crumb ghrm-crumb-current">README.md</strong>"#)
+        );
+        assert!(!result.contains(r#"href="/""#));
+        assert!(!result.contains(r#"ghrm-crumb-link"#));
+    }
+
+    #[test]
     fn crumbs_depth_math_with_nonzero_root_idx() {
         let target = PathBuf::from("/home/user/code/project");
         let view = default_view_state();
