@@ -334,7 +334,10 @@ fn protected_routes(gist_enabled: bool) -> Router<AppState> {
             .route("/_ghrm/gist/raw/{id}", get(http_gist::raw_id))
             .route("/_ghrm/gist/rename/{id}", post(http_gist::rename))
             .route("/_ghrm/gist/stash", get(http_gist::stash))
-            .route("/_ghrm/gist/p/{id}", get(http_gist::show_id))
+            .route(
+                "/_ghrm/gist/p/{id}",
+                get(http_gist::show_id).delete(http_gist::delete_id),
+            )
     } else {
         router
     }
@@ -611,7 +614,7 @@ async fn render_file(
         .map(|p| p.to_string_lossy().into_owned())
         .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_default();
-    let crumbs = crumbs::html(root, s.home.as_deref(), &rel, &view, &s.view_cfg);
+    let crumbs = page_crumbs(s, path, root, &rel, &view);
     let raw_html = delivery::raw_blob_html(&md, Some("markdown"));
     let view = delivery::FileView::markdown();
     let view_attrs = delivery::file_view_attrs(&rel, view);
@@ -637,11 +640,12 @@ async fn render_file(
         &rendered.title
     };
     if hx.is_htmx {
-        return shell::fragment(&body, title, source, &s.runtime_paths, false);
+        return shell::fragment(&body, title, None, source, &s.runtime_paths, false);
     }
     shell::full_page(
         &rendered,
         &body,
+        None,
         source,
         s.auth.is_some(),
         &s.runtime_paths,
@@ -702,7 +706,7 @@ async fn render_source_file(
     let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
     let rendered = render::render_text(filename, &text);
     let features = vendor::feature_list(&rendered);
-    let crumbs = crumbs::html(root, s.home.as_deref(), rel, &view, &s.view_cfg);
+    let crumbs = page_crumbs(s, path, root, rel, &view);
     let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
     let file_view = delivery::FileView::source();
     let view_attrs = delivery::file_view_attrs(rel, file_view);
@@ -728,11 +732,12 @@ async fn render_source_file(
         &rendered.title
     };
     if hx.is_htmx {
-        return shell::fragment(&body, title, source, &s.runtime_paths, false);
+        return shell::fragment(&body, title, None, source, &s.runtime_paths, false);
     }
     shell::full_page(
         &rendered,
         &body,
+        None,
         source,
         s.auth.is_some(),
         &s.runtime_paths,
@@ -762,17 +767,19 @@ async fn render_dual_file(
     let ext = path.extension().and_then(|s| s.to_str());
     let native_url = format!("/{}", rel.trim_matches('/'));
     let preview_html = dual_preview_html(ext, &native_url, filename);
+    let raw_rendered = render::render_text(filename, &text);
     let rendered = Rendered {
         html: preview_html.clone(),
         title: filename.to_string(),
-        lang: ext.map(String::from),
+        langs: raw_rendered.langs,
+        lang: raw_rendered.lang,
         has_mermaid: false,
         has_math: false,
         has_map: false,
     };
     let features = vendor::feature_list(&rendered);
-    let crumbs = crumbs::html(root, s.home.as_deref(), rel, &view, &s.view_cfg);
-    let raw_html = delivery::raw_blob_html(&text, ext);
+    let crumbs = page_crumbs(s, path, root, rel, &view);
+    let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
     let file_view = delivery::FileView::dual();
     let view_attrs = delivery::file_view_attrs(rel, file_view);
     let body = match tmpl::page(tmpl::PageCtx {
@@ -792,11 +799,19 @@ async fn render_dual_file(
     };
     let source = s.repos.source_for(path);
     if hx.is_htmx {
-        return shell::fragment(&body, &rendered.title, source, &s.runtime_paths, false);
+        return shell::fragment(
+            &body,
+            &rendered.title,
+            None,
+            source,
+            &s.runtime_paths,
+            false,
+        );
     }
     shell::full_page(
         &rendered,
         &body,
+        None,
         source,
         s.auth.is_some(),
         &s.runtime_paths,
@@ -812,6 +827,14 @@ fn dual_preview_html(ext: Option<&str>, native_url: &str, filename: &str) -> Str
             format!(r#"<div class="ghrm-svg-preview"><img src="{url}" alt="{alt}"></div>"#)
         }
         _ => String::new(),
+    }
+}
+
+fn page_crumbs(s: &AppState, path: &Path, root: &Path, rel: &str, view: &ViewState) -> String {
+    if s.mode == Mode::File {
+        crumbs::html(path, s.home.as_deref(), "", view, &s.view_cfg)
+    } else {
+        crumbs::html(root, s.home.as_deref(), rel, view, &s.view_cfg)
     }
 }
 

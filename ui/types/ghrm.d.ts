@@ -10,6 +10,10 @@
 // highlight.js
 export interface HighlightJS {
   highlightElement(element: Element): void;
+  registerLanguage(
+    name: string,
+    definition: (hljs: unknown) => Record<string, unknown>,
+  ): void;
 }
 
 // mermaid

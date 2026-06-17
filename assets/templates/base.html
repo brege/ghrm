@@ -21,8 +21,9 @@
     height: 1em;
   }
   </style>
-{% for href in vendor_styles %}  <link rel="stylesheet" href="{{ href }}">
-{% endfor %}
+  {%- for href in vendor_styles %}
+  <link rel="stylesheet" href="{{ href }}">
+  {%- endfor %}
   <script type="application/json" id="ghrm-assets">{{ asset_json|safe }}</script>
   <link rel="stylesheet" href="/_ghrm/assets/css/theme.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/shell.css">
@@ -38,15 +39,24 @@
   <link rel="stylesheet" href="/_ghrm/assets/css/admonitions.css">
 </head>
 <body
+  {%- if !layout_class.is_empty() %} class="{{ layout_class }}"{% endif %}
   hx-boost="true"
   hx-target="article.markdown-body"
   hx-swap="outerHTML show:none"
-  hx-push-url="true">
-  <header class="ghrm-topbar">
+  hx-push-url="true"
+>
+  <header class="ghrm-topbar{% if !layout_class.is_empty() %} {{ layout_class }}{% endif %}">
     <div class="ghrm-topbar-inner">
-{{ source|safe }}      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
+      {{- source|safe -}}
+      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
         <div class="ghrm-search-field">
-          <button id="ghrm-search-mode" type="button" class="ghrm-search-mode" title="Switch search mode" aria-label="Switch search mode">
+          <button
+            id="ghrm-search-mode"
+            type="button"
+            class="ghrm-search-mode"
+            title="Switch search mode"
+            aria-label="Switch search mode"
+          >
             <svg class="icon-path" aria-hidden="true" focusable="false">
               <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-search-path"></use>
             </svg>
@@ -64,7 +74,13 @@
         <span id="ghrm-path-search-status" class="ghrm-path-search-status" aria-live="polite"></span>
         <ghrm-search-panel></ghrm-search-panel>
       </div>
-      <button id="doc-chrome-toggle" type="button" hidden aria-label="Hide document wrapper" title="Hide document wrapper">
+      <button
+        id="doc-chrome-toggle"
+        type="button"
+        hidden
+        aria-label="Hide document wrapper"
+        title="Hide document wrapper"
+      >
         <svg class="icon-framed" aria-hidden="true" focusable="false">
           <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-doc-framed"></use>
         </svg>
@@ -80,19 +96,31 @@
           <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-moon"></use>
         </svg>
       </button>
-{{ gist_nav|safe }}
-{% if show_logout %}      <a id="ghrm-logout" href="/_ghrm/logout" hx-boost="false" aria-label="Log out" title="Log out">
+      {{- gist_nav|safe -}}
+      {% if show_logout %}
+      <a
+        id="ghrm-logout"
+        href="/_ghrm/logout"
+        hx-boost="false"
+        aria-label="Log out"
+        title="Log out"
+      >
         <svg aria-hidden="true" focusable="false">
           <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-logout"></use>
         </svg>
       </a>
-{% endif %}
+      {% endif %}
     </div>
   </header>
-{{ about|safe }}
+  {{- about|safe }}
   <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
-{{ body|safe }}{% for src in vendor_scripts %}  <script defer src="{{ src }}"></script>
-{% endfor %}
+  <main class="ghrm-layout{% if !layout_class.is_empty() %} {{ layout_class }}{% endif %}">
+    {{- body|safe -}}
+    {{- sidebar|safe }}
+  </main>
+  {%- for src in vendor_scripts %}
+  <script defer src="{{ src }}"></script>
+  {%- endfor %}
   <script type="module" src="/_ghrm/assets/js/preview.js"></script>
   <script type="module" src="/_ghrm/assets/js/main.js"></script>
   <script type="module" src="/_ghrm/assets/js/gist.js"></script>

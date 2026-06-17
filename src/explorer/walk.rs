@@ -27,6 +27,7 @@ pub enum Sort {
     Size,
     Lines,
     CommitMessage,
+    CommitAuthor,
     CommitDate,
 }
 
@@ -88,6 +89,14 @@ pub(crate) const SORT_DEFS: &[SortDef] = &[
         title: "Sort explorer entries by commit message",
         default_dir: SortDir::Asc,
         column_key: Some("commit"),
+    },
+    SortDef {
+        sort: Sort::CommitAuthor,
+        key: "commit_author",
+        label: "Commit author",
+        title: "Sort explorer entries by commit author",
+        default_dir: SortDir::Asc,
+        column_key: Some("commit_author"),
     },
     SortDef {
         sort: Sort::CommitDate,
@@ -827,7 +836,9 @@ fn cmp_entries(a: &NavEntry, b: &NavEntry, sort: Sort, dir: SortDir) -> Ordering
         ),
         Sort::Size => apply_dir(cmp_opt(a.size, b.size, &a.name, &b.name), dir),
         Sort::Lines => apply_dir(cmp_opt(a.lines, b.lines, &a.name, &b.name), dir),
-        Sort::CommitMessage | Sort::CommitDate => apply_dir(cmp_names(&a.name, &b.name), dir),
+        Sort::CommitMessage | Sort::CommitAuthor | Sort::CommitDate => {
+            apply_dir(cmp_names(&a.name, &b.name), dir)
+        }
     })
 }
 

@@ -1,228 +1,210 @@
-<section id="ghrm-about-peek" class="ghrm-about-peek" data-stats-loaded="{% if stats_loaded %}true{% else %}false{% endif %}" hidden>
+{% import "macros/about.html" as about %}
+{% import "macros/menu.html" as menu %}
+{% import "macros/stat.html" as stat %}
+<section
+  id="ghrm-about-peek"
+  class="ghrm-about-peek"
+  data-stats-loaded="{% if stats_loaded %}true{% else %}false{% endif %}"
+  hidden
+>
   <div class="ghrm-about-tools">
-    <button id="ghrm-about-panel-menu-toggle" class="ghrm-view-menu-toggle ghrm-about-panel-menu-toggle" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Choose about panels" title="Choose about panels">
+    <button
+      id="ghrm-about-panel-menu-toggle"
+      class="ghrm-view-menu-toggle ghrm-about-panel-menu-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-haspopup="menu"
+      aria-label="Choose about panels"
+      title="Choose about panels"
+    >
       <svg aria-hidden="true" focusable="false">
         <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-columns"></use>
       </svg>
     </button>
-    <div id="ghrm-about-panel-menu" class="ghrm-view-menu ghrm-about-panel-menu" role="menu" aria-label="Choose about panels" hidden>
-      <div class="ghrm-about-menu-section" role="group" aria-label="Git panels">
+    <div
+      id="ghrm-about-panel-menu"
+      class="ghrm-view-menu ghrm-about-panel-menu"
+      role="menu"
+      aria-label="Choose about panels"
+      hidden
+    >
+      <div
+        class="ghrm-about-menu-section"
+        role="group"
+        aria-label="Git panels"
+        data-ghrm-about-menu-group="git"
+      >
         <div class="ghrm-about-menu-heading">Git</div>
-        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="about" role="menuitemcheckbox" aria-checked="true" title="Show about panel">
-          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-          </svg>
-          <span class="ghrm-view-option-label">About</span>
-        </button>
-        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="history" role="menuitemcheckbox" aria-checked="true" title="Show history panel">
-          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-          </svg>
-          <span class="ghrm-view-option-label">History</span>
-        </button>
-        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="languages" role="menuitemcheckbox" aria-checked="true" title="Show languages panel">
-          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-          </svg>
-          <span class="ghrm-view-option-label">Languages</span>
-        </button>
-        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="activity" role="menuitemcheckbox" aria-checked="true" title="Show activity panel">
-          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-          </svg>
-          <span class="ghrm-view-option-label">Activity</span>
-        </button>
+        {{- menu::panel_option("about", "About", "Show about panel") -}}
+        {{- menu::panel_option("history", "History", "Show history panel") -}}
+        {{- menu::panel_option("languages", "Languages", "Show languages panel") -}}
+        {{- menu::panel_option("activity", "Activity", "Show activity panel") -}}
       </div>
-      <div class="ghrm-about-menu-section" role="group" aria-label="Runtime panels">
+
+      <div
+        class="ghrm-about-menu-section"
+        role="group"
+        aria-label="Runtime panels"
+        data-ghrm-about-menu-group="runtime"
+      >
         <div class="ghrm-about-menu-heading">Runtime</div>
-        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="directory" role="menuitemcheckbox" aria-checked="true" title="Show directory metrics panel">
-          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-          </svg>
-          <span class="ghrm-view-option-label">Directory Metrics</span>
-        </button>
-        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="filters" role="menuitemcheckbox" aria-checked="true" title="Show available filters panel">
-          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-          </svg>
-          <span class="ghrm-view-option-label">Available Filters</span>
-        </button>
-        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="paths" role="menuitemcheckbox" aria-checked="true" title="Show paths panel">
-          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-          </svg>
-          <span class="ghrm-view-option-label">Paths</span>
-        </button>
-        <button class="ghrm-view-option is-active" type="button" data-ghrm-about-panel-option="network" role="menuitemcheckbox" aria-checked="true" title="Show network panel">
-          <svg class="ghrm-view-option-check" aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-          </svg>
-          <span class="ghrm-view-option-label">Network</span>
-        </button>
+        {{- menu::panel_option(
+          "directory",
+          "Directory Metrics",
+          "Show directory metrics panel",
+        ) -}}
+        {{- menu::panel_option(
+          "filters",
+          "Available Filters",
+          "Show available filters panel",
+        ) -}}
+        {{- menu::panel_option("paths", "Paths", "Show paths panel") -}}
+        {{- menu::panel_option("network", "Network", "Show network panel") -}}
       </div>
+
       <div class="ghrm-about-menu-section" role="group" aria-label="Ghrm links">
         <div class="ghrm-about-menu-heading">Ghrm</div>
-        <a class="ghrm-view-option ghrm-about-menu-link" href="{{ project_href }}" target="_blank" rel="noopener noreferrer" role="menuitem" title="Open brege/ghrm">
-          <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-github"></use>
-          </svg>
-          <span class="ghrm-view-option-label">brege/ghrm</span>
-        </a>
-        <a class="ghrm-view-option ghrm-about-menu-link" href="{{ project_release_href }}" target="_blank" rel="noopener noreferrer" role="menuitem" title="Open ghrm v{{ project_version }}">
-          <svg class="ghrm-view-option-icon" aria-hidden="true" focusable="false">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-fork"></use>
-          </svg>
-          <span class="ghrm-view-option-label">v{{ project_version }}</span>
-        </a>
+        {{- menu::menu_link(
+          project_href,
+          "ghrm-icon-github",
+          "brege/ghrm",
+          "Open brege/ghrm",
+        ) -}}
+        {{- menu::release_link(project_release_href, project_version) -}}
       </div>
     </div>
   </div>
+
   <div class="ghrm-about-peek-inner">
-{% if !details.scope.is_empty() %}    <div class="ghrm-about-scope" aria-label="Current scope">
+    {% if !details.scope.is_empty() %}
+    <div class="ghrm-about-scope" aria-label="Current scope">
       <dl>
-{% for item in details.scope %}        <div>
-          <dt>{{ item.label }}</dt>
-          <dd title="{{ item.title }}">{{ item.value }}</dd>
-        </div>
-{% endfor %}      </dl>
+        {%- for item in details.scope %}
+        {{- about::detail_item(item, "", false) -}}
+        {%- endfor %}
+      </dl>
     </div>
-{% endif %}
+    {% endif %}
+
     <div class="ghrm-about-panel-grid" aria-label="About panels">
-{% if !stats.metadata.is_empty() %}      <section class="ghrm-about-tile ghrm-about-stats ghrm-summary-panel" data-ghrm-about-panel="about" aria-label="Repository metadata">
-          <div class="ghrm-about-heading">About</div>
-          <dl class="ghrm-stat-list">
-{% for row in stats.metadata %}            <div class="ghrm-stat-row">
-              <dt>{% if !row.icon.is_empty() %}<svg aria-hidden="true"><use href="/_ghrm/assets/js/icons.svg#{{ row.icon }}"></use></svg>{% endif %}<span>{{ row.label }}</span></dt>
-              <dd{% if !row.title.is_empty() %} title="{{ row.title }}"{% endif %}{% if let Some(ts) = row.title_ts %} data-ghrm-title-ts="{{ ts }}"{% endif %}>
-{% if !row.items.is_empty() %}                <dl class="ghrm-stat-sublist">
-{% for item in row.items %}                  <div>
-                    <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
-                    <dd>{% if !item.metrics.is_empty() %}<span class="ghrm-stat-metrics">{% for metric in item.metrics %}<span class="ghrm-stat-metric"{% if !metric.title.is_empty() %} title="{{ metric.title }}"{% endif %}><span>{{ metric.value }}</span>{% if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif %}</span>{% endfor %}</span>{% else %}{{ item.value }}{% endif %}</dd>
-                  </div>
-{% endfor %}                </dl>
-{% else %}{% if !row.parts.is_empty() %}                <span class="ghrm-stat-parts">{% for part in row.parts %}{% if part.separator %}<span class="ghrm-stat-separator" aria-hidden="true">/</span>{% endif %}<span>{{ part.value }}</span>{% endfor %}</span>
-{% else %}{% if !row.href.is_empty() %}                <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
-{% else %}                {{ row.value }}
-{% endif %}{% endif %}{% endif %}              </dd>
-            </div>
-{% endfor %}          </dl>
-        </section>
-{% endif %}
-{% if !stats.history.is_empty() %}      <section class="ghrm-about-tile ghrm-about-stats ghrm-summary-panel" data-ghrm-about-panel="history" aria-label="Repository history">
-          <div class="ghrm-about-heading">History</div>
-          <dl class="ghrm-stat-list">
-{% for row in stats.history %}            <div class="ghrm-stat-row">
-              <dt>{% if !row.icon.is_empty() %}<svg aria-hidden="true"><use href="/_ghrm/assets/js/icons.svg#{{ row.icon }}"></use></svg>{% endif %}<span>{{ row.label }}</span></dt>
-              <dd{% if !row.title.is_empty() %} title="{{ row.title }}"{% endif %}{% if let Some(ts) = row.title_ts %} data-ghrm-title-ts="{{ ts }}"{% endif %}>
-{% if !row.items.is_empty() %}                <dl class="ghrm-stat-sublist">
-{% for item in row.items %}                  <div>
-                    <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
-                    <dd>{% if !item.metrics.is_empty() %}<span class="ghrm-stat-metrics">{% for metric in item.metrics %}<span class="ghrm-stat-metric"{% if !metric.title.is_empty() %} title="{{ metric.title }}"{% endif %}><span>{{ metric.value }}</span>{% if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif %}</span>{% endfor %}</span>{% else %}{{ item.value }}{% endif %}</dd>
-                  </div>
-{% endfor %}                </dl>
-{% else %}{% if !row.parts.is_empty() %}                <span class="ghrm-stat-parts">{% for part in row.parts %}{% if part.separator %}<span class="ghrm-stat-separator" aria-hidden="true">/</span>{% endif %}<span>{{ part.value }}</span>{% endfor %}</span>
-{% else %}{% if !row.href.is_empty() %}                <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
-{% else %}                {{ row.value }}
-{% endif %}{% endif %}{% endif %}              </dd>
-            </div>
-{% endfor %}          </dl>
-        </section>
-{% endif %}
-{% if !stats.languages.is_empty() %}      <section class="ghrm-about-tile ghrm-languages ghrm-summary-panel" data-ghrm-about-panel="languages" aria-label="Languages">
-          <div class="ghrm-about-heading">Languages</div>
-          <div class="ghrm-lang-bar" aria-hidden="true">
-{% for lang in stats.languages %}            <span title="{{ lang.title }}" style="{{ lang.style }}"></span>
-{% endfor %}          </div>
-          <dl class="ghrm-lang-list">
-{% for lang in stats.languages %}            <div class="ghrm-lang-row">
-              <dt><span class="ghrm-lang-dot" style="--ghrm-lang-color: {{ lang.color }}"></span><span>{{ lang.name }}</span></dt>
-              <dd><span class="ghrm-lang-lines" title="{{ lang.lines }} lines of code">{{ lang.lines }}</span><span class="ghrm-lang-percent">{{ lang.value }}</span></dd>
-            </div>
-{% endfor %}
-{% if !stats.language_total.is_empty() %}            <div class="ghrm-lang-row ghrm-lang-total">
-              <dt>Total</dt>
-              <dd><span class="ghrm-lang-lines" title="{{ stats.language_total }} lines of code">{{ stats.language_total }}</span><span class="ghrm-lang-percent">LOC</span></dd>
-            </div>
-{% endif %}          </dl>
-        </section>
-{% endif %}
-{% if !stats.activity.is_empty() %}      <section class="ghrm-about-tile ghrm-about-stats ghrm-summary-panel" data-ghrm-about-panel="activity" aria-label="Repository activity">
-          <div class="ghrm-about-heading">Activity</div>
-          <dl class="ghrm-stat-list">
-{% for row in stats.activity %}            <div class="ghrm-stat-row">
-              <dt>{% if !row.icon.is_empty() %}<svg aria-hidden="true"><use href="/_ghrm/assets/js/icons.svg#{{ row.icon }}"></use></svg>{% endif %}<span>{{ row.label }}</span></dt>
-              <dd{% if !row.title.is_empty() %} title="{{ row.title }}"{% endif %}{% if let Some(ts) = row.title_ts %} data-ghrm-title-ts="{{ ts }}"{% endif %}>
-{% if !row.items.is_empty() %}                <dl class="ghrm-stat-sublist">
-{% for item in row.items %}                  <div>
-                    <dt>{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</dt>
-                    <dd>{% if !item.metrics.is_empty() %}<span class="ghrm-stat-metrics">{% for metric in item.metrics %}<span class="ghrm-stat-metric"{% if !metric.title.is_empty() %} title="{{ metric.title }}"{% endif %}><span>{{ metric.value }}</span>{% if !metric.label.is_empty() %}<span>{{ metric.label }}</span>{% endif %}</span>{% endfor %}</span>{% else %}{{ item.value }}{% endif %}</dd>
-                  </div>
-{% endfor %}                </dl>
-{% else %}{% if !row.parts.is_empty() %}                <span class="ghrm-stat-parts">{% for part in row.parts %}{% if part.separator %}<span class="ghrm-stat-separator" aria-hidden="true">/</span>{% endif %}<span>{{ part.value }}</span>{% endfor %}</span>
-{% else %}{% if !row.href.is_empty() %}                <a href="{{ row.href }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
-{% else %}                {{ row.value }}
-{% endif %}{% endif %}{% endif %}              </dd>
-            </div>
-{% endfor %}          </dl>
-        </section>
-{% endif %}
-{% if !details.directory.is_empty() %}      <section class="ghrm-about-tile ghrm-detail-panel" data-ghrm-about-panel="directory" aria-label="Directory metrics">
-          <div class="ghrm-about-heading">Directory Metrics</div>
-          <div class="ghrm-detail-panel-body">
-            <table class="ghrm-detail-table">
-              <thead>
-                <tr><th>Metric</th><th>Value</th></tr>
-              </thead>
-              <tbody>
-{% for item in details.directory %}                <tr><td>{{ item.label }}</td><td title="{{ item.title }}">{{ item.value }}</td></tr>
-{% endfor %}              </tbody>
-            </table>
-          </div>
-        </section>
-{% endif %}
-{% if !details.filters.is_empty() %}      <section class="ghrm-about-tile ghrm-detail-panel" data-ghrm-about-panel="filters" aria-label="Available filters">
-          <div class="ghrm-about-heading">Available Filters</div>
-          <div class="ghrm-detail-panel-body">
-            <table class="ghrm-detail-table">
-              <thead>
-                <tr><th>Group</th><th>Files</th><th>Dirs</th><th>Size</th></tr>
-              </thead>
-              <tbody>
-{% for row in details.filters %}                <tr><td>{{ row.label }}{% if row.default_enabled %}<span aria-label="default enabled">*</span>{% endif %}</td><td>{{ row.files }}</td><td>{{ row.dirs }}</td><td>{{ row.size }}</td></tr>
-{% endfor %}              </tbody>
-            </table>
-          </div>
-        </section>
-{% endif %}
-{% if !details.paths.is_empty() %}      <section class="ghrm-about-tile ghrm-detail-panel" data-ghrm-about-panel="paths" aria-label="Runtime paths">
-          <div class="ghrm-about-heading">Paths</div>
-          <div class="ghrm-detail-panel-body">
-            <dl class="ghrm-detail-list">
-{% for item in details.paths %}              <div class="ghrm-detail-row">
-                <dt>{{ item.label }}</dt>
-                <dd title="{{ item.title }}">{{ item.value }}</dd>
-              </div>
-{% endfor %}            </dl>
-          </div>
-        </section>
-{% endif %}
-{% if !details.network.is_empty() %}      <section class="ghrm-about-tile ghrm-detail-panel" data-ghrm-about-panel="network" aria-label="Runtime network">
-          <div class="ghrm-about-heading">Network</div>
-          <div class="ghrm-detail-panel-body">
-            <dl class="ghrm-detail-list">
-{% for item in details.network %}              <div class="ghrm-detail-row">
-                <dt>{{ item.label }}</dt>
-                <dd title="{{ item.title }}">{% if !item.href.is_empty() %}<a href="{{ item.href }}">{{ item.value }}</a>{% else %}{{ item.value }}{% endif %}</dd>
-              </div>
-{% endfor %}            </dl>
-          </div>
-        </section>
-{% endif %}
+      {{- stat::stat_section(
+        "about",
+        "About",
+        "Repository metadata",
+        "ghrm-about-stats ghrm-summary-panel",
+        stats.metadata.as_slice(),
+      ) -}}
+
+      {{- stat::stat_section(
+        "history",
+        "History",
+        "Repository history",
+        "ghrm-about-stats ghrm-summary-panel",
+        stats.history.as_slice(),
+      ) -}}
+
+      {{- stat::language_section(
+        "languages",
+        "ghrm-languages ghrm-summary-panel",
+        stats.languages.as_slice(),
+        stats.language_total.as_str(),
+      ) -}}
+
+      {{- stat::stat_section(
+        "activity",
+        "Activity",
+        "Repository activity",
+        "ghrm-about-stats ghrm-summary-panel",
+        stats.activity.as_slice(),
+      ) -}}
+
+      {% if !details.directory.is_empty() %}
+      <section
+        class="ghrm-about-tile ghrm-detail-panel"
+        data-ghrm-about-panel="directory"
+        aria-label="Directory metrics"
+      >
+        <div class="ghrm-about-heading">Directory Metrics</div>
+        <div class="ghrm-detail-panel-body">
+          <table class="ghrm-detail-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {%- for item in details.directory %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td title="{{ item.title }}">{{ item.value }}</td>
+              </tr>
+              {%- endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if !details.filters.is_empty() %}
+      <section
+        class="ghrm-about-tile ghrm-detail-panel"
+        data-ghrm-about-panel="filters"
+        aria-label="Available filters"
+      >
+        <div class="ghrm-about-heading">Available Filters</div>
+        <div class="ghrm-detail-panel-body">
+          <table class="ghrm-detail-table">
+            <thead>
+              <tr>
+                <th>Group</th>
+                <th>Files</th>
+                <th>Dirs</th>
+                <th>Size</th>
+              </tr>
+            </thead>
+            <tbody>
+              {%- for row in details.filters %}
+              <tr>
+                <td>
+                  {{ row.label }}
+                  {%- if row.default_enabled %}
+                  <span aria-label="default enabled">*</span>
+                  {%- endif %}
+                </td>
+                <td>{{ row.files }}</td>
+                <td>{{ row.dirs }}</td>
+                <td>{{ row.size }}</td>
+              </tr>
+              {%- endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
+
+      {{- about::detail_list_panel(
+        "paths",
+        "Paths",
+        "Runtime paths",
+        details.paths.as_slice(),
+        false,
+      ) -}}
+
+      {{- about::detail_list_panel(
+        "network",
+        "Network",
+        "Runtime network",
+        details.network.as_slice(),
+        true,
+      ) -}}
     </div>
-{% if !local_path.is_empty() %}    <div class="ghrm-about-local-path" aria-label="Local path">
+
+    {% if !local_path.is_empty() %}
+    <div class="ghrm-about-local-path" aria-label="Local path">
       <span>not a git repo</span>
       <code>{{ local_path }}</code>
     </div>
-{% endif %}
+    {% endif %}
   </div>
 </section>

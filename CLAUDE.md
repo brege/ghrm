@@ -117,6 +117,8 @@ Use `just ui-release` to refresh tracked runtime assets on `main`. Do not refres
 
 Template changes should preserve the Rust data contract. Do not move structure
 into JavaScript just to avoid changing a template or view model.
+Template authoring rules for `assets/templates/` live in
+`assets/templates/README.md`.
 
 ## Benchmarks
 

@@ -10,6 +10,106 @@
         "highlightjs/highlight.min.js"
       ]
     },
+    "hljs-applescript": {
+      "scripts": [
+        "highlightjs/languages/applescript.min.js"
+      ]
+    },
+    "hljs-awk": {
+      "scripts": [
+        "highlightjs/languages/awk.min.js"
+      ]
+    },
+    "hljs-clojure": {
+      "scripts": [
+        "highlightjs/languages/clojure.min.js"
+      ]
+    },
+    "hljs-cmake": {
+      "scripts": [
+        "highlightjs/languages/cmake.min.js"
+      ]
+    },
+    "hljs-crystal": {
+      "scripts": [
+        "highlightjs/languages/crystal.min.js"
+      ]
+    },
+    "hljs-dart": {
+      "scripts": [
+        "highlightjs/languages/dart.min.js"
+      ]
+    },
+    "hljs-dockerfile": {
+      "scripts": [
+        "highlightjs/languages/dockerfile.min.js"
+      ]
+    },
+    "hljs-elixir": {
+      "scripts": [
+        "highlightjs/languages/elixir.min.js"
+      ]
+    },
+    "hljs-erlang": {
+      "scripts": [
+        "highlightjs/languages/erlang.min.js"
+      ]
+    },
+    "hljs-groovy": {
+      "scripts": [
+        "highlightjs/languages/groovy.min.js"
+      ]
+    },
+    "hljs-haskell": {
+      "scripts": [
+        "highlightjs/languages/haskell.min.js"
+      ]
+    },
+    "hljs-julia": {
+      "scripts": [
+        "highlightjs/languages/julia.min.js"
+      ]
+    },
+    "hljs-lisp": {
+      "scripts": [
+        "highlightjs/languages/lisp.min.js"
+      ]
+    },
+    "hljs-nim": {
+      "scripts": [
+        "highlightjs/languages/nim.min.js"
+      ]
+    },
+    "hljs-nix": {
+      "scripts": [
+        "highlightjs/languages/nix.min.js"
+      ]
+    },
+    "hljs-ocaml": {
+      "scripts": [
+        "highlightjs/languages/ocaml.min.js"
+      ]
+    },
+    "hljs-powershell": {
+      "scripts": [
+        "highlightjs/languages/powershell.min.js"
+      ]
+    },
+    "hljs-scheme": {
+      "scripts": [
+        "highlightjs/languages/scheme.min.js"
+      ]
+    },
+    "hljs-scala": {
+      "scripts": [
+        "highlightjs/languages/scala.min.js"
+      ]
+    },
+    "hljs-tcl": {
+      "scripts": [
+        "highlightjs/languages/tcl.min.js"
+      ]
+    },
     "mermaid": {
       "scripts": [
         "mermaid.js",
@@ -163,6 +263,86 @@
     {
       "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js",
       "path": "highlightjs/highlight.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/applescript.min.js",
+      "path": "highlightjs/languages/applescript.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/awk.min.js",
+      "path": "highlightjs/languages/awk.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/clojure.min.js",
+      "path": "highlightjs/languages/clojure.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/cmake.min.js",
+      "path": "highlightjs/languages/cmake.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/crystal.min.js",
+      "path": "highlightjs/languages/crystal.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/dart.min.js",
+      "path": "highlightjs/languages/dart.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/dockerfile.min.js",
+      "path": "highlightjs/languages/dockerfile.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/elixir.min.js",
+      "path": "highlightjs/languages/elixir.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/erlang.min.js",
+      "path": "highlightjs/languages/erlang.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/groovy.min.js",
+      "path": "highlightjs/languages/groovy.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/haskell.min.js",
+      "path": "highlightjs/languages/haskell.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/julia.min.js",
+      "path": "highlightjs/languages/julia.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/lisp.min.js",
+      "path": "highlightjs/languages/lisp.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/nim.min.js",
+      "path": "highlightjs/languages/nim.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/nix.min.js",
+      "path": "highlightjs/languages/nix.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/ocaml.min.js",
+      "path": "highlightjs/languages/ocaml.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/powershell.min.js",
+      "path": "highlightjs/languages/powershell.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/scheme.min.js",
+      "path": "highlightjs/languages/scheme.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/scala.min.js",
+      "path": "highlightjs/languages/scala.min.js"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/tcl.min.js",
+      "path": "highlightjs/languages/tcl.min.js"
     },
     {
       "url": "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/github.min.css",

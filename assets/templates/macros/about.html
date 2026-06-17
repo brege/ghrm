@@ -1,0 +1,31 @@
+{% macro detail_item(item, row_class, linked) -%}
+<div{%- if !row_class.is_empty() %} class="{{ row_class }}"{% endif %}>
+  <dt>{{ item.label }}</dt>
+  <dd title="{{ item.title }}">
+    {%- if linked && !item.href.is_empty() -%}
+    <a href="{{ item.href }}">{{ item.value }}</a>
+    {%- else -%}
+    {{ item.value }}
+    {%- endif -%}
+  </dd>
+</div>
+{%- endmacro %}
+
+{% macro detail_list_panel(panel, heading, aria_label, rows, linked) -%}
+{%- if !rows.is_empty() %}
+<section
+  class="ghrm-about-tile ghrm-detail-panel"
+  data-ghrm-about-panel="{{ panel }}"
+  aria-label="{{ aria_label }}"
+>
+  <div class="ghrm-about-heading">{{ heading }}</div>
+  <div class="ghrm-detail-panel-body">
+    <dl class="ghrm-detail-list">
+      {%- for item in rows %}
+      {{- detail_item(item, "ghrm-detail-row", linked) -}}
+      {%- endfor %}
+    </dl>
+  </div>
+</section>
+{%- endif %}
+{%- endmacro %}

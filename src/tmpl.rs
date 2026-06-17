@@ -8,8 +8,10 @@ use askama::Template;
 pub struct PageShell<'a> {
     pub title: &'a str,
     pub body: &'a str,
+    pub layout_class: &'a str,
     pub source: &'a str,
     pub about: &'a str,
+    pub sidebar: &'a str,
     pub show_logout: bool,
     pub gist_nav: &'a str,
     pub asset_json: &'a str,
@@ -43,15 +45,9 @@ pub struct AboutStatRow {
     pub value: String,
     pub title: String,
     pub title_ts: Option<u64>,
-    pub parts: Vec<AboutStatPart>,
     pub icon: &'static str,
     pub href: String,
     pub items: Vec<AboutStatItem>,
-}
-
-pub struct AboutStatPart {
-    pub value: String,
-    pub separator: bool,
 }
 
 pub struct AboutStatItem {
@@ -211,7 +207,9 @@ pub struct GistStashEntry {
     pub name: String,
     pub href: String,
     pub modified: Option<u64>,
+    pub size_value: u64,
     pub size: String,
+    pub lines_value: u64,
     pub lines: String,
     pub current: bool,
 }
@@ -258,6 +256,18 @@ pub fn about(p: AboutPeek) -> Result<String> {
     Ok(p.render()?)
 }
 
+#[derive(Template)]
+#[template(path = "fragments/sidebar.html")]
+pub struct AboutSidebar<'a> {
+    pub stats: &'a AboutStats,
+    pub has_stats: bool,
+    pub oob: bool,
+}
+
+pub fn sidebar(p: AboutSidebar) -> Result<String> {
+    Ok(p.render()?)
+}
+
 pub fn page(ctx: PageCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
@@ -295,8 +305,10 @@ mod tests {
         PageShell {
             title: "Test",
             body: "<article class=\"markdown-body\">content</article>",
+            layout_class: "",
             source: "",
             about: "",
+            sidebar: "",
             show_logout: false,
             gist_nav: "",
             asset_json: "{}",
@@ -514,6 +526,17 @@ mod tests {
                 "missing #ghrm-toc-panel nav"
             );
         }
+
+        #[test]
+        fn layout_class_applies_to_header_and_main() {
+            let mut shell = empty_shell();
+            shell.layout_class = "ghrm-layout-explorer";
+            let html = base(shell).unwrap();
+
+            assert!(html.contains("<body class=\"ghrm-layout-explorer\""));
+            assert!(html.contains("<header class=\"ghrm-topbar ghrm-layout-explorer\">"));
+            assert!(html.contains("<main class=\"ghrm-layout ghrm-layout-explorer\">"));
+        }
     }
 
     mod explorer_contracts {
@@ -724,6 +747,7 @@ mod tests {
                 text_class: None,
                 text: None,
                 timestamp: Some(1700000000),
+                title: None,
                 hidden: false,
             }];
             let entries = [ExplorerEntry {
@@ -890,7 +914,9 @@ mod tests {
                     name: "test".to_string(),
                     href: "/_ghrm/gist?id=abc123".to_string(),
                     modified: Some(1700000000),
+                    size_value: 100,
                     size: "100 B".to_string(),
+                    lines_value: 10,
                     lines: "10".to_string(),
                     current: false,
                 }],
@@ -963,6 +989,7 @@ mod tests {
                 text_class: None,
                 text: None,
                 timestamp: Some(1700000000),
+                title: None,
                 hidden: false,
             }];
             static ROWS: [PathSearchRow<'static>; 1] = [PathSearchRow {

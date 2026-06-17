@@ -2,7 +2,7 @@ use crate::http::{about, vendor};
 use crate::render::Rendered;
 use crate::repo::SourceState;
 use crate::runtime;
-use crate::tmpl::{self, AboutStats, PageShell};
+use crate::tmpl::{self, AboutSidebar, AboutStats, PageShell};
 
 use axum::{
     body::Body,
@@ -15,6 +15,7 @@ use tracing::warn;
 pub(crate) fn full_page(
     r: &Rendered,
     body: &str,
+    explorer_path: Option<&str>,
     source: SourceState,
     show_logout: bool,
     runtime_paths: &runtime::Paths,
@@ -27,14 +28,20 @@ pub(crate) fn full_page(
     };
     let stats = AboutStats::default();
     let about = about::html(runtime_paths, &stats, false);
+    let (layout_class, sidebar) = match explorer_path {
+        Some(path) => ("ghrm-layout-explorer", explorer_sidebar_html(path, false)),
+        None => ("", String::new()),
+    };
     let source = source_html(&source);
     let gist_nav = gist_nav_html(runtime_paths.has_gist(), gist_active, false);
     let assets = vendor::plan(r);
     let shell = PageShell {
         title,
         body,
+        layout_class,
         source: &source,
         about: &about,
+        sidebar: &sidebar,
         show_logout,
         gist_nav: &gist_nav,
         asset_json: vendor::client_json(),
@@ -57,13 +64,18 @@ pub(crate) fn full_page(
 pub(crate) fn fragment(
     body: &str,
     title: &str,
+    explorer_path: Option<&str>,
     source: SourceState,
     runtime_paths: &runtime::Paths,
     gist_active: bool,
 ) -> Response {
     let source_oob = source_oob_html(&source);
     let gist_oob = gist_nav_html(runtime_paths.has_gist(), gist_active, true);
-    let html = format!("{body}{source_oob}{gist_oob}");
+    let sidebar_oob = match explorer_path {
+        Some(path) => explorer_sidebar_html(path, true),
+        None => hidden_sidebar_html(true),
+    };
+    let html = format!("{body}{source_oob}{gist_oob}{sidebar_oob}");
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -180,6 +192,60 @@ fn not_found() -> Response {
         .unwrap()
 }
 
+fn about_sidebar_href(current_path: &str) -> String {
+    format!(
+        "/_ghrm/about?sidebar=true&path={}",
+        utf8_percent_encode(current_path, NON_ALPHANUMERIC)
+    )
+}
+
+fn sidebar_shell(about_href: Option<&str>, oob: bool) -> String {
+    let request_attrs = about_href.map_or_else(String::new, |href| {
+        format!(
+            " hx-get=\"{href}\" hx-trigger=\"load, ghrm:contentready from:document\" hx-target=\"this\" hx-swap=\"outerHTML\" hx-push-url=\"false\""
+        )
+    });
+    let oob_attr = if oob {
+        " hx-swap-oob=\"outerHTML\""
+    } else {
+        ""
+    };
+    format!(
+        "<aside id=\"ghrm-sidebar\" class=\"ghrm-sidebar\" data-loaded=\"false\"{request_attrs}{oob_attr} hidden></aside>"
+    )
+}
+
+fn explorer_sidebar_html(current_path: &str, oob: bool) -> String {
+    let href = about_sidebar_href(current_path);
+    sidebar_shell(Some(&href), oob)
+}
+
+fn hidden_sidebar_html(oob: bool) -> String {
+    sidebar_shell(None, oob)
+}
+
+fn has_sidebar_stats(stats: &AboutStats) -> bool {
+    !stats.metadata.is_empty()
+        || !stats.history.is_empty()
+        || !stats.languages.is_empty()
+        || !stats.activity.is_empty()
+}
+
+pub(crate) fn sidebar_html(stats: &AboutStats, oob: bool) -> String {
+    let sidebar = AboutSidebar {
+        stats,
+        has_stats: has_sidebar_stats(stats),
+        oob,
+    };
+    match tmpl::sidebar(sidebar) {
+        Ok(html) => html,
+        Err(e) => {
+            warn!("sidebar template error: {}", e);
+            String::new()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,7 +302,7 @@ mod tests {
     #[test]
     fn fragment_response_varies_on_hx_request() {
         let paths = runtime_paths(false);
-        let response = fragment("body", "Test", SourceState::NoRepo, &paths, false);
+        let response = fragment("body", "Test", None, SourceState::NoRepo, &paths, false);
         assert_eq!(response.headers().get(header::VARY).unwrap(), "HX-Request");
         assert_eq!(response.headers().get("HX-Title").unwrap(), "Test");
     }
@@ -244,11 +310,41 @@ mod tests {
     #[test]
     fn fragment_response_encodes_title_header() {
         let paths = runtime_paths(false);
-        let response = fragment("body", "Test Title\nλ", SourceState::NoRepo, &paths, false);
+        let response = fragment(
+            "body",
+            "Test Title\nλ",
+            None,
+            SourceState::NoRepo,
+            &paths,
+            false,
+        );
         assert_eq!(
             response.headers().get("HX-Title").unwrap(),
             "Test%20Title%0A%CE%BB"
         );
+    }
+
+    #[test]
+    fn explorer_sidebar_request_encodes_current_path() {
+        let html = explorer_sidebar_html("/docs/space name/", false);
+
+        assert!(html.contains("id=\"ghrm-sidebar\""));
+        assert!(
+            html.contains("hx-get=\"/_ghrm/about?sidebar=true&path=%2Fdocs%2Fspace%20name%2F\"")
+        );
+        assert!(html.contains("hx-trigger=\"load, ghrm:contentready from:document\""));
+        assert!(html.contains("hx-target=\"this\""));
+        assert!(html.contains("hx-swap=\"outerHTML\""));
+        assert!(html.contains("hx-push-url=\"false\""));
+    }
+
+    #[test]
+    fn hidden_sidebar_oob_replaces_existing_sidebar() {
+        let html = hidden_sidebar_html(true);
+
+        assert!(html.contains("id=\"ghrm-sidebar\""));
+        assert!(html.contains("hx-swap-oob=\"outerHTML\""));
+        assert!(!html.contains("hx-get="));
     }
 
     #[test]

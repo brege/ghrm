@@ -39,7 +39,7 @@ fn commit_info_for_requests(root: &Path, requests: &[LogRequest]) -> BTreeMap<Pa
         .arg("-C")
         .arg(root)
         .arg("log")
-        .arg("--format=format:%x1f%ct%x1f%s")
+        .arg("--format=format:%x1f%ct%x1f%an%x1f%ae%x1f%s")
         .arg("--name-only")
         .arg("--")
         .args(requests.iter().map(|request| request.rel.as_str()))
@@ -58,9 +58,13 @@ fn commit_info_for_requests(root: &Path, requests: &[LogRequest]) -> BTreeMap<Pa
     let mut commit = None::<CommitInfo>;
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
         if let Some(raw) = line.strip_prefix('\x1f') {
-            commit = raw.split_once('\x1f').and_then(|(timestamp, subject)| {
+            commit = raw.split_once('\x1f').and_then(|(timestamp, rest)| {
+                let (author, rest) = rest.split_once('\x1f')?;
+                let (email, subject) = rest.split_once('\x1f')?;
                 Some(CommitInfo {
                     subject: subject.to_string(),
+                    author: author.to_string(),
+                    email: email.to_string(),
                     timestamp: timestamp.parse().ok()?,
                 })
             });

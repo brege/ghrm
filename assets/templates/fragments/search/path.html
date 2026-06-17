@@ -1,13 +1,18 @@
-{% if pending %}<tr class="ghrm-search-empty"><td colspan="{{ empty_colspan }}">Indexing paths...</td></tr>
-{% else if rows.is_empty() %}<tr class="ghrm-search-empty"><td colspan="{{ empty_colspan }}">No matching paths.</td></tr>
-{% else %}{% for row in rows %}<tr>
-  <td class="ghrm-nav-icon">
-    <svg aria-hidden="true" focusable="false" class="octicon">
-      <use href="/_ghrm/assets/js/icons.svg#{% if row.is_dir %}ghrm-icon-dir{% else %}ghrm-icon-file{% endif %}"></use>
-    </svg>
+{% import "macros/explorer.html" as nav %}
+{% if pending %}
+{{- nav::empty_row("Indexing paths...", empty_colspan) -}}
+{% else if rows.is_empty() %}
+{{- nav::empty_row("No matching paths.", empty_colspan) -}}
+{% else %}
+{% for row in rows %}
+<tr>
+  {{- nav::icon_cell(row.is_dir) -}}
+  <td class="ghrm-nav-name">
+    <a class="ghrm-search-path" href="{{ row.href }}">{{ row.html|safe }}</a>
   </td>
-  <td class="ghrm-nav-name"><a class="ghrm-search-path" href="{{ row.href }}">{{ row.html|safe }}</a></td>
-{% for cell in row.cells %}  <td class="{{ cell.class }}" data-column-key="{{ cell.key }}"{% if cell.hidden %} hidden{% endif %}{% if let Some(ts) = cell.timestamp %} data-ts="{{ ts }}"{% endif %}>{% if let Some(text) = cell.text %}{% if let Some(class) = cell.text_class %}<span class="{{ class }}">{{ text }}</span>{% else %}{{ text }}{% endif %}{% endif %}</td>
-{% endfor %}
+  {%- for cell in row.cells %}
+  {{- nav::data_cell(cell) -}}
+  {%- endfor %}
 </tr>
-{% endfor %}{% endif %}
+{% endfor %}
+{% endif %}

@@ -49,6 +49,8 @@ pub(crate) fn path_response(rows: super::path::Rows, columns: &column::Set) -> P
                 size: row.size,
                 lines: row.lines,
                 commit_subject: row.commit_subject.as_deref(),
+                commit_author: row.commit_author.as_deref(),
+                commit_email: row.commit_email.as_deref(),
                 commit_timestamp: row.commit_timestamp,
             }
             .cells(columns);
@@ -441,6 +443,8 @@ mod tests {
                 size: Some(1024),
                 lines: Some(100),
                 commit_subject: Some("test commit".to_string()),
+                commit_author: Some("Test Author".to_string()),
+                commit_email: Some("test@example.com".to_string()),
                 commit_timestamp: Some(1700000000),
             }],
             truncated: true,

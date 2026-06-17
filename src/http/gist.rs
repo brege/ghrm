@@ -8,16 +8,24 @@ use crate::tmpl::{self, GistCtx};
 use axum::{
     Json,
     body::{Body, Bytes},
-    extract::{Path as AxPath, State},
+    extract::{Path as AxPath, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::broadcast;
 use tracing::warn;
 
 const MAX_PASTE_BYTES: usize = 1024 * 1024;
 const GIST_HREF: &str = "/_ghrm/gist";
+const NEW_GIST_HREF: &str = "/_ghrm/gist?new=1";
+
+#[derive(Deserialize, Default)]
+pub(crate) struct ShowQuery {
+    #[serde(default)]
+    new: bool,
+}
 const RAW_HREF: &str = "/_ghrm/gist/raw";
 const STASH_HREF: &str = "/_ghrm/gist/stash";
 const GIST_ID_HEADER: &str = "X-Ghrm-Gist-Id";
@@ -39,10 +47,17 @@ struct RenameSummary {
     href: String,
 }
 
-pub(crate) async fn show(State(s): State<AppState>, headers: HeaderMap) -> Response {
+pub(crate) async fn show(
+    State(s): State<AppState>,
+    Query(query): Query<ShowQuery>,
+    headers: HeaderMap,
+) -> Response {
     let Some(store) = s.gist.as_ref() else {
         return not_found();
     };
+    if query.new {
+        return show_paste(&s, &headers, None, NEW_GIST_HREF, RAW_HREF);
+    }
     let current = match store.current() {
         Ok(current) => current,
         Err(err) => {
@@ -109,12 +124,20 @@ fn show_paste(
 
     let title = "Gist";
     if hx.is_htmx {
-        return shell::fragment(&body, title, SourceState::NoRepo, &s.runtime_paths, true);
+        return shell::fragment(
+            &body,
+            title,
+            None,
+            SourceState::NoRepo,
+            &s.runtime_paths,
+            true,
+        );
     }
 
     let rendered = Rendered {
         html: String::new(),
         title: title.to_string(),
+        langs: Vec::new(),
         lang: None,
         has_mermaid: false,
         has_math: false,
@@ -123,6 +146,7 @@ fn show_paste(
     shell::full_page(
         &rendered,
         &body,
+        None,
         SourceState::NoRepo,
         s.auth.is_some(),
         &s.runtime_paths,
@@ -180,7 +204,9 @@ pub(crate) async fn stash(State(s): State<AppState>, headers: HeaderMap) -> Resp
             href: format!("{GIST_HREF}/p/{}", entry.id),
             name: entry.name,
             modified: entry.modified,
+            size_value: entry.size.unwrap_or_default(),
             size: crate::explorer::column::size_text(entry.size).unwrap_or_default(),
+            lines_value: entry.lines.unwrap_or_default(),
             lines: crate::explorer::column::count_text(entry.lines).unwrap_or_default(),
             current: entry.current,
         })
@@ -195,12 +221,20 @@ pub(crate) async fn stash(State(s): State<AppState>, headers: HeaderMap) -> Resp
 
     let title = "Gist stash";
     if HtmxContext::from_headers(&headers).is_htmx {
-        return shell::fragment(&body, title, SourceState::NoRepo, &s.runtime_paths, true);
+        return shell::fragment(
+            &body,
+            title,
+            None,
+            SourceState::NoRepo,
+            &s.runtime_paths,
+            true,
+        );
     }
 
     let rendered = Rendered {
         html: String::new(),
         title: title.to_string(),
+        langs: Vec::new(),
         lang: None,
         has_mermaid: false,
         has_math: false,
@@ -209,6 +243,7 @@ pub(crate) async fn stash(State(s): State<AppState>, headers: HeaderMap) -> Resp
     shell::full_page(
         &rendered,
         &body,
+        None,
         SourceState::NoRepo,
         s.auth.is_some(),
         &s.runtime_paths,
@@ -242,6 +277,36 @@ pub(crate) async fn rename(
         return not_found();
     };
     rename_inner(store, &s.reload, &id, &headers, &body)
+}
+
+pub(crate) async fn delete_id(State(s): State<AppState>, AxPath(id): AxPath<String>) -> Response {
+    let Some(store) = s.gist.as_ref() else {
+        return not_found();
+    };
+    delete_inner(store, &s.reload, &id)
+}
+
+fn delete_inner(
+    store: &crate::gist::Store,
+    reload: &broadcast::Sender<String>,
+    id: &str,
+) -> Response {
+    if !store.has(id) {
+        return not_found();
+    }
+    match store.delete(id) {
+        Ok(()) => {
+            let _ = reload.send("gist".to_string());
+            Response::builder()
+                .status(StatusCode::NO_CONTENT)
+                .body(Body::empty())
+                .unwrap()
+        }
+        Err(err) => {
+            warn!("gist delete failed: {err}");
+            server_error()
+        }
+    }
 }
 
 fn create_inner(
@@ -455,6 +520,38 @@ mod tests {
         assert!(!store.root().join("before.txt").exists());
         assert!(store.root().join("after.txt").is_file());
         assert_eq!(store.current().unwrap().unwrap().id, "after");
+    }
+
+    #[test]
+    fn delete_removes_paste_and_broadcasts_event() {
+        let td = TempDir::new("ghrm-gist-delete-http");
+        let store = crate::gist::Store::from_root(td.path().join("gist")).unwrap();
+        let (tx, mut rx) = broadcast::channel(4);
+        create_inner(
+            &store,
+            &tx,
+            &named_headers("deleteme"),
+            Bytes::from_static(b"hello\n"),
+        );
+        rx.try_recv().unwrap();
+
+        let response = delete_inner(&store, &tx, "deleteme");
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert!(!store.root().join("deleteme.txt").exists());
+        assert!(store.current().unwrap().is_none());
+        assert_eq!(rx.try_recv().unwrap(), "gist");
+    }
+
+    #[test]
+    fn delete_missing_paste_returns_not_found() {
+        let td = TempDir::new("ghrm-gist-delete-missing");
+        let store = crate::gist::Store::from_root(td.path().join("gist")).unwrap();
+        let (tx, _) = broadcast::channel(4);
+
+        let response = delete_inner(&store, &tx, "nonexistent");
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[test]

@@ -9,7 +9,7 @@ mod path;
 
 use alert::rewrite_alerts;
 use anchor::{extract_title, rewrite_heading_anchors};
-use code::{GhrmBlockAdapter, rewrite_code_blocks};
+use code::{GhrmBlockAdapter, extract_langs, rewrite_code_blocks};
 use comrak::options::Plugins;
 use comrak::{Options, markdown_to_html_with_plugins};
 use math::{GhrmMathAdapter, has_math_markers, rewrite_math_display, rewrite_math_spans};
@@ -34,6 +34,7 @@ static MATH_ADAPTER: GhrmMathAdapter = GhrmMathAdapter;
 pub struct Rendered {
     pub html: String,
     pub title: String,
+    pub langs: Vec<String>,
     pub lang: Option<String>,
     pub has_mermaid: bool,
     pub has_math: bool,
@@ -83,6 +84,7 @@ pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     let html = rewrite_math_spans(&html);
     let html = rewrite_alerts(&html);
     let html = rewrite_code_blocks(&html);
+    let langs = extract_langs(&html);
     let title = extract_title(&html).unwrap_or_else(|| "Preview".to_string());
     let html = rewrite_heading_anchors(&html);
     let html = match path {
@@ -99,6 +101,7 @@ pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     Rendered {
         html,
         title,
+        langs,
         lang: None,
         has_mermaid: flags.mermaid,
         has_math: flags.math,

@@ -12,10 +12,10 @@
     </div>
     <div class="ghrm-page-content">
       <div class="ghrm-file-pane" data-ghrm-preview-pane{% if preview_hidden %} hidden{% endif %}>
-{{ preview_html|safe }}
+        {{- preview_html|safe -}}
       </div>
       <div class="ghrm-file-pane ghrm-raw-pane" data-ghrm-raw-pane{% if raw_hidden %} hidden{% endif %}>
-{{ raw_html|safe }}
+        {{- raw_html|safe -}}
       </div>
     </div>
   </section>

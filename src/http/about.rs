@@ -1,12 +1,13 @@
 use crate::explorer::view::ViewQuery;
 use crate::explorer::{view, walk};
 use crate::http::server::{AppState, Mode};
+use crate::http::shell;
 use crate::paths;
 use crate::repo::SourceState;
 use crate::runtime;
 use crate::tmpl::{
     self, AboutDetailRow, AboutDetails, AboutFilterRow, AboutLanguage, AboutPeek, AboutStatItem,
-    AboutStatMetric, AboutStatPart, AboutStatRow, AboutStats,
+    AboutStatMetric, AboutStatRow, AboutStats,
 };
 
 use anyhow::{Context, Result};
@@ -82,7 +83,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         ghrm_stat::Tool::Version,
         StatDisplay {
             label: "Version",
-            icon: "ghrm-icon-fork",
+            icon: "ghrm-icon-version",
             is_list: false,
             has_timestamp: false,
         },
@@ -190,6 +191,8 @@ fn stat_display(tool: ghrm_stat::Tool) -> &'static StatDisplay {
 #[derive(Default, Deserialize)]
 pub(crate) struct AboutQuery {
     path: Option<String>,
+    #[serde(default)]
+    sidebar: bool,
     #[serde(flatten)]
     view: ViewQuery,
 }
@@ -240,6 +243,9 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     } else {
         AboutStats::default()
     };
+    if q.sidebar {
+        return Ok(html_response(&shell::sidebar_html(&stats, false)));
+    }
     let local_path = if source == SourceState::NoRepo {
         stats_path.display().to_string()
     } else {
@@ -247,12 +253,9 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     };
     let details = details_model(&s, &stats_input, &view, &source, raw_query.as_deref()).await?;
 
-    Ok(html_response(&html_with_details(
-        &details,
-        &stats,
-        true,
-        &local_path,
-    )))
+    let peek_html = html_with_details(&details, &stats, true, &local_path);
+    let sidebar_html = shell::sidebar_html(&stats, true);
+    Ok(html_response(&format!("{peek_html}{sidebar_html}")))
 }
 
 async fn details_model(
@@ -380,8 +383,8 @@ fn source_row(source: &SourceState) -> Option<AboutDetailRow> {
 
 fn scope_rows(s: &AppState, report: &ghrm_stat::filesystem::FsReport) -> Vec<AboutDetailRow> {
     vec![
-        detail_row("ghrm root", served_root(s).display().to_string()),
-        detail_row("currently", display_fs_path(s, &report.root)),
+        detail_row("served root", served_root(s).display().to_string()),
+        detail_row("scan root", display_fs_path(s, &report.root)),
     ]
 }
 
@@ -531,8 +534,8 @@ fn stats_model(report: ghrm_stat::Report, source: &SourceState, served_root: &Pa
                 about.language_total = total;
             }
             ghrm_stat::Tool::Loc if has_languages => {}
-            ghrm_stat::Tool::Project
-            | ghrm_stat::Tool::Version
+            ghrm_stat::Tool::Project => about.metadata.extend(project_rows(&section.rows)),
+            ghrm_stat::Tool::Version
             | ghrm_stat::Tool::License
             | ghrm_stat::Tool::Url
             | ghrm_stat::Tool::Title
@@ -541,7 +544,8 @@ fn stats_model(report: ghrm_stat::Report, source: &SourceState, served_root: &Pa
                     about.metadata.push(row);
                 }
             }
-            ghrm_stat::Tool::Head | ghrm_stat::Tool::Created | ghrm_stat::Tool::LastChange => {
+            ghrm_stat::Tool::Head => about.history.extend(head_rows(&section.rows)),
+            ghrm_stat::Tool::Created | ghrm_stat::Tool::LastChange => {
                 if let Some(row) = stat_row(section, source, &repo_root, served_root) {
                     about.history.push(row);
                 }
@@ -598,23 +602,19 @@ fn stat_row(
 ) -> Option<AboutStatRow> {
     let label = stat_title(section.tool);
     let items = stat_items(section.tool, &section.rows, repo_root, served_root);
-    let parts = stat_parts(section.tool, &section.rows);
-    let value = parts_text(&parts)
-        .or_else(|| stat_value(section.tool, &section.rows))
-        .unwrap_or_default();
-    if value.is_empty() && parts.is_empty() && items.is_empty() {
+    let value = stat_value(section.tool, &section.rows).unwrap_or_default();
+    if value.is_empty() && items.is_empty() {
         return None;
     }
     let icon = stat_icon(section.tool, &value);
     let href = stat_href(section.tool, &value, source);
-    let title = stat_title_attr(section.tool, &section.rows, &parts);
+    let title = stat_title_attr(section.tool, &section.rows);
     let title_ts = stat_title_ts(section.tool, &section.rows);
     Some(AboutStatRow {
         label: label.to_string(),
         value,
         title,
         title_ts,
-        parts,
         icon,
         href,
         items,
@@ -623,7 +623,6 @@ fn stat_row(
 
 fn stat_value(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Option<String> {
     match tool {
-        ghrm_stat::Tool::Project | ghrm_stat::Tool::Head => None,
         ghrm_stat::Tool::Pending => pending_value(rows),
         ghrm_stat::Tool::Languages | ghrm_stat::Tool::Authors | ghrm_stat::Tool::Churn => None,
         ghrm_stat::Tool::Size => size_value(rows),
@@ -633,15 +632,8 @@ fn stat_value(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Option<String> 
     }
 }
 
-fn stat_title_attr(
-    tool: ghrm_stat::Tool,
-    rows: &[ghrm_stat::Row],
-    parts: &[AboutStatPart],
-) -> String {
+fn stat_title_attr(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> String {
     match tool {
-        ghrm_stat::Tool::Project if !parts.is_empty() => "project / branches / tags".to_string(),
-        ghrm_stat::Tool::Head if parts.len() > 1 => "commit hash / refs".to_string(),
-        ghrm_stat::Tool::Head if !parts.is_empty() => "commit hash".to_string(),
         ghrm_stat::Tool::Commits => row_value(rows, "commits")
             .map(|commits| format!("{commits} commits"))
             .unwrap_or_default(),
@@ -661,59 +653,40 @@ fn stat_title_ts(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Option<u64> 
         .and_then(|value| value.parse().ok())
 }
 
-fn stat_parts(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Vec<AboutStatPart> {
-    match tool {
-        ghrm_stat::Tool::Project => project_parts(rows),
-        ghrm_stat::Tool::Head => head_parts(rows),
-        _ => Vec::new(),
-    }
-}
-
-fn project_parts(rows: &[ghrm_stat::Row]) -> Vec<AboutStatPart> {
+fn project_rows(rows: &[ghrm_stat::Row]) -> Vec<AboutStatRow> {
     let Some(name) = row_value(rows, "name") else {
         return Vec::new();
     };
     let branches = row_value(rows, "branches").unwrap_or("0");
     let tags = row_value(rows, "tags").unwrap_or("0");
     vec![
-        stat_part(name, false),
-        stat_part(
-            &format!("{branches} {}", plural(branches, "branch", "branches")),
-            true,
-        ),
-        stat_part(&format!("{tags} {}", plural(tags, "tag", "tags")), true),
+        meta_row("Project", name, "ghrm-icon-table"),
+        meta_row("Branches", branches, "ghrm-icon-branch"),
+        meta_row("Tags", tags, "ghrm-icon-tag"),
     ]
 }
 
-fn head_parts(rows: &[ghrm_stat::Row]) -> Vec<AboutStatPart> {
+fn head_rows(rows: &[ghrm_stat::Row]) -> Vec<AboutStatRow> {
     let Some(commit) = row_value(rows, "commit") else {
         return Vec::new();
     };
-    let mut parts = vec![stat_part(commit, false)];
+    let mut out = vec![meta_row("Head", commit, "ghrm-icon-location")];
     if let Some(refs) = row_value(rows, "refs") {
-        parts.push(stat_part(refs, true));
+        out.push(meta_row("Ref", refs, "ghrm-icon-branch"));
     }
-    parts
+    out
 }
 
-fn stat_part(value: &str, separator: bool) -> AboutStatPart {
-    AboutStatPart {
+fn meta_row(label: &str, value: &str, icon: &'static str) -> AboutStatRow {
+    AboutStatRow {
+        label: label.to_string(),
         value: value.to_string(),
-        separator,
+        title: String::new(),
+        title_ts: None,
+        icon,
+        href: String::new(),
+        items: Vec::new(),
     }
-}
-
-fn parts_text(parts: &[AboutStatPart]) -> Option<String> {
-    if parts.is_empty() {
-        return None;
-    }
-    Some(
-        parts
-            .iter()
-            .map(|part| part.value.as_str())
-            .collect::<Vec<_>>()
-            .join(" / "),
-    )
 }
 
 fn pending_value(rows: &[ghrm_stat::Row]) -> Option<String> {
@@ -828,10 +801,6 @@ fn row_metric<'a>(row: &'a ghrm_stat::Row, key: &str) -> Option<&'a str> {
         .map(|metric| metric.value.as_str())
 }
 
-fn plural(value: &str, single: &'static str, multiple: &'static str) -> &'static str {
-    if value == "1" { single } else { multiple }
-}
-
 fn stat_title(tool: ghrm_stat::Tool) -> &'static str {
     stat_display(tool).label
 }
@@ -886,10 +855,6 @@ mod tests {
 
     fn about_row<'a>(rows: &'a [AboutStatRow], label: &str) -> &'a AboutStatRow {
         rows.iter().find(|row| row.label == label).unwrap()
-    }
-
-    fn part_values(parts: &[AboutStatPart]) -> Vec<&str> {
-        parts.iter().map(|part| part.value.as_str()).collect()
     }
 
     fn metric_values(item: &AboutStatItem) -> Vec<&str> {
@@ -958,7 +923,6 @@ mod tests {
             value: "ghrm".to_string(),
             title: String::new(),
             title_ts: None,
-            parts: Vec::new(),
             icon: "",
             href: String::new(),
             items: Vec::new(),
@@ -1069,20 +1033,12 @@ mod tests {
         };
         let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
 
-        let project = about_row(&stats.metadata, "Project");
-        assert_eq!(
-            part_values(&project.parts),
-            vec!["ghrm", "1 branch", "7 tags"]
-        );
-        assert_eq!(project.title, "project / branches / tags");
+        assert_eq!(about_row(&stats.metadata, "Project").value, "ghrm");
+        assert_eq!(about_row(&stats.metadata, "Branches").value, "1");
+        assert_eq!(about_row(&stats.metadata, "Tags").value, "7");
 
-        let head = about_row(&stats.history, "Head");
-        assert_eq!(head.value, "10314cff / main, origin/main");
-        assert_eq!(
-            part_values(&head.parts),
-            vec!["10314cff", "main, origin/main"]
-        );
-        assert_eq!(head.title, "commit hash / refs");
+        assert_eq!(about_row(&stats.history, "Head").value, "10314cff");
+        assert_eq!(about_row(&stats.history, "Ref").value, "main, origin/main");
 
         let created = about_row(&stats.history, "Created");
         assert_eq!(created.value, "3 years ago");

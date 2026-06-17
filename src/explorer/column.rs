@@ -50,6 +50,18 @@ pub(crate) const DEFS: &[Def] = &[
         render: render_commit_subject,
     },
     Def {
+        key: "commit_author",
+        config_key: "commit_author",
+        label: "Commit author",
+        title: "Show commit authors",
+        cell_class: "ghrm-nav-meta ghrm-nav-meta-text ghrm-nav-middle-meta",
+        text_class: Some("ghrm-nav-meta-text-value"),
+        edge: false,
+        default_visible: false,
+        requires: MetaReq::COMMIT,
+        render: render_commit_author,
+    },
+    Def {
         key: "commit_date",
         config_key: "commit_date",
         label: "Commit date",
@@ -105,6 +117,8 @@ pub(crate) struct RowMeta<'a> {
     pub(crate) size: Option<u64>,
     pub(crate) lines: Option<u64>,
     pub(crate) commit_subject: Option<&'a str>,
+    pub(crate) commit_author: Option<&'a str>,
+    pub(crate) commit_email: Option<&'a str>,
     pub(crate) commit_timestamp: Option<u64>,
 }
 
@@ -118,6 +132,7 @@ impl RowMeta<'_> {
 struct CellValue {
     text: Option<String>,
     timestamp: Option<u64>,
+    title: Option<String>,
 }
 
 impl CellValue {
@@ -125,6 +140,7 @@ impl CellValue {
         Self {
             text,
             timestamp: None,
+            title: None,
         }
     }
 
@@ -132,12 +148,23 @@ impl CellValue {
         Self {
             text: None,
             timestamp,
+            title: None,
         }
+    }
+
+    fn with_title(mut self, title: Option<String>) -> Self {
+        self.title = title;
+        self
     }
 }
 
 fn render_commit_subject(meta: &RowMeta<'_>) -> CellValue {
     CellValue::text(meta.commit_subject.map(str::to_string))
+}
+
+fn render_commit_author(meta: &RowMeta<'_>) -> CellValue {
+    CellValue::text(meta.commit_author.map(str::to_string))
+        .with_title(meta.commit_email.map(str::to_string))
 }
 
 fn render_commit_timestamp(meta: &RowMeta<'_>) -> CellValue {
@@ -177,6 +204,7 @@ pub(crate) struct Cell {
     pub(crate) text_class: Option<&'static str>,
     pub(crate) text: Option<String>,
     pub(crate) timestamp: Option<u64>,
+    pub(crate) title: Option<String>,
     pub(crate) hidden: bool,
 }
 
@@ -230,6 +258,7 @@ impl Set {
             text_class: def.text_class,
             text: value.text,
             timestamp: value.timestamp,
+            title: value.title,
             hidden: !self.is_visible(def),
         }
     }

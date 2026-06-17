@@ -17,6 +17,7 @@ import {
   FiChevronRight,
   FiChevronUp,
   FiDownload,
+  FiPlus,
   FiSearch,
   FiSun,
 } from 'react-icons/fi';
@@ -28,10 +29,12 @@ import {
   GoLightBulb,
   GoLocation,
   GoPeople,
-  GoRepoForked,
   GoScreenFull,
   GoStop,
   GoSync,
+  GoTag,
+  GoTrash,
+  GoVersions,
   GoZoomIn,
   GoZoomOut,
 } from 'react-icons/go';
@@ -54,6 +57,7 @@ import {
   MdUpdate,
   MdWrapText,
 } from 'react-icons/md';
+import { PiGitBranch } from 'react-icons/pi';
 import { RxExternalLink } from 'react-icons/rx';
 import { SiCodeberg, SiSourcehut } from 'react-icons/si';
 import { TbEdit, TbEggCracked, TbListSearch, TbScale } from 'react-icons/tb';
@@ -76,7 +80,9 @@ export const icons: Icon[] = [
   { id: 'ghrm-icon-doc-framed', icon: <MdBorderOuter /> },
   { id: 'ghrm-icon-doc-flat', icon: <MdOutlineBorderClear /> },
   { id: 'ghrm-icon-github', icon: <BsGithub /> },
-  { id: 'ghrm-icon-fork', icon: <GoRepoForked /> },
+  { id: 'ghrm-icon-branch', icon: <PiGitBranch /> },
+  { id: 'ghrm-icon-tag', icon: <GoTag /> },
+  { id: 'ghrm-icon-version', icon: <GoVersions /> },
   { id: 'ghrm-icon-bitbucket', icon: <FaBitbucket /> },
   { id: 'ghrm-icon-gitlab', icon: <FaGitlab /> },
   { id: 'ghrm-icon-codeberg', icon: <SiCodeberg /> },
@@ -112,7 +118,9 @@ export const icons: Icon[] = [
   { id: 'ghrm-icon-chevron-right', icon: <FiChevronRight /> },
   { id: 'ghrm-icon-home', icon: <GoHome /> },
   { id: 'ghrm-icon-note', icon: <FaRegNoteSticky /> },
+  { id: 'ghrm-icon-plus', icon: <FiPlus /> },
   { id: 'ghrm-icon-edit', icon: <TbEdit /> },
+  { id: 'ghrm-icon-trash', icon: <GoTrash /> },
   { id: 'ghrm-icon-tip', icon: <GoLightBulb /> },
   { id: 'ghrm-icon-important', icon: <FaRegCommentDots /> },
   { id: 'ghrm-icon-warning', icon: <GoAlert /> },

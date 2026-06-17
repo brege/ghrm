@@ -14,6 +14,8 @@ pub(crate) struct Row {
     pub(crate) size: Option<u64>,
     pub(crate) lines: Option<u64>,
     pub(crate) commit_subject: Option<String>,
+    pub(crate) commit_author: Option<String>,
+    pub(crate) commit_email: Option<String>,
     pub(crate) commit_timestamp: Option<u64>,
 }
 
@@ -53,7 +55,10 @@ pub(crate) fn tree(spec: TreeSpec<'_>, mut load_commits: impl FnMut(&mut [Row]))
         return empty(spec.max_rows);
     }
 
-    if matches!(spec.sort, Sort::CommitMessage | Sort::CommitDate) {
+    if matches!(
+        spec.sort,
+        Sort::CommitMessage | Sort::CommitAuthor | Sort::CommitDate
+    ) {
         let mut rows = Vec::new();
         visit_tree_rows(&spec, &needle, |row| rows.push(row));
         load_commits(&mut rows);
@@ -90,7 +95,10 @@ pub(crate) fn nav(
         return empty(spec.max_rows);
     }
 
-    if matches!(spec.sort, Sort::CommitMessage | Sort::CommitDate) {
+    if matches!(
+        spec.sort,
+        Sort::CommitMessage | Sort::CommitAuthor | Sort::CommitDate
+    ) {
         let mut rows = Vec::new();
         visit_nav_rows(nav, &spec, &needle, |row| rows.push(row));
         load_commits(&mut rows);
@@ -165,6 +173,8 @@ fn visit_tree_rows(spec: &TreeSpec<'_>, needle: &str, mut visit: impl FnMut(Row)
                 size: entry.size,
                 lines: entry.lines,
                 commit_subject: None,
+                commit_author: None,
+                commit_email: None,
                 commit_timestamp: None,
             });
         }
@@ -227,6 +237,8 @@ fn visit_nav_rows(nav: &NavSet, spec: &NavSpec<'_>, needle: &str, mut visit: imp
                 None
             },
             commit_subject: None,
+            commit_author: None,
+            commit_email: None,
             commit_timestamp: None,
         });
     }
@@ -300,6 +312,7 @@ struct RankedRow {
     display_lower: String,
     ext: String,
     commit_subject_lower: Option<String>,
+    commit_author_lower: Option<String>,
     sort: Sort,
     dir: SortDir,
 }
@@ -316,12 +329,17 @@ impl RankedRow {
             .commit_subject
             .as_ref()
             .map(|subject| subject.to_lowercase());
+        let commit_author_lower = row
+            .commit_author
+            .as_ref()
+            .map(|author| author.to_lowercase());
         Self {
             row,
             base_match,
             display_lower,
             ext,
             commit_subject_lower,
+            commit_author_lower,
             sort,
             dir,
         }
@@ -384,6 +402,12 @@ fn cmp_rows(a: &RankedRow, b: &RankedRow, sort: Sort, dir: SortDir) -> Ordering 
             Sort::CommitMessage => apply_dir(
                 a.commit_subject_lower
                     .cmp(&b.commit_subject_lower)
+                    .then_with(|| a.display_lower.cmp(&b.display_lower)),
+                dir,
+            ),
+            Sort::CommitAuthor => apply_dir(
+                a.commit_author_lower
+                    .cmp(&b.commit_author_lower)
                     .then_with(|| a.display_lower.cmp(&b.display_lower)),
                 dir,
             ),

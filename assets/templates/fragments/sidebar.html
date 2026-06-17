@@ -1,0 +1,39 @@
+{% import "macros/stat.html" as stat %}
+<aside
+  id="ghrm-sidebar"
+  class="ghrm-sidebar"
+  data-loaded="{% if has_stats %}true{% else %}false{% endif %}"
+  {%- if oob %} hx-swap-oob="outerHTML"{% endif -%}
+  {%- if !has_stats %} hidden{% endif %}
+>
+  {{- stat::stat_section(
+    "about",
+    "About",
+    "Repository metadata",
+    "ghrm-about-stats",
+    stats.metadata.as_slice(),
+  ) -}}
+
+  {{- stat::stat_section(
+    "history",
+    "History",
+    "Repository history",
+    "ghrm-about-stats",
+    stats.history.as_slice(),
+  ) -}}
+
+  {{- stat::language_section(
+    "languages",
+    "ghrm-languages",
+    stats.languages.as_slice(),
+    stats.language_total.as_str(),
+  ) -}}
+
+  {{- stat::stat_section(
+    "activity",
+    "Activity",
+    "Repository activity",
+    "ghrm-about-stats",
+    stats.activity.as_slice(),
+  ) -}}
+</aside>

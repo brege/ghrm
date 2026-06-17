@@ -55,6 +55,14 @@ body:is(.ghrm-doc-flat, .ghrm-print) .ghrm-raw-pane .ghrm-blob {
   gap: 10px;
 }
 
+@media (min-width: 1400px) {
+  .ghrm-topbar.ghrm-layout-explorer .ghrm-topbar-inner {
+    width: auto;
+    max-width: var(--ghrm-layout-max);
+    padding: 0 var(--ghrm-layout-pad);
+  }
+}
+
 #doc-chrome-toggle,
 #theme-toggle,
 #ghrm-gist-link,

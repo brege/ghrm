@@ -1,55 +1,179 @@
-<article class="markdown-body" hx-history-elt data-ghrm-features="" data-ghrm-gist data-ghrm-gist-page="{{ page_href }}" data-ghrm-gist-id="{{ paste_id }}">
+<article class="markdown-body"
+  hx-history-elt
+  data-ghrm-features=""
+  data-ghrm-gist
+  data-ghrm-gist-page="{{ page_href }}"
+  data-ghrm-gist-id="{{ paste_id }}"
+>
   <ghrm-gist-editor>
-  <section class="ghrm-page-shell">
-    <div class="ghrm-explorer-header">
-      <nav class="ghrm-breadcrumbs" aria-label="Path">
-        <span class="ghrm-crumb-current">gist</span>
-      </nav>
-      <div class="ghrm-header-actions">
-        <div class="ghrm-file-tools">
-          <div class="ghrm-file-toggles">
-            <button type="button" class="ghrm-file-toggle" data-ghrm-gist-wrap aria-label="Wrap lines" aria-pressed="false" title="Wrap lines">
-              <svg class="ghrm-file-icon" aria-hidden="true" focusable="false" height="16" width="16">
-                <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-wrap"></use>
-              </svg>
-            </button>
-            <a class="ghrm-file-toggle" href="{{ stash_href }}" aria-label="Browse paste stash" title="Browse paste stash">
-              <svg class="ghrm-file-icon" aria-hidden="true" focusable="false" height="16" width="16">
-                <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-list"></use>
-              </svg>
-            </a>
-          </div>
-          <div class="ghrm-file-actions">
-{% if has_paste %}            <a class="ghrm-file-link" href="{{ raw_href }}" target="_blank" rel="noopener noreferrer" data-ghrm-native="1" hx-boost="false" aria-label="Open raw paste" title="Open raw paste">Raw</a>
-{% endif %}            <button type="button" class="ghrm-file-action" data-ghrm-gist-copy data-copy-label="Copy paste" data-copy-feedback="Copied!" aria-label="Copy paste" title="Copy paste">
-          <svg class="ghrm-copy-icon ghrm-copy-icon-copy" aria-hidden="true" height="16" width="16">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-copy"></use>
-          </svg>
-          <svg class="ghrm-copy-icon ghrm-copy-icon-check" aria-hidden="true" height="16" width="16">
-            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
-          </svg>
-            </button>
+    <section class="ghrm-page-shell">
+      <div class="ghrm-explorer-header">
+        <nav class="ghrm-breadcrumbs" aria-label="Path">
+          <span class="ghrm-crumb-current">gist</span>
+        </nav>
+        <div class="ghrm-header-actions">
+          <div class="ghrm-file-tools">
+            <div class="ghrm-file-toggles">
+              <button
+                type="button"
+                class="ghrm-file-toggle"
+                data-ghrm-gist-wrap
+                aria-label="Wrap lines"
+                aria-pressed="false"
+                title="Wrap lines"
+              >
+                <svg
+                  class="ghrm-file-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-wrap"></use>
+                </svg>
+              </button>
+              <a
+                class="ghrm-file-toggle"
+                href="{{ stash_href }}"
+                aria-label="Browse paste stash"
+                title="Browse paste stash"
+              >
+                <svg
+                  class="ghrm-file-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-list"></use>
+                </svg>
+              </a>
+            </div>
+            <div class="ghrm-file-actions">
+              {% if has_paste %}
+              <button
+                type="button"
+                class="ghrm-file-action"
+                data-ghrm-gist-new
+                aria-label="New paste"
+                title="New paste"
+              >
+                <svg
+                  class="ghrm-file-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-plus"></use>
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="ghrm-file-action ghrm-gist-delete"
+                data-ghrm-gist-delete
+                aria-label="Delete paste"
+                title="Delete paste"
+              >
+                <svg
+                  class="ghrm-file-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-trash"></use>
+                </svg>
+              </button>
+              <a
+                class="ghrm-file-link"
+                href="{{ raw_href }}"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-ghrm-native="1"
+                hx-boost="false"
+                aria-label="Open raw paste"
+                title="Open raw paste"
+              >
+                Raw
+              </a>
+              {% endif %}
+              <button
+                type="button"
+                class="ghrm-file-action"
+                data-ghrm-gist-copy
+                data-copy-label="Copy paste"
+                data-copy-feedback="Copied!"
+                aria-label="Copy paste"
+                title="Copy paste"
+              >
+                <svg
+                  class="ghrm-copy-icon ghrm-copy-icon-copy"
+                  aria-hidden="true"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-copy"></use>
+                </svg>
+                <svg
+                  class="ghrm-copy-icon ghrm-copy-icon-check"
+                  aria-hidden="true"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    <div class="ghrm-page-content">
-      <form class="ghrm-gist-form" data-ghrm-gist-form hx-boost="false">
-        <div class="ghrm-gist-editor ghrm-file-pane ghrm-raw-pane" data-ghrm-gist-editor>
-{{ raw_html|safe }}
-          <textarea class="ghrm-gist-input" name="paste" rows="24" autocomplete="off" spellcheck="false" aria-label="Paste text" wrap="off">{{ paste_body }}</textarea>
-        </div>
-        <div class="ghrm-gist-actions">
-          <span class="ghrm-gist-save-control" data-ghrm-gist-save-control title="No changes to save">
-            <button type="button" class="ghrm-gist-submit" data-ghrm-gist-save disabled aria-label="No changes to save">Save</button>
-          </span>
-          <label class="ghrm-gist-name-control" title="Save name">
-            <input class="ghrm-gist-name-input" data-ghrm-gist-name type="text" value="{{ paste_id }}" placeholder="Save name" autocomplete="off" spellcheck="false" aria-label="Save name">
-          </label>
-          <span class="ghrm-gist-status" data-ghrm-gist-status aria-live="polite"></span>
-        </div>
-      </form>
-    </div>
-  </section>
+      <div class="ghrm-page-content">
+        <form class="ghrm-gist-form" data-ghrm-gist-form hx-boost="false">
+          <div class="ghrm-gist-editor ghrm-file-pane ghrm-raw-pane" data-ghrm-gist-editor>
+            {{- raw_html|safe -}}
+            <textarea
+              class="ghrm-gist-input"
+              name="paste"
+              rows="24"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Paste text"
+              wrap="off"
+            >{{ paste_body }}</textarea>
+          </div>
+          <div class="ghrm-gist-actions">
+            <span
+              class="ghrm-gist-save-control"
+              data-ghrm-gist-save-control
+              title="No changes to save"
+            >
+              <button
+                type="button"
+                class="ghrm-gist-submit"
+                data-ghrm-gist-save
+                disabled
+                aria-label="No changes to save"
+              >
+                Save
+              </button>
+            </span>
+            <label class="ghrm-gist-name-control" title="Save name">
+              <input
+                class="ghrm-gist-name-input"
+                data-ghrm-gist-name
+                type="text"
+                value="{{ paste_id }}"
+                placeholder="Save name"
+                autocomplete="off"
+                spellcheck="false"
+                aria-label="Save name"
+              >
+            </label>
+            <span class="ghrm-gist-status" data-ghrm-gist-status aria-live="polite"></span>
+          </div>
+        </form>
+      </div>
+    </section>
   </ghrm-gist-editor>
 </article>
