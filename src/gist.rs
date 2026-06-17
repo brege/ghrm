@@ -77,7 +77,7 @@ impl Store {
 
     pub(crate) fn entries(&self) -> Result<Vec<Entry>> {
         let current_id = self.current_id()?;
-        let mut entries = Vec::new();
+        let mut raw: Vec<(Option<SystemTime>, Entry)> = Vec::new();
         for entry in fs::read_dir(&self.root)
             .with_context(|| format!("read gist directory {}", self.root.display()))?
         {
@@ -101,17 +101,21 @@ impl Store {
                 .with_context(|| format!("read gist paste metadata {}", path.display()))?;
             let body = fs::read_to_string(&path)
                 .with_context(|| format!("read gist paste {}", path.display()))?;
-            entries.push(Entry {
-                id: id.to_string(),
-                name: name.to_string(),
-                modified: meta.modified().ok().and_then(system_time_secs),
-                size: Some(meta.len()),
-                lines: Some(body.lines().count() as u64),
-                current: current_id.as_deref() == Some(id),
-            });
+            let mtime = meta.modified().ok();
+            raw.push((
+                mtime,
+                Entry {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    modified: mtime.and_then(system_time_secs),
+                    size: Some(meta.len()),
+                    lines: Some(body.lines().count() as u64),
+                    current: current_id.as_deref() == Some(id),
+                },
+            ));
         }
-        entries.sort_by(|a, b| b.id.cmp(&a.id));
-        Ok(entries)
+        raw.sort_by_key(|r| std::cmp::Reverse(r.0));
+        Ok(raw.into_iter().map(|(_, e)| e).collect())
     }
 
     fn current_id(&self) -> Result<Option<String>> {
@@ -196,6 +200,7 @@ impl Store {
             }
             fs::rename(&source_path, &target_path)
                 .with_context(|| format!("rename gist paste {}", source_path.display()))?;
+            set_mtime(&target_path, SystemTime::now())?;
             if self.current_id()?.as_deref() == Some(source.as_str()) {
                 self.write_current(&target)?;
             }
@@ -474,5 +479,76 @@ mod tests {
             fs::read_to_string(store.root().join(CURRENT)).unwrap(),
             "renamed\n"
         );
+    }
+
+    #[test]
+    fn entries_sort_by_mtime_not_name() {
+        let td = TempDir::new("ghrm-gist-mtime-sort");
+        let store = Store::from_root(td.path().join("gist")).unwrap();
+
+        store
+            .save_at(
+                None,
+                "oldest\n",
+                Some("zebra"),
+                UNIX_EPOCH + Duration::new(100, 0),
+            )
+            .unwrap();
+        store
+            .save_at(
+                None,
+                "newest\n",
+                Some("alpha"),
+                UNIX_EPOCH + Duration::new(300, 0),
+            )
+            .unwrap();
+        store
+            .save_at(
+                None,
+                "middle\n",
+                Some("middle"),
+                UNIX_EPOCH + Duration::new(200, 0),
+            )
+            .unwrap();
+
+        let entries = store.entries().unwrap();
+
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].id, "alpha");
+        assert_eq!(entries[1].id, "middle");
+        assert_eq!(entries[2].id, "zebra");
+    }
+
+    #[test]
+    fn rename_moves_paste_to_top_of_stash() {
+        let td = TempDir::new("ghrm-gist-rename-mtime");
+        let store = Store::from_root(td.path().join("gist")).unwrap();
+
+        store
+            .save_at(
+                None,
+                "older\n",
+                Some("older"),
+                UNIX_EPOCH + Duration::new(100, 0),
+            )
+            .unwrap();
+        store
+            .save_at(
+                None,
+                "newer\n",
+                Some("newer"),
+                UNIX_EPOCH + Duration::new(200, 0),
+            )
+            .unwrap();
+
+        let entries = store.entries().unwrap();
+        assert_eq!(entries[0].id, "newer");
+        assert_eq!(entries[1].id, "older");
+
+        store.rename("older", "renamed").unwrap();
+
+        let entries = store.entries().unwrap();
+        assert_eq!(entries[0].id, "renamed");
+        assert_eq!(entries[1].id, "newer");
     }
 }
