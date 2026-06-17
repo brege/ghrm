@@ -71,6 +71,10 @@ impl Store {
         }))
     }
 
+    pub(crate) fn has(&self, id: &str) -> bool {
+        self.path_for(id).map(|p| p.is_file()).unwrap_or(false)
+    }
+
     pub(crate) fn entries(&self) -> Result<Vec<Entry>> {
         let current_id = self.current_id()?;
         let mut entries = Vec::new();
