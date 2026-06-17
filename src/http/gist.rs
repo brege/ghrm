@@ -262,6 +262,33 @@ pub(crate) async fn rename(
     rename_inner(store, &s.reload, &id, &headers, &body)
 }
 
+pub(crate) async fn delete_id(State(s): State<AppState>, AxPath(id): AxPath<String>) -> Response {
+    let Some(store) = s.gist.as_ref() else {
+        return not_found();
+    };
+    delete_inner(store, &s.reload, &id)
+}
+
+fn delete_inner(
+    store: &crate::gist::Store,
+    reload: &broadcast::Sender<String>,
+    id: &str,
+) -> Response {
+    match store.delete(id) {
+        Ok(()) => {
+            let _ = reload.send("gist".to_string());
+            Response::builder()
+                .status(StatusCode::NO_CONTENT)
+                .body(Body::empty())
+                .unwrap()
+        }
+        Err(err) => {
+            warn!("gist delete failed: {err}");
+            not_found()
+        }
+    }
+}
+
 fn create_inner(
     store: &crate::gist::Store,
     reload: &broadcast::Sender<String>,
@@ -473,6 +500,38 @@ mod tests {
         assert!(!store.root().join("before.txt").exists());
         assert!(store.root().join("after.txt").is_file());
         assert_eq!(store.current().unwrap().unwrap().id, "after");
+    }
+
+    #[test]
+    fn delete_removes_paste_and_broadcasts_event() {
+        let td = TempDir::new("ghrm-gist-delete-http");
+        let store = crate::gist::Store::from_root(td.path().join("gist")).unwrap();
+        let (tx, mut rx) = broadcast::channel(4);
+        create_inner(
+            &store,
+            &tx,
+            &named_headers("deleteme"),
+            Bytes::from_static(b"hello\n"),
+        );
+        rx.try_recv().unwrap();
+
+        let response = delete_inner(&store, &tx, "deleteme");
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert!(!store.root().join("deleteme.txt").exists());
+        assert!(store.current().unwrap().is_none());
+        assert_eq!(rx.try_recv().unwrap(), "gist");
+    }
+
+    #[test]
+    fn delete_missing_paste_returns_not_found() {
+        let td = TempDir::new("ghrm-gist-delete-missing");
+        let store = crate::gist::Store::from_root(td.path().join("gist")).unwrap();
+        let (tx, _) = broadcast::channel(4);
+
+        let response = delete_inner(&store, &tx, "nonexistent");
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[test]
