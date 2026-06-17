@@ -2,10 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../../islands/gist/stash';
 import type { GhrmGistStash } from '../../../islands/gist/stash';
 
-function createStashArticle(
-  rows: Array<{ id: string; name: string; href: string }> = [],
-): string {
-  const defaultRows =
+interface StashRow {
+  id: string;
+  name: string;
+  href: string;
+  ts?: number;
+  size?: number;
+  lines?: number;
+}
+
+function createStashArticle(rows: StashRow[] = []): string {
+  const defaultRows: StashRow[] =
     rows.length > 0
       ? rows
       : [
@@ -23,6 +30,9 @@ function createStashArticle(
           <a href="${r.href}" data-ghrm-gist-row-link>${r.name}</a>
           <button data-ghrm-gist-rename-start>Rename</button>
         </td>
+        <td data-column-key="date"${r.ts ? ` data-ts="${r.ts}" data-sort-value="${r.ts}"` : ''}></td>
+        <td data-column-key="size" data-sort-value="${r.size ?? 0}">${r.size ?? 0}</td>
+        <td data-column-key="lines" data-sort-value="${r.lines ?? 0}">${r.lines ?? 0}</td>
       </tr>
     `,
     )
@@ -32,6 +42,14 @@ function createStashArticle(
     <article data-ghrm-gist-stash>
       <ghrm-gist-stash>
         <table class="ghrm-nav-table">
+          <thead>
+            <tr>
+              <th><button class="ghrm-column-sort" data-ghrm-gist-sort="name">Name<svg class="ghrm-column-sort-icon" hidden><use></use></svg></button></th>
+              <th><button class="ghrm-column-sort is-active" data-ghrm-gist-sort="date">Modified<svg class="ghrm-column-sort-icon"><use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-down"></use></svg></button></th>
+              <th><button class="ghrm-column-sort" data-ghrm-gist-sort="size">Size<svg class="ghrm-column-sort-icon" hidden><use></use></svg></button></th>
+              <th><button class="ghrm-column-sort" data-ghrm-gist-sort="lines">Lines<svg class="ghrm-column-sort-icon" hidden><use></use></svg></button></th>
+            </tr>
+          </thead>
           <tbody>${rowsHtml}</tbody>
         </table>
       </ghrm-gist-stash>
@@ -364,6 +382,116 @@ describe('ghrm-gist-stash', () => {
       await Promise.resolve();
 
       expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sorting', () => {
+    function createSortableStash(): GhrmGistStash {
+      document.body.innerHTML = '';
+      const rows: StashRow[] = [
+        { id: 'b', name: 'beta.txt', href: '/b', ts: 200, size: 50, lines: 5 },
+        {
+          id: 'a',
+          name: 'alpha.txt',
+          href: '/a',
+          ts: 300,
+          size: 100,
+          lines: 3,
+        },
+        {
+          id: 'c',
+          name: 'gamma.txt',
+          href: '/c',
+          ts: 100,
+          size: 25,
+          lines: 10,
+        },
+      ];
+      const template = document.createElement('template');
+      template.innerHTML = createStashArticle(rows);
+      document.body.appendChild(template.content.cloneNode(true));
+      const el = document.querySelector<GhrmGistStash>('ghrm-gist-stash');
+      if (!el) throw new Error('missing ghrm-gist-stash');
+      return el;
+    }
+
+    function getRowIds(): string[] {
+      return Array.from(document.querySelectorAll('[data-ghrm-gist-row]')).map(
+        (row) => (row as HTMLElement).dataset.ghrmGistId || '',
+      );
+    }
+
+    it('clicking name header sorts alphabetically ascending', async () => {
+      const el = createSortableStash();
+      await el.updateComplete;
+
+      const nameHeader = document.querySelector<HTMLElement>(
+        '[data-ghrm-gist-sort="name"]',
+      );
+      nameHeader?.click();
+
+      expect(getRowIds()).toEqual(['a', 'b', 'c']);
+      expect(nameHeader?.classList.contains('is-active')).toBe(true);
+      expect(nameHeader?.closest('th')?.getAttribute('aria-sort')).toBe(
+        'ascending',
+      );
+    });
+
+    it('clicking date header twice reverses to ascending', async () => {
+      const el = createSortableStash();
+      await el.updateComplete;
+
+      const dateHeader = document.querySelector<HTMLElement>(
+        '[data-ghrm-gist-sort="date"]',
+      );
+      dateHeader?.click();
+
+      expect(getRowIds()).toEqual(['c', 'b', 'a']);
+      expect(dateHeader?.closest('th')?.getAttribute('aria-sort')).toBe(
+        'ascending',
+      );
+    });
+
+    it('clicking size header sorts by size descending', async () => {
+      const el = createSortableStash();
+      await el.updateComplete;
+
+      const sizeHeader = document.querySelector<HTMLElement>(
+        '[data-ghrm-gist-sort="size"]',
+      );
+      sizeHeader?.click();
+
+      expect(getRowIds()).toEqual(['a', 'b', 'c']);
+    });
+
+    it('sorts formatted sizes by raw byte value', async () => {
+      const el = createSortableStash();
+      await el.updateComplete;
+      const sizeCell = document.querySelector<HTMLElement>(
+        '[data-ghrm-gist-id="a"] [data-column-key="size"]',
+      );
+      if (!sizeCell) throw new Error('missing size cell');
+      sizeCell.textContent = '1.2 KB';
+      sizeCell.dataset.sortValue = '1200';
+
+      const sizeHeader = document.querySelector<HTMLElement>(
+        '[data-ghrm-gist-sort="size"]',
+      );
+      sizeHeader?.click();
+
+      expect(getRowIds()).toEqual(['a', 'b', 'c']);
+    });
+
+    it('clicking lines header sorts by lines descending', async () => {
+      const el = createSortableStash();
+      await el.updateComplete;
+
+      const linesHeader = document.querySelector<HTMLElement>(
+        '[data-ghrm-gist-sort="lines"]',
+      );
+      linesHeader?.click();
+
+      expect(getRowIds()).toEqual(['c', 'b', 'a']);
     });
   });
 });

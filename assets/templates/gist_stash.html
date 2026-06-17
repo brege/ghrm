@@ -27,6 +27,24 @@
                 </svg>
               </a>
             </div>
+            <div class="ghrm-file-actions">
+              <a
+                class="ghrm-file-action"
+                href="/_ghrm/gist?new=1"
+                aria-label="New paste"
+                title="New paste"
+              >
+                <svg
+                  class="ghrm-file-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-plus"></use>
+                </svg>
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -43,15 +61,57 @@
         </colgroup>
         <thead class="ghrm-column-headers">
           <tr>
-            <th class="ghrm-nav-name" colspan="2">Name</th>
-            <th class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta" data-column-key="date">
-              Modified date
+            <th class="ghrm-nav-name" colspan="2">
+              <button
+                type="button"
+                class="ghrm-column-sort"
+                data-ghrm-gist-sort="name"
+                title="Sort gist stash by name"
+              >
+                <span>Name</span>
+                <svg class="ghrm-column-sort-icon" aria-hidden="true" focusable="false" hidden>
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-up"></use>
+                </svg>
+              </button>
+            </th>
+            <th class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta" data-column-key="date" aria-sort="descending">
+              <button
+                type="button"
+                class="ghrm-column-sort is-active"
+                data-ghrm-gist-sort="date"
+                title="Sort gist stash by modified date"
+              >
+                <span>Modified</span>
+                <svg class="ghrm-column-sort-icon" aria-hidden="true" focusable="false">
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-down"></use>
+                </svg>
+              </button>
             </th>
             <th class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="size">
-              Size
+              <button
+                type="button"
+                class="ghrm-column-sort"
+                data-ghrm-gist-sort="size"
+                title="Sort gist stash by file size"
+              >
+                <span>Size</span>
+                <svg class="ghrm-column-sort-icon" aria-hidden="true" focusable="false" hidden>
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-down"></use>
+                </svg>
+              </button>
             </th>
             <th class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="lines">
-              Lines
+              <button
+                type="button"
+                class="ghrm-column-sort"
+                data-ghrm-gist-sort="lines"
+                title="Sort gist stash by line count"
+              >
+                <span>Lines</span>
+                <svg class="ghrm-column-sort-icon" aria-hidden="true" focusable="false" hidden>
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-down"></use>
+                </svg>
+              </button>
             </th>
           </tr>
         </thead>
@@ -87,17 +147,36 @@
                     <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-edit"></use>
                   </svg>
                 </button>
+                <button
+                  type="button"
+                  class="ghrm-gist-row-edit ghrm-gist-row-delete"
+                  data-ghrm-gist-delete-start
+                  aria-label="Delete paste"
+                  title="Delete paste"
+                >
+                  <svg aria-hidden="true" focusable="false">
+                    <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-trash"></use>
+                  </svg>
+                </button>
               </span>
             </td>
             <td
               class="ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta"
               data-column-key="date"
-              {%- if let Some(ts) = e.modified %} data-ts="{{ ts }}"{% endif %}
+              {%- if let Some(ts) = e.modified %} data-ts="{{ ts }}" data-sort-value="{{ ts }}"{% endif %}
             ></td>
-            <td class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="size">
+            <td
+              class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta"
+              data-column-key="size"
+              data-sort-value="{{ e.size_value }}"
+            >
               {{ e.size }}
             </td>
-            <td class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta" data-column-key="lines">
+            <td
+              class="ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta"
+              data-column-key="lines"
+              data-sort-value="{{ e.lines_value }}"
+            >
               {{ e.lines }}
             </td>
           </tr>

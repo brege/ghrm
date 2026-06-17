@@ -176,24 +176,30 @@ body.ghrm-wrap .ghrm-gist-input {
   position: relative;
 }
 
+.ghrm-gist-name-cell > [data-ghrm-gist-row-link] {
+  max-width: calc(100% - 66px);
+}
+
 .ghrm-gist-row-seat {
   display: inline-flex;
   position: relative;
-  width: 28px;
+  width: 54px;
   height: 24px;
   margin-left: 6px;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   vertical-align: -5px;
 }
 
 .ghrm-gist-row-edit {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 0 0 24px;
   width: 24px;
   height: 24px;
   padding: 0;
   border: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--fgColor-muted, #636c76);
   cursor: pointer;
@@ -202,6 +208,7 @@ body.ghrm-wrap .ghrm-gist-input {
 
 .ghrm-gist-row-edit:hover,
 .ghrm-gist-row-edit:focus {
+  background: var(--bgColor-neutral-muted, #afb8c133);
   color: var(--fgColor-default, #1f2328);
 }
 
