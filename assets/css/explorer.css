@@ -180,6 +180,16 @@ hr.ghrm-menu-separator {
   text-decoration: none;
 }
 
+.markdown-body .ghrm-nav-table button.ghrm-column-sort {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
 .markdown-body .ghrm-nav-table .ghrm-column-sort:hover,
 .markdown-body .ghrm-nav-table .ghrm-column-sort.is-active {
   color: var(--fgColor-default, #1f2328);
@@ -198,9 +208,22 @@ hr.ghrm-menu-separator {
   width: 34px;
 }
 
-.ghrm-nav-table .ghrm-column-headers .ghrm-nav-meta-number,
-.ghrm-nav-table .ghrm-column-headers .ghrm-nav-meta-time {
+.markdown-body .ghrm-nav-table .ghrm-column-headers .ghrm-nav-meta-number,
+.markdown-body .ghrm-nav-table .ghrm-column-headers .ghrm-nav-meta-time {
   text-align: right;
+}
+
+.markdown-body
+  .ghrm-nav-table
+  .ghrm-column-headers
+  .ghrm-nav-meta-number
+  button.ghrm-column-sort,
+.markdown-body
+  .ghrm-nav-table
+  .ghrm-column-headers
+  .ghrm-nav-meta-time
+  button.ghrm-column-sort {
+  justify-content: flex-end;
 }
 
 .ghrm-nav-empty {
