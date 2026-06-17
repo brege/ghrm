@@ -156,6 +156,19 @@ impl Store {
         self.current()?.context("missing written gist paste")
     }
 
+    pub(crate) fn delete(&self, id: &str) -> Result<()> {
+        let id = normalize_name(id)?;
+        let path = self.path_for(&id)?;
+        if !path.is_file() {
+            bail!("missing gist paste");
+        }
+        fs::remove_file(&path).with_context(|| format!("delete gist paste {}", path.display()))?;
+        if self.current_id()?.as_deref() == Some(id.as_str()) {
+            self.clear_current()?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn rename(&self, source: &str, name: &str) -> Result<Paste> {
         let source = normalize_name(source)?;
         let source_path = self.path_for(&source)?;
@@ -191,6 +204,15 @@ impl Store {
         fs::write(&tmp, format!("{id}\n"))
             .with_context(|| format!("write gist current pointer {}", tmp.display()))?;
         fs::rename(&tmp, self.root.join(CURRENT)).context("replace gist current pointer")
+    }
+
+    fn clear_current(&self) -> Result<()> {
+        let path = self.root.join(CURRENT);
+        match fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err).context("clear gist current pointer"),
+        }
     }
 
     fn path_for(&self, id: &str) -> Result<PathBuf> {
@@ -372,6 +394,56 @@ mod tests {
             fs::read_to_string(store.root().join(CURRENT)).unwrap(),
             "second\n"
         );
+    }
+
+    #[test]
+    fn delete_removes_paste_and_clears_current() {
+        let td = TempDir::new("ghrm-gist-delete");
+        let store = Store::from_root(td.path().join("gist")).unwrap();
+        store
+            .save_at(
+                None,
+                "hello\n",
+                Some("deleteme"),
+                UNIX_EPOCH + Duration::new(0, 1),
+            )
+            .unwrap();
+        assert!(store.root().join("deleteme.txt").is_file());
+        assert!(store.current().unwrap().is_some());
+
+        store.delete("deleteme").unwrap();
+
+        assert!(!store.root().join("deleteme.txt").exists());
+        assert!(store.current().unwrap().is_none());
+    }
+
+    #[test]
+    fn delete_non_current_paste_preserves_current() {
+        let td = TempDir::new("ghrm-gist-delete-noncurrent");
+        let store = Store::from_root(td.path().join("gist")).unwrap();
+        store
+            .save_at(
+                None,
+                "first\n",
+                Some("first"),
+                UNIX_EPOCH + Duration::new(0, 1),
+            )
+            .unwrap();
+        store
+            .save_at(
+                None,
+                "second\n",
+                Some("second"),
+                UNIX_EPOCH + Duration::new(1, 0),
+            )
+            .unwrap();
+        assert_eq!(store.current().unwrap().unwrap().id, "second");
+
+        store.delete("first").unwrap();
+
+        assert!(!store.root().join("first.txt").exists());
+        assert!(store.root().join("second.txt").is_file());
+        assert_eq!(store.current().unwrap().unwrap().id, "second");
     }
 
     #[test]

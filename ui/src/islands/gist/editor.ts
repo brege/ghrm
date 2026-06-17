@@ -24,6 +24,10 @@ interface GistCopyButton extends HTMLButtonElement {
 const gistPath = '/_ghrm/gist';
 const nameMax = 80;
 
+function deleteUrl(id: string): string {
+  return `/_ghrm/gist/p/${encodeURIComponent(id)}`;
+}
+
 function pad(value: number, width: number): string {
   return String(value).padStart(width, '0');
 }
@@ -294,6 +298,29 @@ export class GhrmGistEditor extends LitElement {
     }
   }
 
+  private async deletePaste(): Promise<void> {
+    const gistId = this.getGistId();
+    if (!gistId) return;
+
+    const confirmed = window.confirm(
+      'Delete this paste? This cannot be undone.',
+    );
+    if (!confirmed) return;
+
+    this.setStatus('Deleting');
+    try {
+      const response = await fetch(deleteUrl(gistId), { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error(`delete failed: ${response.status}`);
+      }
+      this.setStatus('Deleted');
+      await this.refresh(gistPath, 'Deleted');
+      this.replaceGistUrl();
+    } catch {
+      this.setStatus('Delete failed');
+    }
+  }
+
   async refresh(path = this.getGistPage(), status?: string): Promise<boolean> {
     const article = this.getArticle();
     if (!article) return false;
@@ -401,6 +428,14 @@ export class GhrmGistEditor extends LitElement {
       setWrapPref(!getWrapPref());
       this.syncWrapToggle();
     });
+
+    const deleteButton = this.querySelector<HTMLButtonElement>(
+      '[data-ghrm-gist-delete]',
+    );
+    deleteButton?.addEventListener('click', () => {
+      this.deletePaste();
+    });
+
     this.syncWrapToggle();
     this.syncSaveAction();
     renderBlobs();

@@ -23,6 +23,10 @@ interface RenameResponse {
 const stashPath = '/_ghrm/gist/stash';
 const nameMax = 80;
 
+function deleteUrl(id: string): string {
+  return `/_ghrm/gist/p/${encodeURIComponent(id)}`;
+}
+
 function normalizeName(value: string): string {
   const name = value.trim();
   return name.endsWith('.txt') ? name.slice(0, -4) : name;
@@ -90,15 +94,45 @@ export class GhrmGistStash extends LitElement {
     for (const row of article.querySelectorAll<GistRow>(
       '[data-ghrm-gist-row]',
     )) {
-      const button = row.querySelector<HTMLElement>(
+      const renameButton = row.querySelector<HTMLElement>(
         '[data-ghrm-gist-rename-start]',
       );
-      if (button && !button.dataset.ghrmBound) {
-        button.dataset.ghrmBound = '1';
-        button.addEventListener('click', () => {
+      if (renameButton && !renameButton.dataset.ghrmBound) {
+        renameButton.dataset.ghrmBound = '1';
+        renameButton.addEventListener('click', () => {
           this.beginRowRename(row);
         });
       }
+      const deleteButton = row.querySelector<HTMLElement>(
+        '[data-ghrm-gist-delete-start]',
+      );
+      if (deleteButton && !deleteButton.dataset.ghrmBound) {
+        deleteButton.dataset.ghrmBound = '1';
+        deleteButton.addEventListener('click', () => {
+          this.deleteRow(row);
+        });
+      }
+    }
+  }
+
+  private async deleteRow(row: GistRow): Promise<void> {
+    const id = row.dataset.ghrmGistId;
+    if (!id) return;
+
+    const link = row.querySelector<HTMLElement>('[data-ghrm-gist-row-link]');
+    const name = link?.textContent || id;
+    const confirmed = window.confirm(
+      `Delete "${name}"? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    const response = await fetch(deleteUrl(id), { method: 'DELETE' });
+    if (!response.ok) return;
+
+    row.remove();
+    const tbody = this.querySelector('tbody');
+    if (tbody && !tbody.querySelector('[data-ghrm-gist-row]')) {
+      this.refresh();
     }
   }
 
