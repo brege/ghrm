@@ -341,6 +341,12 @@ hr.ghrm-menu-separator {
   color: var(--fgColor-success, #1a7f37);
 }
 
+.ghrm-nav-icon:has(.ghrm-nav-copy-path:hover) > svg,
+.ghrm-nav-icon:has(.ghrm-nav-copy-path:focus-visible) > svg,
+.ghrm-nav-icon:has(.ghrm-nav-copy-path.is-copied) > svg {
+  opacity: 0;
+}
+
 .ghrm-nav-icon svg {
   display: block;
   width: 16px;
