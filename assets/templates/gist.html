@@ -51,6 +51,40 @@
             </div>
             <div class="ghrm-file-actions">
               {% if has_paste %}
+              <button
+                type="button"
+                class="ghrm-file-action"
+                data-ghrm-gist-new
+                aria-label="New paste"
+                title="New paste"
+              >
+                <svg
+                  class="ghrm-file-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-plus"></use>
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="ghrm-file-action ghrm-gist-delete"
+                data-ghrm-gist-delete
+                aria-label="Delete paste"
+                title="Delete paste"
+              >
+                <svg
+                  class="ghrm-file-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-trash"></use>
+                </svg>
+              </button>
               <a
                 class="ghrm-file-link"
                 href="{{ raw_href }}"
