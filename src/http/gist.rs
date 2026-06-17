@@ -204,7 +204,9 @@ pub(crate) async fn stash(State(s): State<AppState>, headers: HeaderMap) -> Resp
             href: format!("{GIST_HREF}/p/{}", entry.id),
             name: entry.name,
             modified: entry.modified,
+            size_value: entry.size.unwrap_or_default(),
             size: crate::explorer::column::size_text(entry.size).unwrap_or_default(),
+            lines_value: entry.lines.unwrap_or_default(),
             lines: crate::explorer::column::count_text(entry.lines).unwrap_or_default(),
             current: entry.current,
         })

@@ -20,8 +20,15 @@ interface RenameResponse {
   name: string;
 }
 
+type SortColumn = 'name' | 'date' | 'size' | 'lines';
+type SortDirection = 'asc' | 'desc';
+
 const stashPath = '/_ghrm/gist/stash';
 const nameMax = 80;
+const defaultSortColumn: SortColumn = 'date';
+const defaultSortDirection: SortDirection = 'desc';
+const sortIconAsc = '/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-up';
+const sortIconDesc = '/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-down';
 
 function deleteUrl(id: string): string {
   return `/_ghrm/gist/p/${encodeURIComponent(id)}`;
@@ -64,6 +71,8 @@ function renameResponse(value: unknown): RenameResponse {
 export class GhrmGistStash extends LitElement {
   private boundLiveHandler: (() => void) | null = null;
   private connectedOnce = false;
+  private sortColumn: SortColumn = defaultSortColumn;
+  private sortDirection: SortDirection = defaultSortDirection;
 
   protected createRenderRoot(): HTMLElement {
     return this;
@@ -72,6 +81,7 @@ export class GhrmGistStash extends LitElement {
   connectedCallback(): void {
     super.connectedCallback();
     this.setupRows();
+    this.setupSortHeaders();
     if (!this.connectedOnce) {
       this.connectedOnce = true;
       this.addGlobalListeners();
@@ -111,6 +121,115 @@ export class GhrmGistStash extends LitElement {
         deleteButton.addEventListener('click', () => {
           this.deleteRow(row);
         });
+      }
+    }
+  }
+
+  private setupSortHeaders(): void {
+    const article = this.getArticle();
+    if (!article) return;
+    for (const header of article.querySelectorAll<HTMLElement>(
+      '[data-ghrm-gist-sort]',
+    )) {
+      if (header.dataset.ghrmBound) continue;
+      header.dataset.ghrmBound = '1';
+      header.addEventListener('click', () => {
+        const column = header.dataset.ghrmGistSort as SortColumn;
+        if (!column) return;
+        this.toggleSort(column);
+      });
+    }
+    this.applySort();
+    this.updateSortHeaders();
+  }
+
+  private toggleSort(column: SortColumn): void {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = column === 'name' ? 'asc' : 'desc';
+    }
+    this.applySort();
+    this.updateSortHeaders();
+  }
+
+  private updateSortHeaders(): void {
+    const article = this.getArticle();
+    if (!article) return;
+    for (const header of article.querySelectorAll<HTMLElement>(
+      '[data-ghrm-gist-sort]',
+    )) {
+      const column = header.dataset.ghrmGistSort;
+      const isActive = column === this.sortColumn;
+      header.classList.toggle('is-active', isActive);
+      const heading = header.closest('th');
+      if (heading) {
+        if (isActive) {
+          heading.setAttribute(
+            'aria-sort',
+            this.sortDirection === 'asc' ? 'ascending' : 'descending',
+          );
+        } else {
+          heading.removeAttribute('aria-sort');
+        }
+      }
+      const icon = header.querySelector<SVGElement>('.ghrm-column-sort-icon');
+      const use = icon?.querySelector('use');
+      if (icon && use) {
+        icon.toggleAttribute('hidden', !isActive);
+        use.setAttribute(
+          'href',
+          this.sortDirection === 'asc' ? sortIconAsc : sortIconDesc,
+        );
+      }
+    }
+  }
+
+  private applySort(): void {
+    const tbody = this.querySelector('tbody');
+    if (!tbody) return;
+    const rows = Array.from(
+      tbody.querySelectorAll<GistRow>('[data-ghrm-gist-row]'),
+    );
+    if (rows.length === 0) return;
+
+    rows.sort((a, b) => {
+      const valA = this.getSortValue(a, this.sortColumn);
+      const valB = this.getSortValue(b, this.sortColumn);
+      let cmp: number;
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        cmp = valA.localeCompare(valB, undefined, { sensitivity: 'base' });
+      } else {
+        cmp = (valA as number) - (valB as number);
+      }
+      return this.sortDirection === 'asc' ? cmp : -cmp;
+    });
+
+    for (const row of rows) {
+      tbody.appendChild(row);
+    }
+  }
+
+  private getSortValue(row: GistRow, column: SortColumn): string | number {
+    switch (column) {
+      case 'name': {
+        const link = row.querySelector('[data-ghrm-gist-row-link]');
+        return link?.textContent?.toLowerCase() || '';
+      }
+      case 'date': {
+        const cell = row.querySelector<HTMLElement>('[data-column-key="date"]');
+        return Number(cell?.dataset.sortValue || cell?.dataset.ts || 0);
+      }
+      case 'size': {
+        const cell = row.querySelector<HTMLElement>('[data-column-key="size"]');
+        return Number(cell?.dataset.sortValue || 0);
+      }
+      case 'lines': {
+        const cell = row.querySelector<HTMLElement>(
+          '[data-column-key="lines"]',
+        );
+        return Number(cell?.dataset.sortValue || 0);
       }
     }
   }
