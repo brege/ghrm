@@ -2,13 +2,13 @@
 members = ["ghrm-stat"]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 rust-version = "1.88"
 license = "GPL-3.0-only"
 
 [workspace.dependencies]
-ghrm-stat = { version = "0.5.0", path = "ghrm-stat" }
+ghrm-stat = { version = "0.5.1", path = "ghrm-stat" }
 
 [package]
 name = "ghrm"
