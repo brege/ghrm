@@ -274,6 +274,9 @@ fn delete_inner(
     reload: &broadcast::Sender<String>,
     id: &str,
 ) -> Response {
+    if !store.has(id) {
+        return not_found();
+    }
     match store.delete(id) {
         Ok(()) => {
             let _ = reload.send("gist".to_string());
@@ -284,7 +287,7 @@ fn delete_inner(
         }
         Err(err) => {
             warn!("gist delete failed: {err}");
-            not_found()
+            server_error()
         }
     }
 }

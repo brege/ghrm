@@ -129,11 +129,7 @@ export class GhrmGistStash extends LitElement {
     const response = await fetch(deleteUrl(id), { method: 'DELETE' });
     if (!response.ok) return;
 
-    row.remove();
-    const tbody = this.querySelector('tbody');
-    if (tbody && !tbody.querySelector('[data-ghrm-gist-row]')) {
-      this.refresh();
-    }
+    await this.refresh();
   }
 
   private restoreRowRename(cell: Element, input: GistRowInput): void {
