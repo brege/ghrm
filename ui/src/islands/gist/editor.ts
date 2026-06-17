@@ -321,6 +321,17 @@ export class GhrmGistEditor extends LitElement {
     }
   }
 
+  private async newPaste(): Promise<void> {
+    if (this.hasUnsavedChanges()) {
+      const confirmed = window.confirm(
+        'Discard unsaved changes and create a new paste?',
+      );
+      if (!confirmed) return;
+    }
+    await this.refresh(`${gistPath}?new=1`);
+    window.history.replaceState(window.history.state, '', gistPath);
+  }
+
   async refresh(path = this.getGistPage(), status?: string): Promise<boolean> {
     const article = this.getArticle();
     if (!article) return false;
@@ -427,6 +438,13 @@ export class GhrmGistEditor extends LitElement {
     wrap?.addEventListener('click', () => {
       setWrapPref(!getWrapPref());
       this.syncWrapToggle();
+    });
+
+    const newButton = this.querySelector<HTMLButtonElement>(
+      '[data-ghrm-gist-new]',
+    );
+    newButton?.addEventListener('click', () => {
+      this.newPaste();
     });
 
     const deleteButton = this.querySelector<HTMLButtonElement>(

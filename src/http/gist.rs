@@ -8,16 +8,24 @@ use crate::tmpl::{self, GistCtx};
 use axum::{
     Json,
     body::{Body, Bytes},
-    extract::{Path as AxPath, State},
+    extract::{Path as AxPath, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::broadcast;
 use tracing::warn;
 
 const MAX_PASTE_BYTES: usize = 1024 * 1024;
 const GIST_HREF: &str = "/_ghrm/gist";
+const NEW_GIST_HREF: &str = "/_ghrm/gist?new=1";
+
+#[derive(Deserialize, Default)]
+pub(crate) struct ShowQuery {
+    #[serde(default)]
+    new: bool,
+}
 const RAW_HREF: &str = "/_ghrm/gist/raw";
 const STASH_HREF: &str = "/_ghrm/gist/stash";
 const GIST_ID_HEADER: &str = "X-Ghrm-Gist-Id";
@@ -39,10 +47,17 @@ struct RenameSummary {
     href: String,
 }
 
-pub(crate) async fn show(State(s): State<AppState>, headers: HeaderMap) -> Response {
+pub(crate) async fn show(
+    State(s): State<AppState>,
+    Query(query): Query<ShowQuery>,
+    headers: HeaderMap,
+) -> Response {
     let Some(store) = s.gist.as_ref() else {
         return not_found();
     };
+    if query.new {
+        return show_paste(&s, &headers, None, NEW_GIST_HREF, RAW_HREF);
+    }
     let current = match store.current() {
         Ok(current) => current,
         Err(err) => {
