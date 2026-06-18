@@ -195,7 +195,7 @@ describe('ghrm-archive-progress', () => {
       expect(labelEl?.textContent).toBe('Archive complete');
     });
 
-    it('hides after completion timeout', async () => {
+    it('shows close button on complete and hides on click', async () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
         if (requestUrl(url).includes('start')) {
           return jsonResponse({
@@ -206,15 +206,18 @@ describe('ghrm-archive-progress', () => {
         return jsonResponse({ state: 'complete', percent: 100 });
       });
 
-      vi.useFakeTimers();
       await element.startJob('/_ghrm/archive/start');
       await element.updateComplete;
       expect(element.querySelector('.ghrm-archive-progress')).toBeTruthy();
 
-      await vi.advanceTimersByTimeAsync(2000);
+      const closeBtn = element.querySelector<HTMLButtonElement>(
+        '.ghrm-archive-progress-close',
+      );
+      expect(closeBtn).toBeTruthy();
+
+      closeBtn?.click();
       await element.updateComplete;
       expect(element.querySelector('.ghrm-archive-progress')).toBeNull();
-      vi.useRealTimers();
     });
   });
 

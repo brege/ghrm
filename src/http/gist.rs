@@ -19,7 +19,7 @@ use tracing::warn;
 
 const MAX_PASTE_BYTES: usize = 1024 * 1024;
 const GIST_HREF: &str = "/_ghrm/gist";
-const NEW_GIST_HREF: &str = "/_ghrm/gist?new=1";
+const NEW_GIST_HREF: &str = "/_ghrm/gist?new=true";
 
 #[derive(Deserialize, Default)]
 pub(crate) struct ShowQuery {
@@ -208,7 +208,6 @@ pub(crate) async fn stash(State(s): State<AppState>, headers: HeaderMap) -> Resp
             size: crate::explorer::column::size_text(entry.size).unwrap_or_default(),
             lines_value: entry.lines.unwrap_or_default(),
             lines: crate::explorer::column::count_text(entry.lines).unwrap_or_default(),
-            current: entry.current,
         })
         .collect();
     let body = match tmpl::gist_stash(tmpl::GistStashCtx { entries: &entries }) {

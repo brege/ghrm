@@ -25,10 +25,10 @@ import {
   GoAlert,
   GoCopy,
   GoFilter,
-  GoHome,
   GoLightBulb,
   GoLocation,
   GoPeople,
+  GoRepoForked,
   GoScreenFull,
   GoStop,
   GoSync,
@@ -39,7 +39,7 @@ import {
   GoZoomOut,
 } from 'react-icons/go';
 import { IoMdCode } from 'react-icons/io';
-import { IoCloudOfflineOutline } from 'react-icons/io5';
+import { IoCloudOfflineOutline, IoHomeOutline } from 'react-icons/io5';
 import {
   LuCopySlash,
   LuFile,
@@ -116,7 +116,7 @@ export const icons: Icon[] = [
   { id: 'ghrm-icon-chevron-down', icon: <FiChevronDown /> },
   { id: 'ghrm-icon-chevron-left', icon: <FiChevronLeft /> },
   { id: 'ghrm-icon-chevron-right', icon: <FiChevronRight /> },
-  { id: 'ghrm-icon-home', icon: <GoHome /> },
+  { id: 'ghrm-icon-home', icon: <IoHomeOutline /> },
   { id: 'ghrm-icon-note', icon: <FaRegNoteSticky /> },
   { id: 'ghrm-icon-plus', icon: <FiPlus /> },
   { id: 'ghrm-icon-edit', icon: <TbEdit /> },
@@ -128,4 +128,5 @@ export const icons: Icon[] = [
   { id: 'ghrm-icon-external', icon: <RxExternalLink /> },
   { id: 'ghrm-icon-logout', icon: <MdLogout /> },
   { id: 'ghrm-icon-cloud-offline', icon: <IoCloudOfflineOutline /> },
+  { id: 'ghrm-icon-fork', icon: <GoRepoForked /> },
 ];

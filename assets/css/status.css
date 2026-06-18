@@ -142,6 +142,26 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
   grid-template-columns: 16px minmax(0, 1fr);
 }
 
+.ghrm-about-menu-local {
+  padding: 6px 10px;
+}
+
+.ghrm-about-menu-local-label {
+  display: block;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.ghrm-about-menu-local-path {
+  display: block;
+  margin-top: 2px;
+  color: var(--fgColor-default, #1f2328);
+  font-size: 12px;
+  word-break: break-all;
+}
+
 .ghrm-about-panel-menu-toggle {
   border: 0;
   background: transparent;

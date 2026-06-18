@@ -12,25 +12,8 @@
             <div class="ghrm-file-toggles">
               <a
                 class="ghrm-file-toggle"
-                href="/_ghrm/gist"
-                aria-label="Open current paste"
-                title="Open current paste"
-              >
-                <svg
-                  class="ghrm-file-icon"
-                  aria-hidden="true"
-                  focusable="false"
-                  height="16"
-                  width="16"
-                >
-                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-note"></use>
-                </svg>
-              </a>
-            </div>
-            <div class="ghrm-file-actions">
-              <a
-                class="ghrm-file-action"
-                href="/_ghrm/gist?new=1"
+                href="/_ghrm/gist?new=true"
+                hx-boost="false"
                 aria-label="New paste"
                 title="New paste"
               >
@@ -124,18 +107,8 @@
               </svg>
             </td>
             <td class="ghrm-nav-name ghrm-gist-name-cell">
-              <a href="{{ e.href }}" data-ghrm-gist-row-link>{{ e.name }}</a>
+              <a href="{{ e.href }}" hx-boost="false" data-ghrm-gist-row-link>{{ e.name }}</a>
               <span class="ghrm-gist-row-seat">
-                {% if e.current %}
-                <span class="ghrm-gist-current-badge" aria-label="Current paste" title="Current paste">
-                  <svg aria-hidden="true" focusable="false">
-                    <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-right"></use>
-                  </svg>
-                  <svg aria-hidden="true" focusable="false">
-                    <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-right"></use>
-                  </svg>
-                </span>
-                {% endif %}
                 <button
                   type="button"
                   class="ghrm-gist-row-edit"

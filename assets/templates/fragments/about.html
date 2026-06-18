@@ -14,8 +14,8 @@
       type="button"
       aria-expanded="false"
       aria-haspopup="menu"
-      aria-label="Choose about panels"
-      title="Choose about panels"
+      aria-label="About menu"
+      title="About menu"
     >
       <svg aria-hidden="true" focusable="false">
         <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-columns"></use>
@@ -28,6 +28,12 @@
       aria-label="Choose about panels"
       hidden
     >
+      {% if !local_path.is_empty() %}
+      <div class="ghrm-about-menu-section ghrm-about-menu-local" role="group" aria-label="Local path">
+        <span class="ghrm-about-menu-local-label">not a git repo</span>
+        <code class="ghrm-about-menu-local-path">{{ local_path }}</code>
+      </div>
+      {% endif %}
       <div
         class="ghrm-about-menu-section"
         role="group"
@@ -71,6 +77,19 @@
           "Open brege/ghrm",
         ) -}}
         {{- menu::release_link(project_release_href, project_version) -}}
+        {% if show_logout %}
+        <a
+          class="ghrm-view-option ghrm-about-menu-link"
+          href="/_ghrm/logout"
+          hx-boost="false"
+          role="menuitem"
+        >
+          <svg aria-hidden="true" focusable="false">
+            <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-logout"></use>
+          </svg>
+          <span>Log out</span>
+        </a>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -200,11 +219,5 @@
       ) -}}
     </div>
 
-    {% if !local_path.is_empty() %}
-    <div class="ghrm-about-local-path" aria-label="Local path">
-      <span>not a git repo</span>
-      <code>{{ local_path }}</code>
-    </div>
-    {% endif %}
   </div>
 </section>

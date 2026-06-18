@@ -23,7 +23,6 @@ pub(crate) struct Entry {
     pub modified: Option<u64>,
     pub size: Option<u64>,
     pub lines: Option<u64>,
-    pub current: bool,
 }
 
 impl Store {
@@ -76,7 +75,6 @@ impl Store {
     }
 
     pub(crate) fn entries(&self) -> Result<Vec<Entry>> {
-        let current_id = self.current_id()?;
         let mut raw: Vec<(Option<SystemTime>, Entry)> = Vec::new();
         for entry in fs::read_dir(&self.root)
             .with_context(|| format!("read gist directory {}", self.root.display()))?
@@ -110,7 +108,6 @@ impl Store {
                     modified: mtime.and_then(system_time_secs),
                     size: Some(meta.len()),
                     lines: Some(body.lines().count() as u64),
-                    current: current_id.as_deref() == Some(id),
                 },
             ));
         }
@@ -354,9 +351,7 @@ mod tests {
         assert_eq!(entries[0].name, "19700101T000001.000000002Z.txt");
         assert_eq!(entries[0].size, Some(second_body.len() as u64));
         assert_eq!(entries[0].lines, Some(2));
-        assert!(entries[0].current);
         assert_eq!(entries[1].id, "19700101T000000.000000001Z");
-        assert!(!entries[1].current);
     }
 
     #[test]

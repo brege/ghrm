@@ -292,6 +292,32 @@ hr.ghrm-menu-separator {
   background: var(--fgColor-danger, #d1242f);
 }
 
+.ghrm-archive-progress-close {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: -2px -4px -2px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fgColor-muted, #636c76);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.ghrm-archive-progress-close:hover {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+  color: var(--fgColor-default, #1f2328);
+}
+
+.ghrm-archive-progress-close svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
 .markdown-body .ghrm-nav-table tr,
 .markdown-body .ghrm-nav-table tr:nth-child(2n) {
   background-color: transparent;
@@ -351,7 +377,6 @@ hr.ghrm-menu-separator {
 .ghrm-nav-copy-path:focus-visible,
 .ghrm-nav-copy-path.is-copied {
   color: var(--fgColor-default, #1f2328);
-  background: var(--bgColor-neutral-muted, #afb8c133);
   opacity: 1;
 }
 

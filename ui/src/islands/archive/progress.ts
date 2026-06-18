@@ -104,7 +104,6 @@ export class GhrmArchiveProgress extends LitElement {
       this.status = status;
 
       if (status.state === 'complete') {
-        this.hideTimer = window.setTimeout(() => this.hide(), 1800);
         return;
       }
       if (status.state === 'failed') {
@@ -198,6 +197,10 @@ export class GhrmArchiveProgress extends LitElement {
     return `${size.toFixed(0)} PB`;
   }
 
+  private get showClose(): boolean {
+    return this.status?.state === 'complete' || this.status?.state === 'failed';
+  }
+
   protected render() {
     if (!this.visible) {
       return nothing;
@@ -212,6 +215,22 @@ export class GhrmArchiveProgress extends LitElement {
         <div class="ghrm-archive-progress-row">
           <span class="ghrm-archive-progress-label">${this.label}</span>
           <span class="ghrm-archive-progress-count">${this.count}</span>
+          ${
+            this.showClose
+              ? html`<button
+                type="button"
+                class="ghrm-archive-progress-close"
+                @click=${() => this.hide()}
+                aria-label="Close"
+              >
+                <svg aria-hidden="true" focusable="false">
+                  <use
+                    href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-up"
+                  ></use>
+                </svg>
+              </button>`
+              : nothing
+          }
         </div>
         <div class="ghrm-archive-progress-track">
           <div

@@ -253,7 +253,7 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     };
     let details = details_model(&s, &stats_input, &view, &source, raw_query.as_deref()).await?;
 
-    let peek_html = html_with_details(&details, &stats, true, &local_path);
+    let peek_html = html_with_details(&details, &stats, true, &local_path, s.auth.is_some());
     let sidebar_html = shell::sidebar_html(&stats, true);
     Ok(html_response(&format!("{peek_html}{sidebar_html}")))
 }
@@ -310,9 +310,10 @@ pub(crate) fn html(
     runtime_paths: &runtime::Paths,
     stats: &AboutStats,
     stats_loaded: bool,
+    show_logout: bool,
 ) -> String {
     let details = runtime_details(runtime_paths, &SourceState::NoRepo, None);
-    html_with_details(&details, stats, stats_loaded, "")
+    html_with_details(&details, stats, stats_loaded, "", show_logout)
 }
 
 fn html_with_details(
@@ -320,6 +321,7 @@ fn html_with_details(
     stats: &AboutStats,
     stats_loaded: bool,
     local_path: &str,
+    show_logout: bool,
 ) -> String {
     let project_version = env!("CARGO_PKG_VERSION");
     let project_release_href = format!("{PROJECT_URL}/releases/tag/v{project_version}");
@@ -331,6 +333,7 @@ fn html_with_details(
         project_href: PROJECT_URL,
         project_release_href: &project_release_href,
         project_version,
+        show_logout,
     };
     match tmpl::about(about) {
         Ok(html) => html,
@@ -887,7 +890,7 @@ mod tests {
     fn about_html_renders_runtime_and_app_links() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, false);
+        let html = html(&runtime_paths, &stats, false, false);
 
         assert!(html.contains("Paths"));
         assert!(html.contains("href=\"https://github.com/brege/ghrm\""));
@@ -905,7 +908,7 @@ mod tests {
     fn about_html_omits_empty_summary() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, true);
+        let html = html(&runtime_paths, &stats, true, false);
 
         assert!(html.contains("class=\"ghrm-about-peek\""));
         assert!(!html.contains("data-details-only"));
@@ -927,7 +930,7 @@ mod tests {
             href: String::new(),
             items: Vec::new(),
         });
-        let html = html(&runtime_paths, &stats, true);
+        let html = html(&runtime_paths, &stats, true, false);
 
         assert!(html.contains("class=\"ghrm-about-peek\""));
         assert!(!html.contains("data-details-only"));
@@ -938,16 +941,17 @@ mod tests {
     }
 
     #[test]
-    fn about_html_renders_local_path_below_panel_grid() {
+    fn about_html_renders_local_path_in_menu() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
         let details = runtime_details(&runtime_paths, &SourceState::NoRepo, None);
-        let html = html_with_details(&details, &stats, true, "/tmp/local");
+        let html = html_with_details(&details, &stats, true, "/tmp/local", false);
 
-        let grid = html.find("ghrm-about-panel-grid").unwrap();
+        let menu = html.find("ghrm-about-panel-menu").unwrap();
         let path = html.find("/tmp/local").unwrap();
         assert!(html.contains("not a git repo"));
-        assert!(grid < path);
+        assert!(html.contains("ghrm-about-menu-local"));
+        assert!(menu < path);
         assert!(!html.contains("ghrm-about-stamp-shell"));
     }
 
@@ -978,7 +982,7 @@ mod tests {
     fn about_html_omits_current_source() {
         let runtime_paths = test_runtime_paths();
         let stats = AboutStats::default();
-        let html = html(&runtime_paths, &stats, false);
+        let html = html(&runtime_paths, &stats, false, false);
 
         assert!(!html.contains("Current Source"));
     }

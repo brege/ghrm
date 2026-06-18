@@ -27,7 +27,7 @@ pub(crate) fn full_page(
         &r.title
     };
     let stats = AboutStats::default();
-    let about = about::html(runtime_paths, &stats, false);
+    let about = about::html(runtime_paths, &stats, false, show_logout);
     let (layout_class, sidebar) = match explorer_path {
         Some(path) => ("ghrm-layout-explorer", explorer_sidebar_html(path, false)),
         None => ("", String::new()),
@@ -42,7 +42,6 @@ pub(crate) fn full_page(
         source: &source,
         about: &about,
         sidebar: &sidebar,
-        show_logout,
         gist_nav: &gist_nav,
         asset_json: vendor::client_json(),
         vendor_styles: &assets.styles,

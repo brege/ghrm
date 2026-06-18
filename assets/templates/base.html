@@ -97,19 +97,6 @@
         </svg>
       </button>
       {{- gist_nav|safe -}}
-      {% if show_logout %}
-      <a
-        id="ghrm-logout"
-        href="/_ghrm/logout"
-        hx-boost="false"
-        aria-label="Log out"
-        title="Log out"
-      >
-        <svg aria-hidden="true" focusable="false">
-          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-logout"></use>
-        </svg>
-      </a>
-      {% endif %}
     </div>
   </header>
   {{- about|safe }}

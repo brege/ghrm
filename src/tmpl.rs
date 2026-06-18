@@ -12,7 +12,6 @@ pub struct PageShell<'a> {
     pub source: &'a str,
     pub about: &'a str,
     pub sidebar: &'a str,
-    pub show_logout: bool,
     pub gist_nav: &'a str,
     pub asset_json: &'a str,
     pub vendor_styles: &'a [String],
@@ -29,6 +28,7 @@ pub struct AboutPeek<'a> {
     pub project_href: &'a str,
     pub project_release_href: &'a str,
     pub project_version: &'static str,
+    pub show_logout: bool,
 }
 
 #[derive(Default)]
@@ -211,7 +211,6 @@ pub struct GistStashEntry {
     pub size: String,
     pub lines_value: u64,
     pub lines: String,
-    pub current: bool,
 }
 
 #[derive(Template)]
@@ -309,7 +308,6 @@ mod tests {
             source: "",
             about: "",
             sidebar: "",
-            show_logout: false,
             gist_nav: "",
             asset_json: "{}",
             vendor_styles: &[],
@@ -918,7 +916,6 @@ mod tests {
                     size: "100 B".to_string(),
                     lines_value: 10,
                     lines: "10".to_string(),
-                    current: false,
                 }],
             };
             let html = gist_stash(ctx).unwrap();

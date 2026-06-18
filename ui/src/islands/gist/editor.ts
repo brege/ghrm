@@ -328,7 +328,7 @@ export class GhrmGistEditor extends LitElement {
       );
       if (!confirmed) return;
     }
-    await this.refresh(`${gistPath}?new=1`);
+    await this.refresh(`${gistPath}?new=true`);
     window.history.replaceState(window.history.state, '', gistPath);
   }
 
