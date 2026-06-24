@@ -57,7 +57,7 @@ pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     options.extension.math_code = false;
     options.extension.shortcodes = true;
     options.extension.header_id_prefix = Some(String::new());
-    options.extension.tagfilter = false;
+    options.extension.tagfilter = true;
     options.render.r#unsafe = true;
     options.render.github_pre_lang = false;
 
