@@ -407,6 +407,7 @@ fn scan(root: &Path, use_ignore: bool, exclude_names: &[String], show_excludes: 
         .follow_links(true)
         .same_file_system(true)
         .require_git(false)
+        .ignore(use_ignore)
         .git_ignore(use_ignore)
         .git_exclude(use_ignore)
         .git_global(use_ignore);
@@ -739,6 +740,7 @@ pub fn list_dir(root: &Path, rel: &Path, spec: ListSpec<'_>) -> Option<NavDir> {
         .follow_links(true)
         .same_file_system(true)
         .require_git(false)
+        .ignore(spec.use_ignore)
         .git_ignore(spec.use_ignore)
         .git_exclude(spec.use_ignore)
         .git_global(spec.use_ignore);
@@ -968,6 +970,57 @@ mod tests {
     fn list_dir_toggles_gitignore() {
         let td = TempDir::new("ghrm-walk-test");
         fs::write(td.path().join(".gitignore"), "ignored.txt\n").unwrap();
+        fs::write(td.path().join("ignored.txt"), "ignored\n").unwrap();
+        fs::write(td.path().join("visible.txt"), "visible\n").unwrap();
+
+        let opts = ViewOpts {
+            show_hidden: true,
+            show_excludes: true,
+            filter_ext: false,
+        };
+        let order = SortSpec {
+            sort: Sort::Name,
+            dir: SortDir::Asc,
+        };
+        let ignored = list_dir(
+            td.path(),
+            Path::new(""),
+            ListSpec {
+                use_ignore: true,
+                exclude_names: &[],
+                extensions: &[],
+                matcher: None,
+                opts,
+                order,
+            },
+        )
+        .unwrap()
+        .entries;
+        let ignored_names: Vec<_> = ignored.into_iter().map(|entry| entry.name).collect();
+        assert!(!ignored_names.contains(&"ignored.txt".to_string()));
+
+        let shown = list_dir(
+            td.path(),
+            Path::new(""),
+            ListSpec {
+                use_ignore: false,
+                exclude_names: &[],
+                extensions: &[],
+                matcher: None,
+                opts,
+                order,
+            },
+        )
+        .unwrap()
+        .entries;
+        let shown_names: Vec<_> = shown.into_iter().map(|entry| entry.name).collect();
+        assert!(shown_names.contains(&"ignored.txt".to_string()));
+    }
+
+    #[test]
+    fn list_dir_toggles_dot_ignore() {
+        let td = TempDir::new("ghrm-walk-dot-ignore-test");
+        fs::write(td.path().join(".ignore"), "ignored.txt\n").unwrap();
         fs::write(td.path().join("ignored.txt"), "ignored\n").unwrap();
         fs::write(td.path().join("visible.txt"), "visible\n").unwrap();
 

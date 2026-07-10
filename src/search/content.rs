@@ -58,6 +58,7 @@ pub fn search(opts: SearchOpts<'_>) -> SearchResponse {
 
     let mut walk = WalkBuilder::new(opts.walk_root);
     walk.hidden(!opts.hidden)
+        .ignore(opts.use_ignore)
         .git_ignore(opts.use_ignore)
         .git_exclude(opts.use_ignore)
         .git_global(opts.use_ignore);
