@@ -8,7 +8,7 @@ mod math;
 mod path;
 
 use alert::rewrite_alerts;
-use anchor::{extract_title, rewrite_heading_anchors};
+use anchor::{HeadingAnchors, extract_title};
 use code::{GhrmBlockAdapter, extract_langs, rewrite_code_blocks};
 use comrak::options::Plugins;
 use comrak::{Options, markdown_to_html_with_plugins};
@@ -56,12 +56,13 @@ pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     options.extension.math_dollars = true;
     options.extension.math_code = false;
     options.extension.shortcodes = true;
-    options.extension.header_id_prefix = Some(String::new());
     options.extension.tagfilter = true;
     options.render.r#unsafe = true;
     options.render.github_pre_lang = false;
 
+    let heading_anchors = HeadingAnchors::default();
     let mut plugins = Plugins::default();
+    plugins.render.heading_adapter = Some(&heading_anchors);
     plugins
         .render
         .codefence_renderers
@@ -86,7 +87,6 @@ pub fn render_at(md: &str, path: Option<RenderPath<'_>>) -> Rendered {
     let html = rewrite_code_blocks(&html);
     let langs = extract_langs(&html);
     let title = extract_title(&html).unwrap_or_else(|| "Preview".to_string());
-    let html = rewrite_heading_anchors(&html);
     let html = match path {
         Some(path) => rewrite_local_urls(&html, path),
         None => html,

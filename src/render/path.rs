@@ -10,24 +10,20 @@ pub struct RenderPath<'a> {
 pub(super) fn rewrite_local_urls(html: &str, path: RenderPath<'_>) -> String {
     rewrite_str(
         html,
-        RewriteStrSettings {
-            element_content_handlers: vec![
-                element!("[href]", move |el| {
-                    if let Some(value) = el.get_attribute("href") {
-                        el.set_attribute("href", &local_url(path, &value))?;
-                    }
-                    Ok(())
-                }),
-                element!("[src]", move |el| {
-                    if let Some(value) = el.get_attribute("src") {
-                        el.set_attribute("src", &local_url(path, &value))?;
-                    }
-                    Ok(())
-                }),
-            ],
-            strict: false,
-            ..RewriteStrSettings::new()
-        },
+        RewriteStrSettings::new()
+            .with_strict(false)
+            .append_element_content_handler(element!("[href]", move |el| {
+                if let Some(value) = el.get_attribute("href") {
+                    el.set_attribute("href", &local_url(path, &value))?;
+                }
+                Ok(())
+            }))
+            .append_element_content_handler(element!("[src]", move |el| {
+                if let Some(value) = el.get_attribute("src") {
+                    el.set_attribute("src", &local_url(path, &value))?;
+                }
+                Ok(())
+            })),
     )
     .expect("rendered markdown URL rewriting should produce valid HTML")
 }

@@ -173,6 +173,22 @@ fn headings_get_hash_anchor_before_close() {
 }
 
 #[test]
+fn duplicate_headings_get_unique_anchors() {
+    let md = "## Taxonomy\n\n## Taxonomy\n";
+    let r = render_at(md, None);
+    assert!(
+        r.html.contains(r##"<h2 id="taxonomy">Taxonomy<a class="ghrm-anchor" aria-hidden="true" tabindex="-1" href="#taxonomy">#</a></h2>"##),
+        "{}",
+        r.html
+    );
+    assert!(
+        r.html.contains(r##"<h2 id="taxonomy-1">Taxonomy<a class="ghrm-anchor" aria-hidden="true" tabindex="-1" href="#taxonomy-1">#</a></h2>"##),
+        "{}",
+        r.html
+    );
+}
+
+#[test]
 fn shebang_detection() {
     let cases = [
         ("#!/bin/bash\n", "bash"),

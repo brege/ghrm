@@ -4,35 +4,31 @@ use lol_html::{RewriteStrSettings, element, rewrite_str, text};
 pub(super) fn rewrite_alerts(html: &str) -> String {
     rewrite_str(
         html,
-        RewriteStrSettings {
-            element_content_handlers: vec![
-                element!("div.markdown-alert", |el| {
-                    if let Some(kind) = el
-                        .get_attribute("class")
-                        .as_deref()
-                        .and_then(alert_kind_from_class)
-                    {
-                        el.set_attribute(
-                            "class",
-                            &format!("markdown-admonition markdown-admonition-{kind}"),
-                        )?;
-                    }
-                    Ok(())
-                }),
-                element!("p.markdown-alert-title", |el| {
-                    el.set_attribute("class", "markdown-admonition-title")?;
-                    Ok(())
-                }),
-                text!("p.markdown-alert-title", |chunk| {
-                    if let Some(icon) = octicon_for_title(chunk.as_str()) {
-                        chunk.before(&octicon_svg(icon), ContentType::Html);
-                    }
-                    Ok(())
-                }),
-            ],
-            strict: false,
-            ..RewriteStrSettings::new()
-        },
+        RewriteStrSettings::new()
+            .with_strict(false)
+            .append_element_content_handler(element!("div.markdown-alert", |el| {
+                if let Some(kind) = el
+                    .get_attribute("class")
+                    .as_deref()
+                    .and_then(alert_kind_from_class)
+                {
+                    el.set_attribute(
+                        "class",
+                        &format!("markdown-admonition markdown-admonition-{kind}"),
+                    )?;
+                }
+                Ok(())
+            }))
+            .append_element_content_handler(element!("p.markdown-alert-title", |el| {
+                el.set_attribute("class", "markdown-admonition-title")?;
+                Ok(())
+            }))
+            .append_element_content_handler(text!("p.markdown-alert-title", |chunk| {
+                if let Some(icon) = octicon_for_title(chunk.as_str()) {
+                    chunk.before(&octicon_svg(icon), ContentType::Html);
+                }
+                Ok(())
+            })),
     )
     .expect("rendered markdown alert rewriting should produce valid HTML")
 }

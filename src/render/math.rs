@@ -54,8 +54,9 @@ fn has_inline_dollar_math(md: &str) -> bool {
 pub(super) fn rewrite_math_spans(html: &str) -> String {
     rewrite_str(
         html,
-        RewriteStrSettings {
-            element_content_handlers: vec![element!("[data-math-style]", |el| {
+        RewriteStrSettings::new()
+            .with_strict(false)
+            .append_element_content_handler(element!("[data-math-style]", |el| {
                 let delim = match el.get_attribute("data-math-style").as_deref() {
                     Some("inline") => "$",
                     Some("display") => "$$",
@@ -65,10 +66,7 @@ pub(super) fn rewrite_math_spans(html: &str) -> String {
                 el.after(delim, ContentType::Text);
                 el.remove_and_keep_content();
                 Ok(())
-            })],
-            strict: false,
-            ..RewriteStrSettings::new()
-        },
+            })),
     )
     .expect("rendered markdown math span rewriting should produce valid HTML")
 }
