@@ -1106,7 +1106,7 @@ dependencies = [
 
 [[package]]
 name = "ghrm"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "anyhow",
  "askama",
@@ -1152,7 +1152,7 @@ dependencies = [
 
 [[package]]
 name = "ghrm-stat"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "anyhow",
  "askalono",
