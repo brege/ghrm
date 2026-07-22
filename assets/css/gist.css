@@ -120,6 +120,9 @@ body.ghrm-wrap .ghrm-gist-input {
 }
 
 .ghrm-gist-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--borderColor-default, #d0d7de);

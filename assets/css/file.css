@@ -63,7 +63,7 @@ body.ghrm-print .ghrm-file-tools {
 }
 
 .ghrm-file-toggle:hover:not(:disabled),
-.ghrm-file-action:hover,
+.ghrm-file-action:hover:not(:disabled),
 .ghrm-file-link:hover {
   background: var(--bgColor-neutral-muted, #afb8c133);
 }
@@ -72,7 +72,8 @@ body.ghrm-print .ghrm-file-tools {
   background: var(--bgColor-muted, #f6f8fa);
 }
 
-.ghrm-file-toggle:disabled {
+.ghrm-file-toggle:disabled,
+.ghrm-file-action:disabled {
   cursor: default;
   color: var(--fgColor-muted, #636c76);
   opacity: 0.5;

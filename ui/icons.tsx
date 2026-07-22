@@ -18,6 +18,7 @@ import {
   FiChevronUp,
   FiDownload,
   FiPlus,
+  FiSave,
   FiSearch,
   FiSun,
 } from 'react-icons/fi';
@@ -120,6 +121,7 @@ export const icons: Icon[] = [
   { id: 'ghrm-icon-note', icon: <FaRegNoteSticky /> },
   { id: 'ghrm-icon-plus', icon: <FiPlus /> },
   { id: 'ghrm-icon-edit', icon: <TbEdit /> },
+  { id: 'ghrm-icon-save', icon: <FiSave /> },
   { id: 'ghrm-icon-trash', icon: <GoTrash /> },
   { id: 'ghrm-icon-tip', icon: <GoLightBulb /> },
   { id: 'ghrm-icon-important', icon: <FaRegCommentDots /> },

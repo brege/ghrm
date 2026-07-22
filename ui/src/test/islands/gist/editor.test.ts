@@ -12,6 +12,7 @@ function createEditorArticle(
   return `
     <article data-ghrm-gist data-ghrm-gist-page="/_ghrm/gist" data-ghrm-gist-id="${id}">
       <ghrm-gist-editor>
+        <button type="button" data-ghrm-gist-save disabled>Save</button>
         <form data-ghrm-gist-form>
           <div data-ghrm-gist-editor>
             <div class="ghrm-blob">
@@ -158,6 +159,25 @@ describe('ghrm-gist-editor', () => {
         '[data-ghrm-gist-save]',
       )!;
       expect(saveButton.disabled).toBe(false);
+    });
+
+    it('syncs the header and form save buttons together', () => {
+      const buttons = element.querySelectorAll<HTMLButtonElement>(
+        '[data-ghrm-gist-save]',
+      );
+      expect(buttons.length).toBe(2);
+      for (const button of buttons) {
+        expect(button.disabled).toBe(true);
+      }
+
+      const textarea = element.querySelector('textarea')!;
+      textarea.value = 'modified content';
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+      for (const button of buttons) {
+        expect(button.disabled).toBe(false);
+        expect(button.getAttribute('aria-label')).toBe('Save paste');
+      }
     });
 
     it('save button is disabled when name is invalid', () => {

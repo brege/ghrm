@@ -99,6 +99,12 @@ export class GhrmGistEditor extends LitElement {
     return this.querySelector<GistNameInput>('[data-ghrm-gist-name]');
   }
 
+  private getSaveButtons(): HTMLButtonElement[] {
+    return [
+      ...this.querySelectorAll<HTMLButtonElement>('[data-ghrm-gist-save]'),
+    ];
+  }
+
   private currentText(): string {
     return this.getTextarea()?.value || '';
   }
@@ -124,20 +130,17 @@ export class GhrmGistEditor extends LitElement {
   private syncSaveAction(saving = false): void {
     const input = this.getTextarea();
     const name = this.getNameInput();
-    const control = this.querySelector<HTMLElement>(
+    const controls = this.querySelectorAll<HTMLElement>(
       '[data-ghrm-gist-save-control]',
     );
-    const button = this.querySelector<HTMLButtonElement>(
-      '[data-ghrm-gist-save]',
-    );
-    if (!input || !button) return;
+    const buttons = this.getSaveButtons();
+    if (!input || buttons.length === 0) return;
 
     const normalized = name ? normalizeName(name.value) : '';
     const valid = !name || validName(normalized);
     const changed =
       input.value !== input.dataset.ghrmGistSaved ||
       !!(name && normalized !== name.dataset.ghrmGistSaved);
-    button.disabled = saving || !valid || !changed;
     const label = saving
       ? 'Saving'
       : !valid
@@ -145,10 +148,13 @@ export class GhrmGistEditor extends LitElement {
         : changed
           ? 'Save paste'
           : 'No changes to save';
-    button.setAttribute('aria-label', label);
-    button.title = label;
+    for (const button of buttons) {
+      button.disabled = saving || !valid || !changed;
+      button.setAttribute('aria-label', label);
+      button.title = label;
+    }
     name?.setAttribute('aria-invalid', valid ? 'false' : 'true');
-    if (control) {
+    for (const control of controls) {
       control.title = label;
     }
   }
@@ -394,12 +400,11 @@ export class GhrmGistEditor extends LitElement {
       this.save();
     });
 
-    const saveButton = this.querySelector<HTMLButtonElement>(
-      '[data-ghrm-gist-save]',
-    );
-    saveButton?.addEventListener('click', () => {
-      this.save();
-    });
+    for (const button of this.getSaveButtons()) {
+      button.addEventListener('click', () => {
+        this.save();
+      });
+    }
 
     const input = this.getTextarea();
     if (input) {

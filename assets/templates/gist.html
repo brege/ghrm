@@ -50,6 +50,24 @@
               </a>
             </div>
             <div class="ghrm-file-actions">
+              <button
+                type="button"
+                class="ghrm-file-action"
+                data-ghrm-gist-save
+                disabled
+                aria-label="No changes to save"
+                title="No changes to save"
+              >
+                <svg
+                  class="ghrm-file-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-save"></use>
+                </svg>
+              </button>
               {% if has_paste %}
               <button
                 type="button"
@@ -160,6 +178,15 @@
                 disabled
                 aria-label="No changes to save"
               >
+                <svg
+                  class="ghrm-file-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                  height="16"
+                  width="16"
+                >
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-save"></use>
+                </svg>
                 Save
               </button>
             </span>
