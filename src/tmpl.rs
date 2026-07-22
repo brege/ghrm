@@ -896,6 +896,16 @@ mod tests {
         }
 
         #[test]
+        fn gist_textarea_newline_sentinel() {
+            let html = gist(minimal_gist_ctx()).unwrap();
+            assert!(
+                html.contains(">\nhello world</textarea>"),
+                "textarea body must follow a sentinel newline so the HTML \
+                 parser strips the sentinel instead of the paste's first line"
+            );
+        }
+
+        #[test]
         fn gist_stash_article() {
             let html = gist_stash(minimal_gist_stash_ctx()).unwrap();
             assert!(
