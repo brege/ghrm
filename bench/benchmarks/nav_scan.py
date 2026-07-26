@@ -1,6 +1,5 @@
 from benchmarks import ghrm
 
-
 MODES = ("git_excluded", "git_included")
 
 
@@ -9,8 +8,8 @@ def setup_cache():
 
 
 class RefScan:
-    params = [ghrm.nav_scan_cases(), MODES]
-    param_names = ["target", "mode"]
+    params = (ghrm.nav_scan_cases(), MODES)
+    param_names = ("target", "mode")
     number = 1
     repeat = 7
     warmup_time = 0

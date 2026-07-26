@@ -77,3 +77,10 @@ repos:
         entry: uv run --project bench ruff format
         language: system
         files: ^bench/.*\.py$
+
+      - id: ty
+        name: ty
+        entry: uv run --project bench ty check
+        language: system
+        files: ^bench/.*\.py$
+        pass_filenames: false

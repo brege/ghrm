@@ -4,7 +4,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 SORTS = ("name", "size", "lines")
 TIME = "path_search.PathSearch.time_query"
 ROWS = "path_search.PathSearch.track_rows"

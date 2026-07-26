@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import argparse
 import json
 import random
@@ -10,7 +9,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-
 
 REPOS = {
     "fd": "https://github.com/sharkdp/fd.git",
@@ -98,7 +96,7 @@ def main():
 
 
 def timestamped_name():
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
     return f"stat-compare-{stamp}.jsonl"
 
 

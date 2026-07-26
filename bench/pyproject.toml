@@ -1,6 +1,6 @@
 [project]
 name = "ghrm-bench"
-version = "0.1.0"
+version = "0.1.1"
 description = "ASV benchmark harness for ghrm"
 requires-python = ">=3.10"
 dependencies = [
@@ -12,5 +12,10 @@ package = false
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15.12",
+    "ruff>=0.16.0",
+    "ty>=0.0.18",
 ]
+
+[tool.ty.src]
+include = ["benchmarks", "report.py", "scripts"]
+respect-ignore-files = true

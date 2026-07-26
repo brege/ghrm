@@ -7,7 +7,6 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-
 REF_SCAN_REPOS = ("fd", "ripgrep", "tokei", "onefetch")
 NAV_SCAN_TARGET_ENV = "GHRM_NAV_SCAN_TARGET"
 
@@ -142,10 +141,10 @@ def wait_for_nav(base):
     while time.monotonic() < deadline:
         try:
             payload = fetch_json(tree_url)
-            if payload.get("ready"):
-                return
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+        if payload.get("ready"):
+            return
         time.sleep(0.05)
     raise RuntimeError("ghrm nav did not become ready")
 

@@ -2,7 +2,6 @@ from pathlib import Path
 
 from benchmarks import ghrm
 
-
 CASE_PARAMS = ("name", "size", "lines")
 
 
@@ -12,7 +11,7 @@ def setup_cache():
 
 class PathSearch:
     params = CASE_PARAMS
-    param_names = ["sort"]
+    param_names = ("sort",)
     number = 1
     repeat = 10
     warmup_time = 0.1
