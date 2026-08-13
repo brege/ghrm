@@ -1,4 +1,4 @@
-use super::CommitInfo;
+use super::{CommitInfo, path_key};
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader};
@@ -99,10 +99,6 @@ fn log_path_matches(request: &LogRequest, changed: &str) -> bool {
         return false;
     };
     request.is_dir && rest.starts_with('/')
-}
-
-fn path_key(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
 }
 
 #[cfg(test)]
