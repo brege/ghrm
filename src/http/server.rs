@@ -3,9 +3,11 @@ use crate::explorer::view::{ViewConfig, ViewQuery, ViewState};
 use crate::explorer::walk::{NavSet, ViewOpts};
 use crate::explorer::{column, crumbs, filter, view, walk, watch};
 use crate::gist;
-use crate::http::{about, api, archive, assets, auth, delivery, gist as http_gist, shell, vendor};
+use crate::http::{
+    about, api, archive, assets, auth, delivery, diff, gist as http_gist, shell, vendor,
+};
 use crate::render::{self, Rendered};
-use crate::repo::RepoSet;
+use crate::repo::{self, RepoSet};
 use crate::runtime;
 use crate::tmpl;
 
@@ -318,6 +320,7 @@ fn protected_routes(gist_enabled: bool) -> Router<AppState> {
         .route("/_ghrm/search", get(api::search))
         .route("/_ghrm/render", get(api::render))
         .route("/_ghrm/about", get(about::show))
+        .route("/_ghrm/compare", get(diff::compare))
         .route("/_ghrm/archive/{format}", post(archive::start))
         .route("/_ghrm/archive/{format}/{*path}", post(archive::start))
         .route("/_ghrm/archive-jobs/{id}", get(archive::status))
@@ -491,7 +494,10 @@ async fn root(
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let hx = HtmxContext::from_headers(&headers);
     match s.mode {
-        Mode::File => render_target(&s, &s.target, None, view, hx).await,
+        Mode::File => {
+            let diff = diff::spec_from_query(raw_query.as_deref());
+            render_target(&s, &s.target, None, diff, view, hx).await
+        }
         Mode::Dir => explorer::render(&s, "", view, hx).await,
     }
 }
@@ -506,8 +512,9 @@ async fn any_path(
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let hx = HtmxContext::from_headers(&headers);
     let native = native_file_request(&headers);
+    let diff = diff::spec_from_query(raw_query.as_deref());
     if s.mode == Mode::File {
-        return serve_file_mode(&s, &path, view, hx, native).await;
+        return serve_file_mode(&s, &path, diff, view, hx, native).await;
     }
     let had_trailing = path.ends_with('/');
     let clean = path.trim_matches('/').to_string();
@@ -532,6 +539,19 @@ async fn any_path(
         }
         return explorer::render(&s, &clean, view, hx).await;
     }
+    if let Some(spec) = &diff
+        && let Some(res) = diff::try_render(
+            &s,
+            &joined,
+            Some(s.target.as_path()),
+            spec,
+            &view,
+            hx.clone(),
+        )
+        .await
+    {
+        return res;
+    }
     if joined.extension().and_then(|s| s.to_str()) == Some("md") {
         return render_file(&s, &joined, Some(s.target.as_path()), view, hx).await;
     }
@@ -544,6 +564,7 @@ async fn any_path(
 async fn serve_file_mode(
     s: &AppState,
     path: &str,
+    diff: Option<repo::diff::DiffSpec>,
     view: ViewState,
     hx: HtmxContext,
     native: bool,
@@ -553,7 +574,7 @@ async fn serve_file_mode(
     };
     let clean = path.trim_matches('/');
     if clean.is_empty() {
-        return render_target(s, &s.target, None, view, hx).await;
+        return render_target(s, &s.target, None, diff, view, hx).await;
     }
     let joined = root.join(clean);
     let meta = match tokio::fs::metadata(&joined).await {
@@ -566,16 +587,22 @@ async fn serve_file_mode(
     if native {
         return delivery::stream_file(&joined).await;
     }
-    render_target(s, &joined, None, view, hx).await
+    render_target(s, &joined, None, diff, view, hx).await
 }
 
 async fn render_target(
     s: &AppState,
     path: &Path,
     root: Option<&Path>,
+    diff: Option<repo::diff::DiffSpec>,
     view: ViewState,
     hx: HtmxContext,
 ) -> Response {
+    if let Some(spec) = &diff
+        && let Some(res) = diff::try_render(s, path, root, spec, &view, hx.clone()).await
+    {
+        return res;
+    }
     if path.extension().and_then(|s| s.to_str()) == Some("md") {
         render_file(s, path, root, view, hx).await
     } else {
@@ -616,14 +643,19 @@ async fn render_file(
         .unwrap_or_default();
     let crumbs = page_crumbs(s, path, root, &rel, &view);
     let raw_html = delivery::raw_blob_html(&md, Some("markdown"));
+    let compare = s
+        .repos
+        .repo_for(path)
+        .map(|_| delivery::compare_attrs(&rel, None));
     let view = delivery::FileView::markdown();
-    let view_attrs = delivery::file_view_attrs(&rel, view);
+    let view_attrs = delivery::file_view_attrs(&rel, view, compare.as_ref());
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
         preview_html: &rendered.html,
         raw_html: &raw_html,
         view_attrs: &view_attrs,
+        compare_html: "",
         preview_hidden: view.preview_hidden,
         raw_hidden: view.raw_hidden,
     }) {
@@ -708,14 +740,19 @@ async fn render_source_file(
     let features = vendor::feature_list(&rendered);
     let crumbs = page_crumbs(s, path, root, rel, &view);
     let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
+    let compare = s
+        .repos
+        .repo_for(path)
+        .map(|_| delivery::compare_attrs(rel, None));
     let file_view = delivery::FileView::source();
-    let view_attrs = delivery::file_view_attrs(rel, file_view);
+    let view_attrs = delivery::file_view_attrs(rel, file_view, compare.as_ref());
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
         preview_html: &rendered.html,
         raw_html: &raw_html,
         view_attrs: &view_attrs,
+        compare_html: "",
         preview_hidden: file_view.preview_hidden,
         raw_hidden: file_view.raw_hidden,
     }) {
@@ -780,14 +817,19 @@ async fn render_dual_file(
     let features = vendor::feature_list(&rendered);
     let crumbs = page_crumbs(s, path, root, rel, &view);
     let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
+    let compare = s
+        .repos
+        .repo_for(path)
+        .map(|_| delivery::compare_attrs(rel, None));
     let file_view = delivery::FileView::dual();
-    let view_attrs = delivery::file_view_attrs(rel, file_view);
+    let view_attrs = delivery::file_view_attrs(rel, file_view, compare.as_ref());
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
         preview_html: &preview_html,
         raw_html: &raw_html,
         view_attrs: &view_attrs,
+        compare_html: "",
         preview_hidden: file_view.preview_hidden,
         raw_hidden: file_view.raw_hidden,
     }) {
@@ -830,7 +872,13 @@ fn dual_preview_html(ext: Option<&str>, native_url: &str, filename: &str) -> Str
     }
 }
 
-fn page_crumbs(s: &AppState, path: &Path, root: &Path, rel: &str, view: &ViewState) -> String {
+pub(crate) fn page_crumbs(
+    s: &AppState,
+    path: &Path,
+    root: &Path,
+    rel: &str,
+    view: &ViewState,
+) -> String {
     if s.mode == Mode::File {
         crumbs::html(path, s.home.as_deref(), "", view, &s.view_cfg)
     } else {

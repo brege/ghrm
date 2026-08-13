@@ -104,8 +104,26 @@ pub struct PageCtx<'a> {
     pub preview_html: &'a str,
     pub raw_html: &'a str,
     pub view_attrs: &'a str,
+    pub compare_html: &'a str,
     pub preview_hidden: bool,
     pub raw_hidden: bool,
+}
+
+#[derive(Template)]
+#[template(path = "fragments/compare.html")]
+pub struct CompareCtx<'a> {
+    pub action: &'a str,
+    pub base: &'a str,
+    pub head: &'a str,
+    pub branches: &'a [String],
+    pub tags: &'a [String],
+    pub commits: &'a [CompareCommit],
+}
+
+pub struct CompareCommit {
+    pub hash: String,
+    pub subject: String,
+    pub timestamp: u64,
 }
 
 #[derive(Template)]
@@ -271,6 +289,10 @@ pub fn page(ctx: PageCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
 
+pub fn compare(ctx: CompareCtx<'_>) -> Result<String> {
+    Ok(ctx.render()?)
+}
+
 pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
     Ok(ctx.render()?)
 }
@@ -379,6 +401,7 @@ mod tests {
             preview_html: "<pre>code</pre>",
             raw_html: "<pre>raw</pre>",
             view_attrs: "data-ghrm-view-kind=\"source\"",
+            compare_html: "",
             preview_hidden: false,
             raw_hidden: true,
         }
@@ -399,6 +422,98 @@ mod tests {
     fn minimal_gist_stash_ctx() -> GistStashCtx<'static> {
         static ENTRIES: &[GistStashEntry] = &[];
         GistStashCtx { entries: ENTRIES }
+    }
+
+    mod compare_contracts {
+        use super::*;
+
+        fn compare_ctx<'a>(
+            branches: &'a [String],
+            tags: &'a [String],
+            commits: &'a [CompareCommit],
+        ) -> CompareCtx<'a> {
+            CompareCtx {
+                action: "/docs/readme.md",
+                base: "HEAD",
+                head: ":worktree",
+                branches,
+                tags,
+                commits,
+            }
+        }
+
+        #[test]
+        fn page_renders_compare_slot_between_crumbs_and_actions() {
+            let mut ctx = minimal_page_ctx();
+            ctx.compare_html = "<form id=\"ghrm-compare\"></form>";
+
+            let html = page(ctx).unwrap();
+
+            let crumbs_idx = html.find("ghrm-breadcrumbs").unwrap();
+            let compare_idx = html.find("id=\"ghrm-compare\"").unwrap();
+            let actions_idx = html.find("ghrm-header-actions").unwrap();
+            assert!(crumbs_idx < compare_idx);
+            assert!(compare_idx < actions_idx);
+        }
+
+        #[test]
+        fn page_omits_empty_compare_slot() {
+            let html = page(minimal_page_ctx()).unwrap();
+            assert!(!html.contains("ghrm-compare"));
+        }
+
+        #[test]
+        fn form_submits_get_to_file_path() {
+            let html = compare(compare_ctx(&[], &[], &[])).unwrap();
+
+            assert!(html.contains("id=\"ghrm-compare\""));
+            assert!(html.contains("method=\"get\""));
+            assert!(html.contains("action=\"/docs/readme.md\""));
+            assert!(html.contains("name=\"base\""));
+            assert!(html.contains("name=\"head\""));
+            assert!(html.contains("data-ghrm-compare-close"));
+        }
+
+        #[test]
+        fn pseudo_refs_and_head_are_always_listed() {
+            let html = compare(compare_ctx(&[], &[], &[])).unwrap();
+
+            assert!(html.contains("value=\":worktree\""));
+            assert!(html.contains("value=\":index\""));
+            assert!(html.contains("value=\"HEAD\""));
+            assert!(!html.contains("optgroup"));
+        }
+
+        #[test]
+        fn selection_marks_base_and_head_options() {
+            let html = compare(compare_ctx(&[], &[], &[])).unwrap();
+
+            assert!(html.contains("value=\"HEAD\" selected>"));
+            assert!(html.contains("value=\":worktree\" selected>"));
+            assert!(!html.contains("value=\":index\" selected>"));
+        }
+
+        #[test]
+        fn refs_and_commits_render_grouped() {
+            let branches = vec!["main".to_string()];
+            let tags = vec!["v0.5.3".to_string()];
+            let commits = vec![CompareCommit {
+                hash: "d888e48".to_string(),
+                subject: "chore: upgrade benchmark tooling".to_string(),
+                timestamp: 1723600000,
+            }];
+
+            let html = compare(compare_ctx(&branches, &tags, &commits)).unwrap();
+
+            assert!(html.contains("<optgroup label=\"Branches\">"));
+            assert!(html.contains("<optgroup label=\"Tags\">"));
+            assert!(html.contains("<optgroup label=\"Commits\">"));
+            assert!(html.contains("value=\"main\""));
+            assert!(html.contains("value=\"v0.5.3\""));
+            assert!(html.contains("value=\"d888e48\""));
+            assert!(html.contains("data-timestamp=\"1723600000\""));
+            assert!(html.contains("d888e48 chore: upgrade benchmark tooling"));
+        }
     }
 
     mod base_shell {

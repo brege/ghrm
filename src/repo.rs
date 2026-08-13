@@ -65,7 +65,6 @@ impl RepoSet {
             .unwrap_or(SourceState::NoRepo)
     }
 
-    #[allow(dead_code)]
     pub fn repo_for(&self, path: &Path) -> Option<(&Path, String)> {
         let entry = self
             .entries

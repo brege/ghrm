@@ -1,5 +1,6 @@
 use crate::http::server::{AppState, Mode};
 use crate::paths;
+use crate::repo::diff::DiffSpec;
 
 use axum::{
     body::Body,
@@ -7,6 +8,7 @@ use axum::{
     http::{HeaderValue, Request, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 use tower_http::services::ServeFile;
@@ -223,22 +225,49 @@ fn raw_source_html(text: &str) -> String {
     )
 }
 
-pub(crate) fn file_view_attrs(rel: &str, view: FileView) -> String {
-    format!(
+pub(crate) struct CompareAttrs {
+    pub(crate) url: String,
+    pub(crate) diff: Option<String>,
+}
+
+pub(crate) fn compare_attrs(rel: &str, diff: Option<&DiffSpec>) -> CompareAttrs {
+    let path = utf8_percent_encode(rel.trim_matches('/'), NON_ALPHANUMERIC);
+    CompareAttrs {
+        url: format!("/_ghrm/compare?path={path}"),
+        diff: diff.map(|spec| spec.token()),
+    }
+}
+
+pub(crate) fn file_view_attrs(rel: &str, view: FileView, compare: Option<&CompareAttrs>) -> String {
+    let mut attrs = format!(
         "data-ghrm-view-kind=\"{kind}\" data-current-path=\"{current}\" data-ghrm-raw-url=\"{raw}\" data-ghrm-download-url=\"{download}\"",
         kind = view.kind,
         current = html_escape::encode_double_quoted_attribute(rel.trim_matches('/')),
         raw = html_escape::encode_double_quoted_attribute(&internal_file_href("raw", rel)),
         download =
             html_escape::encode_double_quoted_attribute(&internal_file_href("download", rel)),
-    )
+    );
+    let Some(compare) = compare else {
+        return attrs;
+    };
+    attrs.push_str(&format!(
+        " data-ghrm-compare-url=\"{}\"",
+        html_escape::encode_double_quoted_attribute(&compare.url),
+    ));
+    if let Some(diff) = &compare.diff {
+        attrs.push_str(&format!(
+            " data-ghrm-diff=\"{}\"",
+            html_escape::encode_double_quoted_attribute(diff),
+        ));
+    }
+    attrs
 }
 
 fn internal_file_href(kind: &str, rel: &str) -> String {
     format!("/_ghrm/{kind}/{}", rel.trim_matches('/'))
 }
 
-fn resolve_internal_file(s: &AppState, rel: &str) -> Option<PathBuf> {
+pub(crate) fn resolve_internal_file(s: &AppState, rel: &str) -> Option<PathBuf> {
     let base = if s.mode == Mode::File {
         s.target.parent().unwrap_or(s.target.as_path())
     } else {
@@ -355,7 +384,7 @@ mod tests {
 
     #[test]
     fn file_view_attrs_escapes_current_and_urls() {
-        let attrs = file_view_attrs("docs/odd\"name.md", FileView::source());
+        let attrs = file_view_attrs("docs/odd\"name.md", FileView::source(), None);
 
         assert!(attrs.contains(r#"data-current-path="docs/odd&quot;name.md""#));
         assert!(attrs.contains(r#"data-ghrm-raw-url="/_ghrm/raw/docs/odd&quot;name.md""#));
@@ -460,13 +489,33 @@ mod tests {
 
     #[test]
     fn file_view_attrs_kind_preserved() {
-        let md = file_view_attrs("/docs/readme.md", FileView::markdown());
+        let md = file_view_attrs("/docs/readme.md", FileView::markdown(), None);
         assert!(md.contains(r#"data-ghrm-view-kind="markdown""#));
 
-        let src = file_view_attrs("/src/main.rs", FileView::source());
+        let src = file_view_attrs("/src/main.rs", FileView::source(), None);
         assert!(src.contains(r#"data-ghrm-view-kind="source""#));
 
-        let dual = file_view_attrs("/icon.svg", FileView::dual());
+        let dual = file_view_attrs("/icon.svg", FileView::dual(), None);
         assert!(dual.contains(r#"data-ghrm-view-kind="dual""#));
+    }
+
+    #[test]
+    fn file_view_attrs_include_compare_url() {
+        let compare = compare_attrs("docs/read me.md", None);
+        let attrs = file_view_attrs("docs/read me.md", FileView::source(), Some(&compare));
+
+        assert!(
+            attrs.contains(r#"data-ghrm-compare-url="/_ghrm/compare?path=docs%2Fread%20me%2Emd""#)
+        );
+        assert!(!attrs.contains("data-ghrm-diff"));
+    }
+
+    #[test]
+    fn file_view_attrs_include_diff_spec() {
+        let spec = DiffSpec::parse("HEAD..:worktree").unwrap();
+        let compare = compare_attrs("a.md", Some(&spec));
+        let attrs = file_view_attrs("a.md", FileView::source(), Some(&compare));
+
+        assert!(attrs.contains(r#"data-ghrm-diff="HEAD..:worktree""#));
     }
 }

@@ -1,11 +1,9 @@
-#![allow(dead_code)]
-
 use std::path::Path;
 use std::process::{Command, Stdio};
 
 const REF_LIMIT: usize = 100;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct RefList {
     pub(crate) branches: Vec<String>,
     pub(crate) tags: Vec<String>,

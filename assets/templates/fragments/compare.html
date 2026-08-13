@@ -1,0 +1,73 @@
+{%- macro ref_options(branches, tags, commits, selected) -%}
+<option
+  value=":worktree"
+  {%- if selected == ":worktree" %} selected{% endif -%}
+>Working tree</option>
+<option
+  value=":index"
+  {%- if selected == ":index" %} selected{% endif -%}
+>Staged</option>
+<option
+  value="HEAD"
+  {%- if selected == "HEAD" %} selected{% endif -%}
+>HEAD</option>
+{%- if !branches.is_empty() %}
+<optgroup label="Branches">
+  {%- for branch in branches %}
+  <option
+    value="{{ branch }}"
+    {%- if selected == branch.as_str() %} selected{% endif -%}
+  >{{ branch }}</option>
+  {%- endfor %}
+</optgroup>
+{%- endif %}
+{%- if !tags.is_empty() %}
+<optgroup label="Tags">
+  {%- for tag in tags %}
+  <option
+    value="{{ tag }}"
+    {%- if selected == tag.as_str() %} selected{% endif -%}
+  >{{ tag }}</option>
+  {%- endfor %}
+</optgroup>
+{%- endif %}
+{%- if !commits.is_empty() %}
+<optgroup label="Commits">
+  {%- for commit in commits %}
+  <option
+    value="{{ commit.hash }}"
+    data-timestamp="{{ commit.timestamp }}"
+    {%- if selected == commit.hash.as_str() %} selected{% endif -%}
+  >{{ commit.hash }} {{ commit.subject }}</option>
+  {%- endfor %}
+</optgroup>
+{%- endif %}
+{%- endmacro %}
+<form
+  id="ghrm-compare"
+  class="ghrm-compare"
+  method="get"
+  action="{{ action }}"
+  data-ghrm-compare
+>
+  <label class="ghrm-compare-side ghrm-compare-base">
+    <span class="ghrm-compare-tag">base</span>
+    <select name="base" aria-label="Base revision">
+      {%- call ref_options(branches, tags, commits, base) %}{% endcall %}
+    </select>
+  </label>
+  <span class="ghrm-compare-dots" aria-hidden="true">..</span>
+  <label class="ghrm-compare-side ghrm-compare-head">
+    <span class="ghrm-compare-tag">head</span>
+    <select name="head" aria-label="Head revision">
+      {%- call ref_options(branches, tags, commits, head) %}{% endcall %}
+    </select>
+  </label>
+  <button type="submit" class="ghrm-compare-apply">Diff</button>
+  <button
+    type="button"
+    class="ghrm-compare-close"
+    data-ghrm-compare-close
+    aria-label="Close compare"
+  >&#215;</button>
+</form>
