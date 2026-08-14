@@ -29,6 +29,7 @@ The UI workspace owns maintained browser source, icon declarations, and the vali
 | --- | --- |
 | src/features.ts | ordered browser feature registry |
 | src/runtime.ts | initial and refresh lifecycle runner used by htmx refreshes and tests |
+| src/compare.ts | file compare bar controls |
 | src/dom.ts | shared DOM helpers |
 | src/explorer.ts | explorer page setup and controls |
 | src/file.ts | rendered file view setup |

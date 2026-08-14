@@ -3,16 +3,16 @@
   "algorithm": "sha256",
   "archive": {
     "path": "js.tar.zst",
-    "sha256": "65ec28496becf2de185f85288420cc2fa937adeabcceff80e50104762151a161"
+    "sha256": "45cb4b1d1474332bfff10f2f898b65f32f15764536cc1489ad46993af19ab723"
   },
   "files": {
-    "js/chunks/adapters.js": "6de7cecb525d64356b4deb2ea2643d0329989874b58c7cda9dcb255076d9a35d",
+    "js/chunks/adapters.js": "f178a7c0ef4de11b3af56d1f5ad3b7df76c8d1c820823ac97e0528304e0356b7",
     "js/chunks/explorer.js": "09dceec3fc8f7a8d12a96efcc879a74888baa44fd08490b91452923f947ce767",
     "js/chunks/gist.js": "c0e087f8848613ce43b0e0ed47639ad3c825f07e8385a9ee5ebfea738fbd9149",
     "js/chunks/shared.js": "043b3c2c4a27fa8b9df628df026da949d3ed5390f717a6ebec93654acb453edb",
     "js/gist.js": "8b832d0ae5b7b3460d3465cc8db496e5a6e9c8e61c3f29c9e709a1507b510c5e",
-    "js/icons.svg": "b063511c4556e8f81893c78b541a71eed95376ed9b42c1287531afd549315278",
-    "js/main.js": "521e0d9f2b0b01dd806fed65e6490506c95fc634892634a6549dfebc821121a9",
+    "js/icons.svg": "cba23112fd6c501d7fba57072e3c156642a149a19587785813af2000a9890e5a",
+    "js/main.js": "b47d40ae8d0cd9f9766ab116f5e55d2ee272fecb694ddee1776c3eb20f0fca01",
     "js/preview.js": "45d68956c4f6d5d03f986de89c8e0a2174e21e830592c996f44e5b870c52bf1c"
   }
 }

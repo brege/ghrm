@@ -108,6 +108,66 @@
   overflow-wrap: inherit;
 }
 
+.markdown-body tr.ghrm-blob-row-add td.ghrm-blob-line-code {
+  background: #e6ffec;
+}
+
+.markdown-body tr.ghrm-blob-row-add td.ghrm-blob-line-no {
+  background: #ccffd8;
+}
+
+.markdown-body tr.ghrm-blob-row-del td.ghrm-blob-line-code {
+  background: #ffebe9;
+}
+
+.markdown-body tr.ghrm-blob-row-del td.ghrm-blob-line-no {
+  background: #ffd7d5;
+}
+
+.markdown-body tr.ghrm-blob-row-hunk td.ghrm-blob-line-code,
+.markdown-body tr.ghrm-blob-row-hunk td.ghrm-blob-line-no {
+  background: #ddf4ff;
+}
+
+:root[data-theme="dark"]
+  .markdown-body
+  tr.ghrm-blob-row-add
+  td.ghrm-blob-line-code {
+  background: rgba(46, 160, 67, 0.15);
+}
+
+:root[data-theme="dark"]
+  .markdown-body
+  tr.ghrm-blob-row-add
+  td.ghrm-blob-line-no {
+  background: rgba(63, 185, 80, 0.3);
+}
+
+:root[data-theme="dark"]
+  .markdown-body
+  tr.ghrm-blob-row-del
+  td.ghrm-blob-line-code {
+  background: rgba(248, 81, 73, 0.1);
+}
+
+:root[data-theme="dark"]
+  .markdown-body
+  tr.ghrm-blob-row-del
+  td.ghrm-blob-line-no {
+  background: rgba(248, 81, 73, 0.3);
+}
+
+:root[data-theme="dark"]
+  .markdown-body
+  tr.ghrm-blob-row-hunk
+  td.ghrm-blob-line-code,
+:root[data-theme="dark"]
+  .markdown-body
+  tr.ghrm-blob-row-hunk
+  td.ghrm-blob-line-no {
+  background: rgba(56, 139, 253, 0.1);
+}
+
 body:is(.ghrm-wrap, .ghrm-print) .markdown-body .ghrm-blob-table {
   width: 100%;
   max-width: 100%;

@@ -42,10 +42,11 @@ describe('code highlighting', () => {
 });
 
 describe('blob line rendering', () => {
-  function makeBlob(source: string): HTMLTableSectionElement {
+  function makeBlob(source: string, lang = ''): HTMLTableSectionElement {
+    const cls = lang ? ` class="language-${lang}"` : '';
     document.body.innerHTML = `
       <div class="ghrm-blob">
-        <div class="ghrm-blob-source"><pre><code></code></pre></div>
+        <div class="ghrm-blob-source"><pre><code${cls}></code></pre></div>
         <table class="ghrm-blob-table"><tbody></tbody></table>
       </div>
     `;
@@ -100,5 +101,33 @@ describe('blob line rendering', () => {
     renderBlobs();
 
     expect(body.querySelectorAll('tr')).toHaveLength(0);
+  });
+
+  it('classes unified diff rows for add, delete, and hunk tinting', () => {
+    const body = makeBlob(
+      'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-old\n+new\n context\n',
+      'diff',
+    );
+
+    renderBlobs();
+
+    const rows = [...body.querySelectorAll('tr')];
+    expect(rows.map((row) => row.className)).toEqual([
+      '',
+      '',
+      '',
+      'ghrm-blob-row-hunk',
+      'ghrm-blob-row-del',
+      'ghrm-blob-row-add',
+      '',
+    ]);
+  });
+
+  it('leaves rows unclassed outside the diff language', () => {
+    const body = makeBlob('+not a diff\n');
+
+    renderBlobs();
+
+    expect(body.querySelector('tr')?.className).toBe('');
   });
 });

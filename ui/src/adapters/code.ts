@@ -237,10 +237,22 @@ function renderBlob(block: Element): void {
     lines.pop();
   }
 
+  const diffBlob = code.classList.contains('language-diff');
+  const plainLines = source.split('\n');
+  if (
+    terminated &&
+    plainLines.length > 1 &&
+    plainLines[plainLines.length - 1] === ''
+  ) {
+    plainLines.pop();
+  }
+
   const rows = lines.map((line, idx) => {
     const content = line || '&#8203;';
     const lineNo = idx + 1;
-    return `<tr><td class="ghrm-blob-line-no" data-line-number="${lineNo}"><span class="ghrm-blob-line-no-text">${lineNo}</span></td><td class="ghrm-blob-line-code"><code class="ghrm-blob-line-text">${content}</code></td></tr>`;
+    const rowClass = diffBlob ? diffRowClass(plainLines[idx] ?? '') : '';
+    const rowAttr = rowClass ? ` class="${rowClass}"` : '';
+    return `<tr${rowAttr}><td class="ghrm-blob-line-no" data-line-number="${lineNo}"><span class="ghrm-blob-line-no-text">${lineNo}</span></td><td class="ghrm-blob-line-code"><code class="ghrm-blob-line-text">${content}</code></td></tr>`;
   });
 
   if (!terminated) {
@@ -250,6 +262,20 @@ function renderBlob(block: Element): void {
   }
 
   body.innerHTML = rows.join('');
+}
+
+// Unified diff row classes come from the raw first characters so whole
+// rows, including the number gutter, carry add, delete, and hunk tinting;
+// the +++/--- file header lines stay untinted.
+function diffRowClass(line: string): string {
+  if (line.startsWith('@@')) return 'ghrm-blob-row-hunk';
+  if (line.startsWith('+') && !line.startsWith('+++')) {
+    return 'ghrm-blob-row-add';
+  }
+  if (line.startsWith('-') && !line.startsWith('---')) {
+    return 'ghrm-blob-row-del';
+  }
+  return '';
 }
 
 export function renderBlobs(): void {

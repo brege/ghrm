@@ -4,6 +4,7 @@ import {
   showCopied,
   writeClipboard,
 } from './adapters/copy';
+import { setupCompare } from './compare';
 import { icon, isHtmlFile } from './dom';
 import { applyWrapState, getWrapPref, isPrintMode, setWrapPref } from './prefs';
 import { buildToc } from './toc';
@@ -13,6 +14,8 @@ interface FileViewContainer extends HTMLElement {
     ghrmViewKind?: string;
     ghrmRawUrl?: string;
     ghrmDownloadUrl?: string;
+    ghrmCompareUrl?: string;
+    ghrmDiff?: string;
   };
 }
 
@@ -198,6 +201,7 @@ function setupFileView(container: FileViewContainer): void {
   actions.append(rawLink, copy, download);
   tools.append(toggles, actions);
   host.prepend(tools);
+  setupCompare(container, tools);
   syncFileView(container, kind === 'source');
 }
 

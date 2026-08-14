@@ -412,6 +412,14 @@ body.ghrm-print .ghrm-topojson:focus-within .leaflet-control-zoom {
   color: var(--fgColor-default, #1f2328);
 }
 
+.markdown-body .hljs-addition {
+  color: var(--fgColor-success, #1a7f37);
+}
+
+.markdown-body .hljs-deletion {
+  color: var(--fgColor-danger, #d1242f);
+}
+
 .leaflet-container {
   font: inherit;
 }

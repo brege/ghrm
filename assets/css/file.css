@@ -179,3 +179,160 @@ body.ghrm-print .ghrm-file-tools {
   color: inherit;
   flex: 0 0 auto;
 }
+
+.ghrm-compare-toggle[aria-expanded="true"] {
+  color: var(--fgColor-accent, #0969da);
+  border-color: var(--borderColor-accent-emphasis, #0969da);
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+.ghrm-page-shell {
+  container: ghrm-page / inline-size;
+}
+
+/* Variant A inline morph: the bar unfolds between the breadcrumbs and the
+   header actions with a width and opacity transition. */
+.ghrm-compare {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 640px;
+  opacity: 1;
+  overflow: hidden;
+  transition:
+    max-width 0.28s ease,
+    opacity 0.18s ease;
+}
+
+.ghrm-compare.is-collapsed {
+  max-width: 0;
+  opacity: 0;
+}
+
+body.ghrm-print .ghrm-compare {
+  display: none;
+}
+
+.ghrm-compare-side {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ghrm-compare-side::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.ghrm-compare-base::before {
+  background: var(--fgColor-danger, #d1242f);
+}
+
+.ghrm-compare-head::before {
+  background: var(--fgColor-success, #1a7f37);
+}
+
+.ghrm-compare-tag {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ghrm-compare select {
+  height: 32px;
+  max-width: 180px;
+  padding: 0 6px 0 22px;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+.ghrm-compare-dots {
+  color: var(--fgColor-muted, #636c76);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  user-select: none;
+}
+
+.ghrm-compare-apply {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ghrm-compare-apply:hover {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+.ghrm-compare-close {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fgColor-muted, #636c76);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ghrm-compare-close:hover {
+  color: var(--fgColor-default, #1f2328);
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+/* Variant B fallback: in a narrow shell the expanded bar takes a full
+   second header row instead of compressing the pickers, and the motion
+   becomes a height reveal. The query tracks the page shell container, not
+   the viewport, so it also engages in wide windows whose header content
+   leaves no inline room. */
+@container ghrm-page (max-width: 960px) {
+  .ghrm-explorer-header:has(.ghrm-compare:not([hidden])) {
+    flex-wrap: wrap;
+  }
+
+  .ghrm-compare {
+    order: 1;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    max-width: none;
+    max-height: 96px;
+    transition:
+      max-height 0.26s ease,
+      opacity 0.18s ease;
+  }
+
+  .ghrm-compare.is-collapsed {
+    max-height: 0;
+    opacity: 0;
+  }
+
+  .ghrm-compare select {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ghrm-compare {
+    transition: none;
+  }
+}
