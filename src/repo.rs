@@ -114,6 +114,7 @@ fn git_command(root: &Path) -> std::process::Command {
         .arg("-C")
         .arg(root)
         .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_NO_LAZY_FETCH", "1")
         .stdin(std::process::Stdio::null());
     cmd
 }
@@ -132,6 +133,19 @@ mod tests {
         assert!(fsmonitor);
         assert!(GIT_SAFETY_ARGS.contains(&"--literal-pathspecs"));
         assert!(GIT_SAFETY_ARGS.contains(&"--no-pager"));
+    }
+
+    #[test]
+    fn git_command_disables_writes_and_lazy_fetches() {
+        let cmd = git_command(Path::new("/repo"));
+        let env = |name: &str| {
+            cmd.get_envs()
+                .find(|(key, _)| *key == name)
+                .and_then(|(_, value)| value)
+        };
+
+        assert_eq!(env("GIT_OPTIONAL_LOCKS"), Some(std::ffi::OsStr::new("0")));
+        assert_eq!(env("GIT_NO_LAZY_FETCH"), Some(std::ffi::OsStr::new("1")));
     }
 
     fn write_git_config(root: &Path) {

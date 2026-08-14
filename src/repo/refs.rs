@@ -1,3 +1,5 @@
+use super::diff::DiffTarget;
+
 use std::io::Read;
 use std::path::Path;
 use std::process::Stdio;
@@ -31,7 +33,7 @@ pub(crate) struct CommitEntry {
 enum GitOut {
     Unavailable,
     Broken,
-    Text(String),
+    Bytes(Vec<u8>),
 }
 
 // Entry counts are bounded at the git command (--count and -n) and bytes
@@ -52,7 +54,7 @@ pub(crate) fn refs_for(root: &Path, rel: &str) -> Option<RefList> {
     ) {
         GitOut::Unavailable => Vec::new(),
         GitOut::Broken => return None,
-        GitOut::Text(text) => parse_ref_lines(&text, "refs/heads/")?,
+        GitOut::Bytes(raw) => parse_ref_output(&raw, "refs/heads/")?,
     };
     let tags = match run_git(
         root,
@@ -65,7 +67,7 @@ pub(crate) fn refs_for(root: &Path, rel: &str) -> Option<RefList> {
     ) {
         GitOut::Unavailable => Vec::new(),
         GitOut::Broken => return None,
-        GitOut::Text(text) => parse_ref_lines(&text, "refs/tags/")?,
+        GitOut::Bytes(raw) => parse_ref_output(&raw, "refs/tags/")?,
     };
     let commits = match run_git(
         root,
@@ -80,7 +82,7 @@ pub(crate) fn refs_for(root: &Path, rel: &str) -> Option<RefList> {
     ) {
         GitOut::Unavailable => Vec::new(),
         GitOut::Broken => return None,
-        GitOut::Text(text) => parse_commit_lines(&text)?,
+        GitOut::Bytes(raw) => parse_commit_output(&raw)?,
     };
     Some(RefList {
         branches,
@@ -118,16 +120,23 @@ fn run_git(root: &Path, args: &[&str]) -> GitOut {
     if !status.success() && !capped {
         return GitOut::Unavailable;
     }
-    let mut text = String::from_utf8_lossy(&raw).into_owned();
     if capped {
         // A capped read can end mid-record; the torn tail is dropped so
         // the parsers only see complete lines.
-        match text.rfind('\n') {
-            Some(idx) => text.truncate(idx + 1),
-            None => text.clear(),
+        match raw.iter().rposition(|byte| *byte == b'\n') {
+            Some(idx) => raw.truncate(idx + 1),
+            None => raw.clear(),
         }
     }
-    GitOut::Text(text)
+    GitOut::Bytes(raw)
+}
+
+fn parse_ref_output(raw: &[u8], prefix: &str) -> Option<Vec<RefEntry>> {
+    parse_ref_lines(std::str::from_utf8(raw).ok()?, prefix)
+}
+
+fn parse_commit_output(raw: &[u8]) -> Option<Vec<CommitEntry>> {
+    parse_commit_lines(&String::from_utf8_lossy(raw))
 }
 
 fn parse_ref_lines(text: &str, prefix: &str) -> Option<Vec<RefEntry>> {
@@ -137,8 +146,11 @@ fn parse_ref_lines(text: &str, prefix: &str) -> Option<Vec<RefEntry>> {
             if !full.starts_with(prefix) || short.is_empty() {
                 return None;
             }
+            let DiffTarget::Rev(value) = DiffTarget::parse(full)? else {
+                return None;
+            };
             Some(RefEntry {
-                value: full.to_string(),
+                value,
                 label: short.to_string(),
             })
         })
@@ -155,8 +167,11 @@ fn parse_commit_lines(text: &str) -> Option<Vec<CommitEntry>> {
             if !hex(value) || !hex(label) {
                 return None;
             }
+            let DiffTarget::Rev(value) = DiffTarget::parse(value)? else {
+                return None;
+            };
             Some(CommitEntry {
-                value: value.to_string(),
+                value,
                 label: label.to_string(),
                 timestamp: timestamp.parse().ok()?,
                 subject: subject.to_string(),
@@ -195,6 +210,14 @@ mod tests {
         assert!(parse_ref_lines("no separator line\n", "refs/heads/").is_none());
         assert!(parse_ref_lines("refs/heads/empty\x1f\n", "refs/heads/").is_none());
         assert!(parse_ref_lines("refs/remotes/origin/main\x1fmain\n", "refs/heads/").is_none());
+
+        let long = format!("refs/heads/{}\x1flong\n", "a".repeat(256));
+        assert!(parse_ref_lines(&long, "refs/heads/").is_none());
+    }
+
+    #[test]
+    fn parse_ref_output_rejects_non_utf8_identity() {
+        assert!(parse_ref_output(b"refs/heads/bad\xff\x1fbad\n", "refs/heads/").is_none());
     }
 
     #[test]
@@ -218,5 +241,17 @@ mod tests {
         assert!(parse_commit_lines("d888e48\x1fd888e48\x1fnot-a-number\x1fsubject\n").is_none());
         assert!(parse_commit_lines("nothex!\x1fd888e48\x1f1723600000\x1fsubject\n").is_none());
         assert!(parse_commit_lines("\x1fd888e48\x1f1723600000\x1fsubject\n").is_none());
+
+        let long = format!("{}\x1fd888e48\x1f1723600000\x1fsubject\n", "a".repeat(257));
+        assert!(parse_commit_lines(&long).is_none());
+    }
+
+    #[test]
+    fn parse_commit_output_replaces_non_utf8_subject_bytes() {
+        let commits =
+            parse_commit_output(b"d888e48aaaa\x1fd888e48\x1f1723600000\x1fsubject \xff\n").unwrap();
+
+        assert_eq!(commits[0].value, "d888e48aaaa");
+        assert_eq!(commits[0].subject, "subject \u{fffd}");
     }
 }

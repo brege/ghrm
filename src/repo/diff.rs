@@ -6,7 +6,7 @@ pub(crate) const WORKTREE: &str = ":worktree";
 pub(crate) const INDEX: &str = ":index";
 
 const MAX_PATCH_BYTES: usize = 1024 * 1024;
-const MAX_STDERR_BYTES: u64 = 4096;
+const MAX_STDERR_BYTES: usize = 4096;
 const MAX_TARGET_LEN: usize = 256;
 
 // --no-ext-diff and --no-textconv disable the diff drivers a repository
@@ -177,21 +177,38 @@ enum TrackedState {
 // unmatched one; every other exit is a repository failure, not an
 // untracked file.
 fn tracked_state(root: &Path, rel: &str) -> TrackedState {
-    let output = super::git_command(root)
-        .args(tracked_argv(rel))
+    let mut cmd = super::git_command(root);
+    cmd.args(tracked_argv(rel))
         .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .output();
-    let Ok(output) = output else {
+        .stderr(Stdio::piped());
+    let Ok(mut child) = cmd.spawn() else {
         return TrackedState::Failed("git is unavailable".to_string());
     };
-    match output.status.code() {
+    let Some(stderr) = child.stderr.take() else {
+        let _ = child.kill();
+        return match child.wait() {
+            Ok(_) => TrackedState::Failed("git stderr pipe missing".to_string()),
+            Err(_) => TrackedState::Failed("git did not exit cleanly".to_string()),
+        };
+    };
+
+    let stderr_read = read_capped(stderr, MAX_STDERR_BYTES);
+    if !matches!(stderr_read, Ok((_, false))) {
+        let _ = child.kill();
+    }
+    let Ok(status) = child.wait() else {
+        return TrackedState::Failed("git did not exit cleanly".to_string());
+    };
+    let Ok((stderr, truncated)) = stderr_read else {
+        return TrackedState::Failed("failed to read git diagnostics".to_string());
+    };
+    if truncated {
+        return TrackedState::Failed("git ls-files diagnostics exceeded 4 KiB".to_string());
+    }
+    match status.code() {
         Some(0) => TrackedState::Tracked,
         Some(1) => TrackedState::Untracked,
-        _ => {
-            let end = output.stderr.len().min(MAX_STDERR_BYTES as usize);
-            TrackedState::Failed(failure_line(&output.stderr[..end]))
-        }
+        _ => TrackedState::Failed(failure_line(&stderr, "git ls-files failed")),
     }
 }
 
@@ -217,7 +234,7 @@ fn spawn_diff(root: &Path, argv: &[String], allow_exit_one: bool) -> DiffOutcome
     // stderr drains on its own thread so a chatty child can never block on
     // a full stderr pipe while stdout is still streaming.
     let stderr_thread = std::thread::spawn(move || -> std::io::Result<Vec<u8>> {
-        let mut limited = stderr.take(MAX_STDERR_BYTES);
+        let mut limited = stderr.take(MAX_STDERR_BYTES as u64);
         let mut buf = Vec::new();
         limited.read_to_end(&mut buf)?;
         std::io::copy(&mut limited.into_inner(), &mut std::io::sink())?;
@@ -250,7 +267,7 @@ fn spawn_diff(root: &Path, argv: &[String], allow_exit_one: bool) -> DiffOutcome
         return DiffOutcome::Patch(shape_truncated_patch(&raw));
     }
     if !status.success() && !(allow_exit_one && status.code() == Some(1)) {
-        return DiffOutcome::Failed(failure_line(&stderr_raw));
+        return DiffOutcome::Failed(failure_line(&stderr_raw, "git diff failed"));
     }
     let patch = String::from_utf8_lossy(&raw).into_owned();
     if patch.trim().is_empty() {
@@ -281,13 +298,13 @@ fn shape_truncated_patch(raw: &[u8]) -> String {
     patch
 }
 
-fn failure_line(stderr: &[u8]) -> String {
+fn failure_line(stderr: &[u8], fallback: &str) -> String {
     String::from_utf8_lossy(stderr)
         .lines()
         .map(str::trim)
         .find(|line| !line.is_empty())
         .map(|line| line.trim_start_matches("fatal:").trim().to_string())
-        .unwrap_or_else(|| "git diff failed".to_string())
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 #[cfg(test)]
@@ -510,9 +527,15 @@ mod tests {
     #[test]
     fn failure_line_reports_first_meaningful_line() {
         assert_eq!(
-            failure_line(b"\nfatal: ambiguous argument 'nope'\nhint: more\n"),
+            failure_line(
+                b"\nfatal: ambiguous argument 'nope'\nhint: more\n",
+                "git diff failed",
+            ),
             "ambiguous argument 'nope'"
         );
-        assert_eq!(failure_line(b""), "git diff failed");
+        assert_eq!(
+            failure_line(b"", "git ls-files failed"),
+            "git ls-files failed"
+        );
     }
 }

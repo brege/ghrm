@@ -14,6 +14,7 @@ use axum::{
     http::{StatusCode, header},
     response::Response,
 };
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use serde::Deserialize;
 use std::path::Path;
 use tracing::warn;
@@ -54,6 +55,32 @@ pub(crate) fn view_pairs(view: &ViewState, cfg: &ViewConfig) -> Vec<(String, Str
     let href = view::with_view("/", view, cfg);
     let query = href.split_once('?').map(|(_, query)| query).unwrap_or("");
     query::parse_pairs(query)
+}
+
+// The HTTP path keeps slash separators while each decoded filesystem
+// segment is encoded with the WHATWG special-path segment set.
+const FILE_SEGMENT: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'#')
+    .add(b'%')
+    .add(b'/')
+    .add(b'<')
+    .add(b'>')
+    .add(b'?')
+    .add(b'`')
+    .add(b'{')
+    .add(b'\\')
+    .add(b'}');
+
+fn file_action(rel: &str) -> String {
+    let encoded = rel
+        .trim_matches('/')
+        .split('/')
+        .map(|segment| utf8_percent_encode(segment, FILE_SEGMENT).to_string())
+        .collect::<Vec<_>>()
+        .join("/");
+    format!("/{encoded}")
 }
 
 pub(crate) async fn try_render(
@@ -136,7 +163,7 @@ fn render_page(page: Page<'_>) -> Response {
     let compare = delivery::compare_attrs(page.rel, Some(page.spec), &hidden);
     let file_view = delivery::FileView::source();
     let view_attrs = delivery::file_view_attrs(page.rel, file_view, Some(&compare));
-    let action = format!("/{}", page.rel.trim_matches('/'));
+    let action = file_action(page.rel);
     let compare_html = match compare_fragment(
         &action,
         page.spec.base.token(),
@@ -231,7 +258,7 @@ pub(crate) async fn compare(
 
     let view = view::from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let hidden = view_pairs(&view, &s.view_cfg);
-    let action = format!("/{rel}");
+    let action = file_action(&rel);
     match compare_fragment(&action, &base, &head, &refs, &hidden) {
         Ok(html) => html_response(html),
         Err(e) => {
@@ -458,6 +485,15 @@ mod tests {
         assert!(canonical_query(Some("base=HEAD")).is_none());
         assert!(canonical_query(Some("base=HEAD&head=--cached")).is_none());
         assert!(canonical_query(None).is_none());
+    }
+
+    #[test]
+    fn compare_form_action_encodes_path_segments() {
+        let action = file_action("/docs/caf\u{e9} ?#%\\.md/");
+        let html =
+            compare_fragment(&action, "HEAD", ":worktree", &RefList::default(), &[]).unwrap();
+
+        assert!(html.contains(r#"action="/docs/caf%C3%A9%20%3F%23%25%5C.md""#,));
     }
 
     #[test]
