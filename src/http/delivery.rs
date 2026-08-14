@@ -1,5 +1,6 @@
 use crate::http::server::{AppState, Mode};
 use crate::paths;
+use crate::query;
 use crate::repo::diff::DiffSpec;
 
 use axum::{
@@ -230,10 +231,19 @@ pub(crate) struct CompareAttrs {
     pub(crate) diff: Option<String>,
 }
 
-pub(crate) fn compare_attrs(rel: &str, diff: Option<&DiffSpec>) -> CompareAttrs {
+pub(crate) fn compare_attrs(
+    rel: &str,
+    diff: Option<&DiffSpec>,
+    view_pairs: &[(String, String)],
+) -> CompareAttrs {
     let path = utf8_percent_encode(rel.trim_matches('/'), NON_ALPHANUMERIC);
+    let mut url = format!("/_ghrm/compare?path={path}");
+    if !view_pairs.is_empty() {
+        url.push('&');
+        url.push_str(&query::encode_pairs(view_pairs));
+    }
     CompareAttrs {
-        url: format!("/_ghrm/compare?path={path}"),
+        url,
         diff: diff.map(|spec| spec.token()),
     }
 }
@@ -501,7 +511,7 @@ mod tests {
 
     #[test]
     fn file_view_attrs_include_compare_url() {
-        let compare = compare_attrs("docs/read me.md", None);
+        let compare = compare_attrs("docs/read me.md", None, &[]);
         let attrs = file_view_attrs("docs/read me.md", FileView::source(), Some(&compare));
 
         assert!(
@@ -511,9 +521,17 @@ mod tests {
     }
 
     #[test]
+    fn compare_url_carries_view_state_pairs() {
+        let pairs = vec![("hidden".to_string(), "1".to_string())];
+        let compare = compare_attrs("a.md", None, &pairs);
+
+        assert_eq!(compare.url, "/_ghrm/compare?path=a%2Emd&hidden=1");
+    }
+
+    #[test]
     fn file_view_attrs_include_diff_spec() {
         let spec = DiffSpec::parse("HEAD..:worktree").unwrap();
-        let compare = compare_attrs("a.md", Some(&spec));
+        let compare = compare_attrs("a.md", Some(&spec), &[]);
         let attrs = file_view_attrs("a.md", FileView::source(), Some(&compare));
 
         assert!(attrs.contains(r#"data-ghrm-diff="HEAD..:worktree""#));

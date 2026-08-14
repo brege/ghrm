@@ -16,7 +16,7 @@ use axum::{
     Router,
     body::Body,
     extract::{Path as AxPath, Query, RawQuery, State, ws::WebSocketUpgrade},
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, StatusCode, Uri, header},
     middleware,
     response::Response,
     routing::{get, post},
@@ -488,6 +488,7 @@ fn open_browser(url: &str) {
 async fn root(
     State(s): State<AppState>,
     headers: HeaderMap,
+    uri: Uri,
     RawQuery(raw_query): RawQuery,
     Query(q): Query<ViewQuery>,
 ) -> Response {
@@ -495,6 +496,9 @@ async fn root(
     let hx = HtmxContext::from_headers(&headers);
     match s.mode {
         Mode::File => {
+            if let Some(canonical) = diff::canonical_query(raw_query.as_deref()) {
+                return canonical_redirect(&uri, &canonical);
+            }
             let diff = diff::spec_from_query(raw_query.as_deref());
             render_target(&s, &s.target, None, diff, view, hx).await
         }
@@ -506,12 +510,16 @@ async fn any_path(
     State(s): State<AppState>,
     AxPath(path): AxPath<String>,
     headers: HeaderMap,
+    uri: Uri,
     RawQuery(raw_query): RawQuery,
     Query(q): Query<ViewQuery>,
 ) -> Response {
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let hx = HtmxContext::from_headers(&headers);
     let native = native_file_request(&headers);
+    if let Some(canonical) = diff::canonical_query(raw_query.as_deref()) {
+        return canonical_redirect(&uri, &canonical);
+    }
     let diff = diff::spec_from_query(raw_query.as_deref());
     if s.mode == Mode::File {
         return serve_file_mode(&s, &path, diff, view, hx, native).await;
@@ -646,7 +654,7 @@ async fn render_file(
     let compare = s
         .repos
         .repo_for(path)
-        .map(|_| delivery::compare_attrs(&rel, None));
+        .map(|_| delivery::compare_attrs(&rel, None, &diff::view_pairs(&view, &s.view_cfg)));
     let view = delivery::FileView::markdown();
     let view_attrs = delivery::file_view_attrs(&rel, view, compare.as_ref());
     let body = match tmpl::page(tmpl::PageCtx {
@@ -743,7 +751,7 @@ async fn render_source_file(
     let compare = s
         .repos
         .repo_for(path)
-        .map(|_| delivery::compare_attrs(rel, None));
+        .map(|_| delivery::compare_attrs(rel, None, &diff::view_pairs(&view, &s.view_cfg)));
     let file_view = delivery::FileView::source();
     let view_attrs = delivery::file_view_attrs(rel, file_view, compare.as_ref());
     let body = match tmpl::page(tmpl::PageCtx {
@@ -820,7 +828,7 @@ async fn render_dual_file(
     let compare = s
         .repos
         .repo_for(path)
-        .map(|_| delivery::compare_attrs(rel, None));
+        .map(|_| delivery::compare_attrs(rel, None, &diff::view_pairs(&view, &s.view_cfg)));
     let file_view = delivery::FileView::dual();
     let view_attrs = delivery::file_view_attrs(rel, file_view, compare.as_ref());
     let body = match tmpl::page(tmpl::PageCtx {
@@ -928,6 +936,22 @@ fn not_found() -> Response {
         .unwrap()
 }
 
+// Location must carry the still-encoded request path: AxPath captures are
+// percent-decoded, and a decoded Unicode or reserved character would be
+// rejected by the header value or change the reconstructed URI meaning.
+fn canonical_redirect(uri: &Uri, canonical: &str) -> Response {
+    see_other(&format!("{}?{}", uri.path(), canonical))
+}
+
+fn see_other(location: &str) -> Response {
+    Response::builder()
+        .status(StatusCode::SEE_OTHER)
+        .header(header::LOCATION, location)
+        .header(header::VARY, "HX-Request")
+        .body(Body::empty())
+        .unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -953,6 +977,33 @@ mod tests {
         headers.insert("HX-Request", "false".parse().unwrap());
         let hx = HtmxContext::from_headers(&headers);
         assert!(!hx.is_htmx);
+    }
+
+    #[test]
+    fn canonical_redirect_preserves_encoded_request_paths() {
+        for path in [
+            "/caf%C3%A9.md",
+            "/read%20me.md",
+            "/a%3Fb.md",
+            "/a%23b.md",
+            "/a%2Fb.md",
+            "/dir/",
+            "/",
+        ] {
+            let uri: Uri = format!("{path}?base=HEAD&head=%3Aworktree")
+                .parse()
+                .unwrap();
+
+            let response = canonical_redirect(&uri, "diff=HEAD..%3Aworktree");
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER, "{path}");
+            let location = response.headers().get(header::LOCATION).unwrap();
+            assert_eq!(
+                location.to_str().unwrap(),
+                format!("{path}?diff=HEAD..%3Aworktree"),
+                "{path}"
+            );
+        }
     }
 
     #[test]

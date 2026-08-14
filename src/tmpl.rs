@@ -115,13 +115,22 @@ pub struct CompareCtx<'a> {
     pub action: &'a str,
     pub base: &'a str,
     pub head: &'a str,
-    pub branches: &'a [String],
-    pub tags: &'a [String],
+    pub base_extra: Option<&'a str>,
+    pub head_extra: Option<&'a str>,
+    pub hidden: &'a [(String, String)],
+    pub branches: &'a [CompareRef],
+    pub tags: &'a [CompareRef],
     pub commits: &'a [CompareCommit],
 }
 
+pub struct CompareRef {
+    pub value: String,
+    pub label: String,
+}
+
 pub struct CompareCommit {
-    pub hash: String,
+    pub value: String,
+    pub label: String,
     pub subject: String,
     pub timestamp: u64,
 }
@@ -427,15 +436,25 @@ mod tests {
     mod compare_contracts {
         use super::*;
 
+        fn compare_ref(value: &str, label: &str) -> CompareRef {
+            CompareRef {
+                value: value.to_string(),
+                label: label.to_string(),
+            }
+        }
+
         fn compare_ctx<'a>(
-            branches: &'a [String],
-            tags: &'a [String],
+            branches: &'a [CompareRef],
+            tags: &'a [CompareRef],
             commits: &'a [CompareCommit],
         ) -> CompareCtx<'a> {
             CompareCtx {
                 action: "/docs/readme.md",
                 base: "HEAD",
                 head: ":worktree",
+                base_extra: None,
+                head_extra: None,
+                hidden: &[],
                 branches,
                 tags,
                 commits,
@@ -495,10 +514,11 @@ mod tests {
 
         #[test]
         fn refs_and_commits_render_grouped() {
-            let branches = vec!["main".to_string()];
-            let tags = vec!["v0.5.3".to_string()];
+            let branches = vec![compare_ref("refs/heads/main", "main")];
+            let tags = vec![compare_ref("refs/tags/v0.5.3", "v0.5.3")];
             let commits = vec![CompareCommit {
-                hash: "d888e48".to_string(),
+                value: "d888e48aaaa".to_string(),
+                label: "d888e48".to_string(),
                 subject: "chore: upgrade benchmark tooling".to_string(),
                 timestamp: 1723600000,
             }];
@@ -508,11 +528,53 @@ mod tests {
             assert!(html.contains("<optgroup label=\"Branches\">"));
             assert!(html.contains("<optgroup label=\"Tags\">"));
             assert!(html.contains("<optgroup label=\"Commits\">"));
-            assert!(html.contains("value=\"main\""));
-            assert!(html.contains("value=\"v0.5.3\""));
-            assert!(html.contains("value=\"d888e48\""));
+            assert!(html.contains("value=\"refs/heads/main\""));
+            assert!(html.contains(">main</option>"));
+            assert!(html.contains("value=\"refs/tags/v0.5.3\""));
+            assert!(html.contains("value=\"d888e48aaaa\""));
             assert!(html.contains("data-timestamp=\"1723600000\""));
-            assert!(html.contains("d888e48 chore: upgrade benchmark tooling"));
+            assert!(html.contains(">d888e48 chore: upgrade benchmark tooling</option>"));
+        }
+
+        #[test]
+        fn colliding_branch_and_tag_submit_distinct_values() {
+            let branches = vec![compare_ref("refs/heads/v1", "v1")];
+            let tags = vec![compare_ref("refs/tags/v1", "v1")];
+
+            let html = compare(compare_ctx(&branches, &tags, &[])).unwrap();
+
+            assert!(html.contains("value=\"refs/heads/v1\""));
+            assert!(html.contains("value=\"refs/tags/v1\""));
+            assert!(!html.contains("value=\"v1\""));
+        }
+
+        #[test]
+        fn hidden_view_state_renders_as_hidden_inputs() {
+            let hidden = vec![
+                ("hidden".to_string(), "1".to_string()),
+                ("sort".to_string(), "timestamp".to_string()),
+            ];
+            let mut ctx = compare_ctx(&[], &[], &[]);
+            ctx.hidden = &hidden;
+
+            let html = compare(ctx).unwrap();
+
+            assert!(html.contains("type=\"hidden\""));
+            assert!(html.contains("name=\"hidden\""));
+            assert!(html.contains("value=\"1\""));
+            assert!(html.contains("name=\"sort\""));
+            assert!(html.contains("value=\"timestamp\""));
+        }
+
+        #[test]
+        fn unlisted_token_renders_extra_selected_option() {
+            let mut ctx = compare_ctx(&[], &[], &[]);
+            ctx.base = "HEAD~2";
+            ctx.base_extra = Some("HEAD~2");
+
+            let html = compare(ctx).unwrap();
+
+            assert!(html.contains("value=\"HEAD~2\" selected>HEAD~2</option>"));
         }
     }
 

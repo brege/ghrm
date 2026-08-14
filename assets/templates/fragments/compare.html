@@ -1,4 +1,7 @@
-{%- macro ref_options(branches, tags, commits, selected) -%}
+{%- macro ref_options(branches, tags, commits, selected, extra) -%}
+{%- if let Some(token) = extra %}
+<option value="{{ token }}" selected>{{ token }}</option>
+{%- endif %}
 <option
   value=":worktree"
   {%- if selected == ":worktree" %} selected{% endif -%}
@@ -15,9 +18,9 @@
 <optgroup label="Branches">
   {%- for branch in branches %}
   <option
-    value="{{ branch }}"
-    {%- if selected == branch.as_str() %} selected{% endif -%}
-  >{{ branch }}</option>
+    value="{{ branch.value }}"
+    {%- if selected == branch.value.as_str() %} selected{% endif -%}
+  >{{ branch.label }}</option>
   {%- endfor %}
 </optgroup>
 {%- endif %}
@@ -25,9 +28,9 @@
 <optgroup label="Tags">
   {%- for tag in tags %}
   <option
-    value="{{ tag }}"
-    {%- if selected == tag.as_str() %} selected{% endif -%}
-  >{{ tag }}</option>
+    value="{{ tag.value }}"
+    {%- if selected == tag.value.as_str() %} selected{% endif -%}
+  >{{ tag.label }}</option>
   {%- endfor %}
 </optgroup>
 {%- endif %}
@@ -35,10 +38,10 @@
 <optgroup label="Commits">
   {%- for commit in commits %}
   <option
-    value="{{ commit.hash }}"
+    value="{{ commit.value }}"
     data-timestamp="{{ commit.timestamp }}"
-    {%- if selected == commit.hash.as_str() %} selected{% endif -%}
-  >{{ commit.hash }} {{ commit.subject }}</option>
+    {%- if selected == commit.value.as_str() %} selected{% endif -%}
+  >{{ commit.label }} {{ commit.subject }}</option>
   {%- endfor %}
 </optgroup>
 {%- endif %}
@@ -50,17 +53,24 @@
   action="{{ action }}"
   data-ghrm-compare
 >
+  {%- for pair in hidden %}
+  <input
+    type="hidden"
+    name="{{ pair.0 }}"
+    value="{{ pair.1 }}"
+  >
+  {%- endfor %}
   <label class="ghrm-compare-side ghrm-compare-base">
     <span class="ghrm-compare-tag">base</span>
     <select name="base" aria-label="Base revision">
-      {%- call ref_options(branches, tags, commits, base) %}{% endcall %}
+      {%- call ref_options(branches, tags, commits, base, base_extra) %}{% endcall %}
     </select>
   </label>
   <span class="ghrm-compare-dots" aria-hidden="true">..</span>
   <label class="ghrm-compare-side ghrm-compare-head">
     <span class="ghrm-compare-tag">head</span>
     <select name="head" aria-label="Head revision">
-      {%- call ref_options(branches, tags, commits, head) %}{% endcall %}
+      {%- call ref_options(branches, tags, commits, head, head_extra) %}{% endcall %}
     </select>
   </label>
   <button type="submit" class="ghrm-compare-apply">Diff</button>

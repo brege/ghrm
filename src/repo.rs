@@ -95,11 +95,44 @@ fn path_key(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+// Non-execution settings shared by every compare-feature git spawn: no
+// pager, literal pathspecs, and no repository-configured fsmonitor
+// process, which index-reading commands such as ls-files would otherwise
+// invoke.
+const GIT_SAFETY_ARGS: &[&str] = &[
+    "--no-pager",
+    "--literal-pathspecs",
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.quotepath=false",
+];
+
+fn git_command(root: &Path) -> std::process::Command {
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(GIT_SAFETY_ARGS)
+        .arg("-C")
+        .arg(root)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .stdin(std::process::Stdio::null());
+    cmd
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::testutil::TempDir;
     use std::fs;
+
+    #[test]
+    fn git_safety_args_disable_repo_configured_execution() {
+        let fsmonitor = GIT_SAFETY_ARGS
+            .windows(2)
+            .any(|pair| pair[0] == "-c" && pair[1] == "core.fsmonitor=false");
+        assert!(fsmonitor);
+        assert!(GIT_SAFETY_ARGS.contains(&"--literal-pathspecs"));
+        assert!(GIT_SAFETY_ARGS.contains(&"--no-pager"));
+    }
 
     fn write_git_config(root: &Path) {
         fs::create_dir_all(root.join(".git")).unwrap();

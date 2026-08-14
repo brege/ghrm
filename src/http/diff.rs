@@ -1,15 +1,16 @@
-use crate::explorer::view::ViewState;
+use crate::explorer::view::{self, ViewConfig, ViewQuery, ViewState};
 use crate::http::server::{AppState, HtmxContext, page_crumbs};
 use crate::http::{delivery, shell, vendor};
 use crate::query;
 use crate::render::Rendered;
-use crate::repo::diff::{DiffOutcome, DiffSpec, DiffTarget, WORKTREE, unified_diff};
+use crate::repo::diff::{DiffOutcome, DiffSpec, DiffTarget, INDEX, WORKTREE, unified_diff};
 use crate::repo::refs::{RefList, refs_for};
 use crate::tmpl;
 
+use anyhow::Result;
 use axum::{
     body::Body,
-    extract::{Query, State},
+    extract::{Query, RawQuery, State},
     http::{StatusCode, header},
     response::Response,
 };
@@ -18,19 +19,41 @@ use std::path::Path;
 use tracing::warn;
 
 pub(crate) fn spec_from_query(raw_query: Option<&str>) -> Option<DiffSpec> {
-    let pairs = query::parse_pairs(raw_query.unwrap_or(""));
+    query::parse_pairs(raw_query.unwrap_or(""))
+        .iter()
+        .find(|(name, _)| name.as_str() == "diff")
+        .and_then(|(_, value)| DiffSpec::parse(value))
+}
+
+// The compare form's two native selects submit base and head; the server
+// canonicalizes that spelling into the single rendered URL grammar with a
+// redirect, so diff=<base>..<head> stays the only public state.
+pub(crate) fn canonical_query(raw_query: Option<&str>) -> Option<String> {
+    let mut pairs = query::parse_pairs(raw_query.unwrap_or(""));
+    if pairs.iter().any(|(name, _)| name.as_str() == "diff") {
+        return None;
+    }
     let value = |key: &str| {
         pairs
             .iter()
             .find(|(name, _)| name.as_str() == key)
-            .map(|(_, value)| value.as_str())
+            .map(|(_, value)| value.clone())
     };
-    if let Some(raw) = value("diff") {
-        return DiffSpec::parse(raw);
-    }
-    let base = DiffTarget::parse(value("base")?)?;
-    let head = DiffTarget::parse(value("head")?)?;
-    Some(DiffSpec { base, head })
+    let base = DiffTarget::parse(&value("base")?)?;
+    let head = DiffTarget::parse(&value("head")?)?;
+    let spec = DiffSpec { base, head };
+    pairs.retain(|(name, _)| name.as_str() != "base" && name.as_str() != "head");
+    pairs.push(("diff".to_string(), spec.token()));
+    Some(query::encode_pairs(&pairs))
+}
+
+// A native GET submission replaces the query string with the form fields,
+// so the form must re-submit the current explorer view state; the pairs
+// come from the same contract that builds view-preserving links.
+pub(crate) fn view_pairs(view: &ViewState, cfg: &ViewConfig) -> Vec<(String, String)> {
+    let href = view::with_view("/", view, cfg);
+    let query = href.split_once('?').map(|(_, query)| query).unwrap_or("");
+    query::parse_pairs(query)
 }
 
 pub(crate) async fn try_render(
@@ -43,13 +66,14 @@ pub(crate) async fn try_render(
 ) -> Option<Response> {
     let (repo_root, repo_rel) = s.repos.repo_for(path)?;
     let repo_root = repo_root.to_path_buf();
-    let base = root.or_else(|| path.parent())?;
+    let base = root
+        .or_else(|| path.parent())
+        .expect("served files have a parent directory");
     let rel = path
         .strip_prefix(base)
-        .ok()
-        .map(|p| p.to_string_lossy().into_owned())
-        .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
-        .unwrap_or_default();
+        .expect("file dispatch passes a path under its serve root")
+        .to_string_lossy()
+        .replace('\\', "/");
 
     let task_spec = spec.clone();
     let (outcome, refs) = tokio::task::spawn_blocking(move || {
@@ -59,12 +83,11 @@ pub(crate) async fn try_render(
         )
     })
     .await
-    .unwrap_or_else(|_| {
-        (
-            DiffOutcome::Failed("diff task failed".to_string()),
-            RefList::default(),
-        )
-    });
+    .expect("join blocking diff task");
+    let Some(refs) = refs else {
+        warn!("malformed git ref listing");
+        return Some(internal_error());
+    };
 
     Some(render_page(Page {
         s,
@@ -109,10 +132,24 @@ fn render_page(page: Page<'_>) -> Response {
     let features = vendor::feature_list(&rendered);
     let crumbs = page_crumbs(page.s, page.path, page.root, page.rel, page.view);
     let raw_html = raw_html(page.outcome, page.spec);
-    let compare = delivery::compare_attrs(page.rel, Some(page.spec));
+    let hidden = view_pairs(page.view, &page.s.view_cfg);
+    let compare = delivery::compare_attrs(page.rel, Some(page.spec), &hidden);
     let file_view = delivery::FileView::source();
     let view_attrs = delivery::file_view_attrs(page.rel, file_view, Some(&compare));
-    let compare_html = compare_html(&page);
+    let action = format!("/{}", page.rel.trim_matches('/'));
+    let compare_html = match compare_fragment(
+        &action,
+        page.spec.base.token(),
+        page.spec.head.token(),
+        page.refs,
+        &hidden,
+    ) {
+        Ok(html) => html,
+        Err(e) => {
+            warn!("compare template error: {}", e);
+            return internal_error();
+        }
+    };
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
@@ -126,7 +163,7 @@ fn render_page(page: Page<'_>) -> Response {
         Ok(b) => b,
         Err(e) => {
             warn!("template error: {}", e);
-            return not_found();
+            return internal_error();
         }
     };
     let source = page.s.repos.source_for(page.path);
@@ -155,9 +192,15 @@ fn render_page(page: Page<'_>) -> Response {
 pub(crate) struct CompareQuery {
     path: Option<String>,
     diff: Option<String>,
+    #[serde(flatten)]
+    view: ViewQuery,
 }
 
-pub(crate) async fn compare(State(s): State<AppState>, Query(q): Query<CompareQuery>) -> Response {
+pub(crate) async fn compare(
+    State(s): State<AppState>,
+    RawQuery(raw_query): RawQuery,
+    Query(q): Query<CompareQuery>,
+) -> Response {
     let rel = q
         .path
         .as_deref()
@@ -180,60 +223,75 @@ pub(crate) async fn compare(State(s): State<AppState>, Query(q): Query<CompareQu
     let repo_root = repo_root.to_path_buf();
     let refs = tokio::task::spawn_blocking(move || refs_for(&repo_root, &repo_rel))
         .await
-        .unwrap_or_default();
-    let commits = refs
-        .commits
-        .into_iter()
-        .map(|commit| tmpl::CompareCommit {
-            hash: commit.hash,
-            subject: commit.subject,
-            timestamp: commit.timestamp,
-        })
-        .collect::<Vec<_>>();
+        .expect("join blocking ref listing task");
+    let Some(refs) = refs else {
+        warn!("malformed git ref listing");
+        return internal_error();
+    };
 
+    let view = view::from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
+    let hidden = view_pairs(&view, &s.view_cfg);
     let action = format!("/{rel}");
-    match tmpl::compare(tmpl::CompareCtx {
-        action: &action,
-        base: &base,
-        head: &head,
-        branches: &refs.branches,
-        tags: &refs.tags,
-        commits: &commits,
-    }) {
+    match compare_fragment(&action, &base, &head, &refs, &hidden) {
         Ok(html) => html_response(html),
         Err(e) => {
             warn!("compare template error: {}", e);
-            not_found()
+            internal_error()
         }
     }
 }
 
-fn compare_html(page: &Page<'_>) -> String {
-    let action = format!("/{}", page.rel.trim_matches('/'));
-    let commits = page
-        .refs
+fn compare_fragment(
+    action: &str,
+    base: &str,
+    head: &str,
+    refs: &RefList,
+    hidden: &[(String, String)],
+) -> Result<String> {
+    let map_refs = |entries: &[crate::repo::refs::RefEntry]| {
+        entries
+            .iter()
+            .map(|entry| tmpl::CompareRef {
+                value: entry.value.clone(),
+                label: entry.label.clone(),
+            })
+            .collect::<Vec<_>>()
+    };
+    let branches = map_refs(&refs.branches);
+    let tags = map_refs(&refs.tags);
+    let commits = refs
         .commits
         .iter()
         .map(|commit| tmpl::CompareCommit {
-            hash: commit.hash.clone(),
+            value: commit.value.clone(),
+            label: commit.label.clone(),
             subject: commit.subject.clone(),
             timestamp: commit.timestamp,
         })
         .collect::<Vec<_>>();
-    match tmpl::compare(tmpl::CompareCtx {
-        action: &action,
-        base: page.spec.base.token(),
-        head: page.spec.head.token(),
-        branches: &page.refs.branches,
-        tags: &page.refs.tags,
+    tmpl::compare(tmpl::CompareCtx {
+        action,
+        base,
+        head,
+        base_extra: unlisted(base, refs),
+        head_extra: unlisted(head, refs),
+        hidden,
+        branches: &branches,
+        tags: &tags,
         commits: &commits,
-    }) {
-        Ok(html) => html,
-        Err(e) => {
-            warn!("compare template error: {}", e);
-            String::new()
-        }
-    }
+    })
+}
+
+// A hand-typed revision like HEAD~2 is valid but absent from the listing;
+// a synthetic first option keeps the select displaying the URL state.
+fn unlisted<'a>(token: &'a str, refs: &RefList) -> Option<&'a str> {
+    let listed = token == WORKTREE
+        || token == INDEX
+        || token == "HEAD"
+        || refs.branches.iter().any(|entry| entry.value == token)
+        || refs.tags.iter().any(|entry| entry.value == token)
+        || refs.commits.iter().any(|entry| entry.value == token);
+    (!listed).then_some(token)
 }
 
 fn raw_html(outcome: &DiffOutcome, spec: &DiffSpec) -> String {
@@ -268,34 +326,148 @@ fn not_found() -> Response {
         .unwrap()
 }
 
+fn internal_error() -> Response {
+    Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .header(header::CACHE_CONTROL, "no-store")
+        .body(Body::from("internal error"))
+        .unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::explorer::column;
+    use crate::explorer::view::ViewConfig;
+    use crate::explorer::walk::{NavSet, Sort, ViewOpts};
+    use crate::http::archive;
+    use crate::http::server::Mode;
+    use crate::repo::RepoSet;
+    use crate::repo::refs::{CommitEntry, RefEntry};
+    use crate::runtime;
+    use crate::testutil::TempDir;
+    use axum::body::to_bytes;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::{Arc, RwLock};
+    use tokio::sync::broadcast;
+
+    fn write_git_config(root: &Path) {
+        fs::create_dir_all(root.join(".git")).unwrap();
+        fs::write(
+            root.join(".git/config"),
+            "[core]\nrepositoryformatversion = 0\n",
+        )
+        .unwrap();
+    }
+
+    fn view_config() -> ViewConfig {
+        ViewConfig {
+            default: ViewOpts {
+                show_hidden: false,
+                show_excludes: false,
+                filter_ext: false,
+            },
+            default_use_ignore: true,
+            default_groups: Vec::new(),
+            default_sort: Sort::Name,
+            default_columns: column::Set::from_defaults(|def| def.default_visible),
+            can_toggle_excludes: false,
+        }
+    }
+
+    fn view_state() -> ViewState {
+        let cfg = view_config();
+        ViewState {
+            opts: cfg.default,
+            use_ignore: cfg.default_use_ignore,
+            groups: Vec::new(),
+            sort: cfg.default_sort,
+            sort_dir: cfg.default_sort.default_dir(),
+            columns: cfg.default_columns.clone(),
+            show_headers: false,
+        }
+    }
+
+    fn app_state(target: &Path) -> AppState {
+        AppState {
+            target: target.to_path_buf(),
+            mode: Mode::Dir,
+            nav: Arc::new(RwLock::new(NavSet::default())),
+            alternate_nav: Arc::new(RwLock::new(None)),
+            repos: RepoSet::discover(target, &[]),
+            reload: broadcast::channel(4).0,
+            use_ignore: true,
+            show_excludes: false,
+            view_cfg: view_config(),
+            filter_exts: Vec::new(),
+            filters: crate::testutil::group_filters(),
+            exclude_names: Vec::new(),
+            archive_jobs: archive::ArchiveJobs::new().unwrap(),
+            search_max_rows: 10,
+            home: None,
+            runtime_paths: runtime::Paths::new(target, None).unwrap(),
+            stats: ghrm_stat::Config::default(),
+            auth: None,
+            gist: None,
+        }
+    }
+
+    fn sample_refs() -> RefList {
+        RefList {
+            branches: vec![RefEntry {
+                value: "refs/heads/main".to_string(),
+                label: "main".to_string(),
+            }],
+            tags: Vec::new(),
+            commits: vec![CommitEntry {
+                value: "d888e48aaaa".to_string(),
+                label: "d888e48".to_string(),
+                timestamp: 1723600000,
+                subject: "chore: upgrade benchmark tooling".to_string(),
+            }],
+        }
+    }
+
+    async fn response_text(response: Response) -> String {
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        String::from_utf8(bytes.to_vec()).unwrap()
+    }
 
     #[test]
-    fn spec_from_query_reads_diff_param() {
+    fn spec_from_query_reads_only_the_diff_param() {
         let spec = spec_from_query(Some("diff=HEAD..%3Aworktree")).unwrap();
         assert_eq!(spec.token(), "HEAD..:worktree");
-    }
 
-    #[test]
-    fn spec_from_query_reads_base_and_head_pair() {
-        let spec = spec_from_query(Some("base=%3Aindex&head=%3Aworktree")).unwrap();
-        assert_eq!(spec.token(), ":index..:worktree");
-    }
-
-    #[test]
-    fn spec_from_query_prefers_diff_param_over_pair() {
-        let spec = spec_from_query(Some("diff=a..b&base=c&head=d")).unwrap();
-        assert_eq!(spec.token(), "a..b");
-    }
-
-    #[test]
-    fn spec_from_query_rejects_partial_or_invalid_input() {
         assert!(spec_from_query(None).is_none());
         assert!(spec_from_query(Some("hidden=1")).is_none());
-        assert!(spec_from_query(Some("base=HEAD")).is_none());
+        assert!(spec_from_query(Some("base=HEAD&head=%3Aworktree")).is_none());
         assert!(spec_from_query(Some("diff=--cached..HEAD")).is_none());
+    }
+
+    #[test]
+    fn canonical_query_rewrites_the_form_spelling() {
+        let canonical = canonical_query(Some("hidden=1&base=HEAD&head=%3Aworktree")).unwrap();
+        assert_eq!(canonical, "hidden=1&diff=HEAD..%3Aworktree");
+    }
+
+    #[test]
+    fn canonical_query_leaves_canonical_and_partial_input_alone() {
+        assert!(canonical_query(Some("diff=HEAD..%3Aworktree")).is_none());
+        assert!(canonical_query(Some("diff=a..b&base=c&head=d")).is_none());
+        assert!(canonical_query(Some("base=HEAD")).is_none());
+        assert!(canonical_query(Some("base=HEAD&head=--cached")).is_none());
+        assert!(canonical_query(None).is_none());
+    }
+
+    #[test]
+    fn unlisted_marks_only_unknown_tokens() {
+        let refs = sample_refs();
+        assert_eq!(unlisted(":worktree", &refs), None);
+        assert_eq!(unlisted("HEAD", &refs), None);
+        assert_eq!(unlisted("refs/heads/main", &refs), None);
+        assert_eq!(unlisted("d888e48aaaa", &refs), None);
+        assert_eq!(unlisted("HEAD~2", &refs), Some("HEAD~2"));
     }
 
     #[test]
@@ -320,5 +492,174 @@ mod tests {
         let failed = raw_html(&DiffOutcome::Failed("bad <ref>".to_string()), &spec);
         assert!(failed.contains("ghrm-diff-error"));
         assert!(failed.contains("bad &lt;ref&gt;"));
+    }
+
+    #[tokio::test]
+    async fn render_page_serves_patch_in_code_view() {
+        let td = TempDir::new("ghrm-diff-page");
+        let root = td.path().join("repo");
+        write_git_config(&root);
+        let file = root.join("a.md");
+        fs::write(&file, "content\n").unwrap();
+
+        let s = app_state(&root);
+        let spec = DiffSpec::parse("HEAD..:worktree").unwrap();
+        let outcome = DiffOutcome::Patch("diff --git a/a.md b/a.md\n".to_string());
+        let refs = sample_refs();
+        let view = view_state();
+
+        let response = render_page(Page {
+            s: &s,
+            path: &file,
+            root: &root,
+            rel: "a.md",
+            spec: &spec,
+            outcome: &outcome,
+            refs: &refs,
+            view: &view,
+            hx: HtmxContext::default(),
+        });
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_text(response).await;
+        assert!(body.contains("<!DOCTYPE html>"));
+        assert!(body.contains(r#"data-ghrm-view-kind="source""#));
+        assert!(body.contains(r#"data-ghrm-diff="HEAD..:worktree""#));
+        assert!(body.contains(r#"class="language-diff""#));
+        assert!(body.contains("data-ghrm-preview-pane hidden"));
+        assert!(body.contains("id=\"ghrm-compare\""));
+        assert!(body.contains("value=\"refs/heads/main\""));
+    }
+
+    #[tokio::test]
+    async fn render_page_htmx_returns_fragment() {
+        let td = TempDir::new("ghrm-diff-fragment");
+        let root = td.path().join("repo");
+        write_git_config(&root);
+        let file = root.join("a.md");
+        fs::write(&file, "content\n").unwrap();
+
+        let s = app_state(&root);
+        let spec = DiffSpec::parse("HEAD..:worktree").unwrap();
+        let outcome = DiffOutcome::Clean;
+        let refs = RefList::default();
+        let view = view_state();
+
+        let response = render_page(Page {
+            s: &s,
+            path: &file,
+            root: &root,
+            rel: "a.md",
+            spec: &spec,
+            outcome: &outcome,
+            refs: &refs,
+            view: &view,
+            hx: HtmxContext { is_htmx: true },
+        });
+
+        assert!(response.headers().get("HX-Title").is_some());
+        let body = response_text(response).await;
+        assert!(!body.contains("<!DOCTYPE html>"));
+        assert!(body.contains("hx-swap-oob"));
+        assert!(body.contains("ghrm-diff-notice"));
+        assert!(body.contains("No changes between HEAD and :worktree"));
+    }
+
+    #[tokio::test]
+    async fn try_render_returns_none_outside_a_repository() {
+        let td = TempDir::new("ghrm-diff-norepo");
+        let root = td.path().join("dir");
+        fs::create_dir_all(&root).unwrap();
+        let file = root.join("a.md");
+        fs::write(&file, "content\n").unwrap();
+
+        let spec = DiffSpec::parse("HEAD..:worktree").unwrap();
+        let view = view_state();
+
+        let dir_state = app_state(&root);
+        let dir_result = try_render(
+            &dir_state,
+            &file,
+            Some(&root),
+            &spec,
+            &view,
+            HtmxContext::default(),
+        )
+        .await;
+        assert!(dir_result.is_none());
+
+        let mut file_state = app_state(&root);
+        file_state.mode = Mode::File;
+        file_state.target = PathBuf::from(&file);
+        let file_result = try_render(
+            &file_state,
+            &file,
+            None,
+            &spec,
+            &view,
+            HtmxContext::default(),
+        )
+        .await;
+        assert!(file_result.is_none());
+    }
+
+    #[tokio::test]
+    async fn compare_endpoint_requires_a_repository_backed_file() {
+        let td = TempDir::new("ghrm-diff-compare-endpoint");
+        let root = td.path().join("dir");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("a.md"), "content\n").unwrap();
+        let s = app_state(&root);
+
+        let outside = compare(
+            State(s.clone()),
+            RawQuery(None),
+            Query(CompareQuery {
+                path: Some("a.md".to_string()),
+                diff: None,
+                view: ViewQuery::default(),
+            }),
+        )
+        .await;
+        assert_eq!(outside.status(), StatusCode::NOT_FOUND);
+
+        let missing = compare(
+            State(s),
+            RawQuery(None),
+            Query(CompareQuery {
+                path: Some("missing.md".to_string()),
+                diff: None,
+                view: ViewQuery::default(),
+            }),
+        )
+        .await;
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn view_pairs_reflect_non_default_state() {
+        let cfg = view_config();
+        let mut view = view_state();
+        view.opts.show_hidden = true;
+
+        let pairs = view_pairs(&view, &cfg);
+
+        assert_eq!(pairs, vec![("hidden".to_string(), "1".to_string())]);
+        assert!(view_pairs(&view_state(), &cfg).is_empty());
+    }
+
+    #[test]
+    fn form_view_state_survives_canonicalization() {
+        let cfg = view_config();
+        let mut view = view_state();
+        view.opts.show_hidden = true;
+        let mut submission = view_pairs(&view, &cfg);
+        submission.push(("base".to_string(), "HEAD".to_string()));
+        submission.push(("head".to_string(), ":worktree".to_string()));
+
+        let canonical = canonical_query(Some(&query::encode_pairs(&submission))).unwrap();
+
+        assert!(canonical.contains("hidden=1"));
+        assert!(canonical.contains("diff=HEAD..%3Aworktree"));
     }
 }
