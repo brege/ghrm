@@ -281,6 +281,7 @@ fn compare_fragment(
             .map(|entry| tmpl::CompareRef {
                 value: entry.value.clone(),
                 label: entry.label.clone(),
+                timestamp: entry.timestamp,
             })
             .collect::<Vec<_>>()
     };
@@ -306,6 +307,7 @@ fn compare_fragment(
         branches: &branches,
         tags: &tags,
         commits: &commits,
+        head_timestamp: refs.head_timestamp,
     })
 }
 
@@ -445,6 +447,7 @@ mod tests {
             branches: vec![RefEntry {
                 value: "refs/heads/main".to_string(),
                 label: "main".to_string(),
+                timestamp: Some(1723600000),
             }],
             tags: Vec::new(),
             commits: vec![CommitEntry {
@@ -453,6 +456,7 @@ mod tests {
                 timestamp: 1723600000,
                 subject: "chore: upgrade benchmark tooling".to_string(),
             }],
+            head_timestamp: Some(1723600000),
         }
     }
 

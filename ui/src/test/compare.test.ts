@@ -3,20 +3,24 @@ import { setupCompare } from '../compare';
 
 const FORM_HTML = `
   <form id="ghrm-compare" class="ghrm-compare" method="get" action="/a.md" data-ghrm-compare>
-    <input type="hidden" name="hidden" value="1">
-    <label class="ghrm-compare-side ghrm-compare-base">
-      <select name="base" aria-label="Base revision">
-        <option value="HEAD" selected>HEAD</option>
-        <option value="d888e48aaaa" data-timestamp="1723600000">d888e48</option>
-      </select>
-    </label>
-    <label class="ghrm-compare-side ghrm-compare-head">
-      <select name="head" aria-label="Head revision">
-        <option value=":worktree" selected>Working tree</option>
-      </select>
-    </label>
-    <button type="submit" class="ghrm-compare-apply">Diff</button>
-    <button type="button" class="ghrm-compare-close" data-ghrm-compare-close aria-label="Close compare">x</button>
+    <div class="ghrm-compare-inner">
+      <input type="hidden" name="hidden" value="1">
+      <label class="ghrm-compare-side ghrm-compare-base">
+        <select name="base" aria-label="Base revision">
+          <option value="HEAD" data-timestamp="1723600000" selected>HEAD</option>
+          <option value="d888e48aaaa" data-timestamp="1723500000">d888e48</option>
+        </select>
+        <time data-ghrm-compare-time></time>
+      </label>
+      <span class="ghrm-compare-dots">..</span>
+      <label class="ghrm-compare-side ghrm-compare-head">
+        <select name="head" aria-label="Head revision">
+          <option value=":worktree" data-time-label="now" selected>Working tree</option>
+          <option value=":index" data-time-label="staged">Staged</option>
+        </select>
+        <time data-ghrm-compare-time></time>
+      </label>
+    </div>
   </form>
 `;
 
@@ -59,6 +63,7 @@ describe('compare controls', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -139,7 +144,7 @@ describe('compare controls', () => {
     expect(button.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('starts expanded for a server-rendered bar and closes from its control', () => {
+  it('leaves an active diff through the compare toggle without ref fields', () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({ matches: true }) as MediaQueryList),
@@ -149,19 +154,28 @@ describe('compare controls', () => {
       FORM_HTML,
     );
     const button = toggleButton(tools) as HTMLButtonElement;
-    const form = container.querySelector('[data-ghrm-compare]') as HTMLElement;
+    const form = container.querySelector(
+      '[data-ghrm-compare]',
+    ) as HTMLFormElement;
+    let submitted: FormData | null = null;
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      submitted = new FormData(form);
+    });
     expect(button.getAttribute('aria-expanded')).toBe('true');
     expect(button.classList.contains('is-active')).toBe(true);
 
-    (
-      form.querySelector('[data-ghrm-compare-close]') as HTMLButtonElement
-    ).click();
+    button.click();
 
     expect(form.hidden).toBe(true);
     expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(submitted?.get('hidden')).toBe('1');
+    expect(submitted?.has('base')).toBe(false);
+    expect(submitted?.has('head')).toBe(false);
   });
 
-  it('submits the form when a select changes', () => {
+  it('debounces automatic submission while a select is changing', async () => {
+    vi.useFakeTimers();
     const { container } = setup(
       'data-ghrm-compare-url="/_ghrm/compare?path=a.md"',
       FORM_HTML,
@@ -179,10 +193,19 @@ describe('compare controls', () => {
     base.value = 'd888e48aaaa';
     base.dispatchEvent(new Event('change', { bubbles: true }));
 
+    await vi.advanceTimersByTimeAsync(400);
+    expect(submitted).toBe(false);
+
+    const head = form.querySelector('select[name="head"]') as HTMLSelectElement;
+    head.value = ':index';
+    head.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(599);
+    expect(submitted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
     expect(submitted).toBe(true);
   });
 
-  it('titles commit options with relative ages', () => {
+  it('shows the selected ref time and mutable state label', () => {
     const { container } = setup(
       'data-ghrm-compare-url="/_ghrm/compare?path=a.md"',
       FORM_HTML,
@@ -192,5 +215,56 @@ describe('compare controls', () => {
       'option[data-timestamp]',
     ) as HTMLOptionElement;
     expect(option.title).toContain('ago');
+    const times = container.querySelectorAll('[data-ghrm-compare-time]');
+    expect(times[0]?.textContent).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+    expect(times[1]?.textContent).toBe('now');
+  });
+
+  it('restores the previous refs when the compare row is loaded again', async () => {
+    const first = setup(
+      'data-ghrm-compare-url="/_ghrm/compare?path=a.md"',
+      FORM_HTML,
+    );
+    const firstForm = first.container.querySelector(
+      '[data-ghrm-compare]',
+    ) as HTMLFormElement;
+    const base = firstForm.querySelector(
+      'select[name="base"]',
+    ) as HTMLSelectElement;
+    const head = firstForm.querySelector(
+      'select[name="head"]',
+    ) as HTMLSelectElement;
+    base.value = 'd888e48aaaa';
+    base.dispatchEvent(new Event('change', { bubbles: true }));
+    head.value = ':index';
+    head.dispatchEvent(new Event('change', { bubbles: true }));
+    (toggleButton(first.tools) as HTMLButtonElement).click();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({ ok: true, text: async () => FORM_HTML }) as unknown as Response,
+      ),
+    );
+    const second = setup('data-ghrm-compare-url="/_ghrm/compare?path=a.md"');
+    (toggleButton(second.tools) as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      expect(
+        second.container.querySelector('[data-ghrm-compare]'),
+      ).not.toBeNull();
+    });
+
+    const secondForm = second.container.querySelector(
+      '[data-ghrm-compare]',
+    ) as HTMLFormElement;
+    expect(
+      (secondForm.querySelector('select[name="base"]') as HTMLSelectElement)
+        .value,
+    ).toBe('d888e48aaaa');
+    expect(
+      (secondForm.querySelector('select[name="head"]') as HTMLSelectElement)
+        .value,
+    ).toBe(':index');
   });
 });

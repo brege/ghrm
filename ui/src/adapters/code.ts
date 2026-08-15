@@ -208,6 +208,66 @@ function pushHighlightedNode(
   lines[lines.length - 1] += `</${el.tagName.toLowerCase()}>`;
 }
 
+interface DiffLineNumber {
+  old: number | null;
+  new: number | null;
+}
+
+// Unified hunk headers define the old and new cursors. Context advances both
+// cursors, deletions advance only the old cursor, and additions advance only
+// the new cursor. Patch metadata and no-newline markers have no source line.
+function diffLineNumbers(lines: string[]): DiffLineNumber[] {
+  let oldLine: number | null = null;
+  let newLine: number | null = null;
+  // The optional counts do not affect cursor initialization.
+  const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+  return lines.map((line) => {
+    if (line.startsWith('diff --git ')) {
+      oldLine = null;
+      newLine = null;
+      return { old: null, new: null };
+    }
+    const header = hunk.exec(line);
+    if (header) {
+      oldLine = Number(header[1]);
+      newLine = Number(header[2]);
+      return { old: null, new: null };
+    }
+    if (oldLine === null || newLine === null) {
+      return { old: null, new: null };
+    }
+    if (line.startsWith('\\ No newline at end of file')) {
+      return { old: null, new: null };
+    }
+    if (line.startsWith('-')) {
+      const current = oldLine;
+      oldLine += 1;
+      return { old: current, new: null };
+    }
+    if (line.startsWith('+')) {
+      const current = newLine;
+      newLine += 1;
+      return { old: null, new: current };
+    }
+    if (line.startsWith(' ')) {
+      const current = { old: oldLine, new: newLine };
+      oldLine += 1;
+      newLine += 1;
+      return current;
+    }
+    return { old: null, new: null };
+  });
+}
+
+function diffLineCell(side: 'old' | 'new', line: number | null): string {
+  const cls = `ghrm-blob-line-no ghrm-blob-line-no-${side}`;
+  if (line === null) {
+    return `<td class="${cls}" aria-hidden="true"></td>`;
+  }
+  return `<td class="${cls}" data-line-number="${line}"><span class="ghrm-blob-line-no-text">${line}</span></td>`;
+}
+
 function renderBlob(block: Element): void {
   const code = block.querySelector('.ghrm-blob-source code');
   const body = block.querySelector('.ghrm-blob-table tbody');
@@ -238,6 +298,7 @@ function renderBlob(block: Element): void {
   }
 
   const diffBlob = code.classList.contains('language-diff');
+  block.classList.toggle('ghrm-blob-diff', diffBlob);
   const plainLines = source.split('\n');
   if (
     terminated &&
@@ -246,18 +307,25 @@ function renderBlob(block: Element): void {
   ) {
     plainLines.pop();
   }
+  const diffNumbers = diffBlob ? diffLineNumbers(plainLines) : [];
 
   const rows = lines.map((line, idx) => {
     const content = line || '&#8203;';
     const lineNo = idx + 1;
     const rowClass = diffBlob ? diffRowClass(plainLines[idx] ?? '') : '';
     const rowAttr = rowClass ? ` class="${rowClass}"` : '';
-    return `<tr${rowAttr}><td class="ghrm-blob-line-no" data-line-number="${lineNo}"><span class="ghrm-blob-line-no-text">${lineNo}</span></td><td class="ghrm-blob-line-code"><code class="ghrm-blob-line-text">${content}</code></td></tr>`;
+    const gutter = diffBlob
+      ? `${diffLineCell('old', diffNumbers[idx]?.old ?? null)}${diffLineCell('new', diffNumbers[idx]?.new ?? null)}`
+      : `<td class="ghrm-blob-line-no" data-line-number="${lineNo}"><span class="ghrm-blob-line-no-text">${lineNo}</span></td>`;
+    return `<tr${rowAttr}>${gutter}<td class="ghrm-blob-line-code"><code class="ghrm-blob-line-text">${content}</code></td></tr>`;
   });
 
   if (!terminated) {
+    const gutter = diffBlob
+      ? `${diffLineCell('old', null)}${diffLineCell('new', null)}`
+      : '<td class="ghrm-blob-line-no" aria-hidden="true"></td>';
     rows.push(
-      '<tr class="ghrm-blob-eof-row"><td class="ghrm-blob-line-no" aria-hidden="true"></td><td class="ghrm-blob-line-code"><span class="ghrm-blob-eof" title="No newline at end of file">No newline at end of file</span></td></tr>',
+      `<tr class="ghrm-blob-eof-row">${gutter}<td class="ghrm-blob-line-code"><span class="ghrm-blob-eof" title="No newline at end of file">No newline at end of file</span></td></tr>`,
     );
   }
 

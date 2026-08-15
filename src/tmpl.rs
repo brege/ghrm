@@ -121,11 +121,13 @@ pub struct CompareCtx<'a> {
     pub branches: &'a [CompareRef],
     pub tags: &'a [CompareRef],
     pub commits: &'a [CompareCommit],
+    pub head_timestamp: Option<u64>,
 }
 
 pub struct CompareRef {
     pub value: String,
     pub label: String,
+    pub timestamp: Option<u64>,
 }
 
 pub struct CompareCommit {
@@ -440,6 +442,7 @@ mod tests {
             CompareRef {
                 value: value.to_string(),
                 label: label.to_string(),
+                timestamp: Some(1723600000),
             }
         }
 
@@ -458,6 +461,7 @@ mod tests {
                 branches,
                 tags,
                 commits,
+                head_timestamp: Some(1723600000),
             }
         }
 
@@ -482,7 +486,7 @@ mod tests {
         }
 
         #[test]
-        fn form_submits_get_to_file_path() {
+        fn form_targets_file_path_without_redundant_controls() {
             let html = compare(compare_ctx(&[], &[], &[])).unwrap();
 
             assert!(html.contains("id=\"ghrm-compare\""));
@@ -490,7 +494,9 @@ mod tests {
             assert!(html.contains("action=\"/docs/readme.md\""));
             assert!(html.contains("name=\"base\""));
             assert!(html.contains("name=\"head\""));
-            assert!(html.contains("data-ghrm-compare-close"));
+            assert!(html.contains("data-ghrm-compare-time"));
+            assert!(!html.contains("ghrm-compare-apply"));
+            assert!(!html.contains("ghrm-compare-close"));
         }
 
         #[test]
@@ -506,10 +512,29 @@ mod tests {
         #[test]
         fn selection_marks_base_and_head_options() {
             let html = compare(compare_ctx(&[], &[], &[])).unwrap();
+            fn select<'a>(html: &'a str, name: &str) -> &'a str {
+                html.split_once(&format!("name=\"{name}\""))
+                    .unwrap()
+                    .1
+                    .split_once("</select>")
+                    .unwrap()
+                    .0
+            }
+            fn option<'a>(select: &'a str, value: &str) -> &'a str {
+                select
+                    .split_once(&format!("value=\"{value}\""))
+                    .unwrap()
+                    .1
+                    .split_once("</option>")
+                    .unwrap()
+                    .0
+            }
+            let base = select(&html, "base");
+            let head = select(&html, "head");
 
-            assert!(html.contains("value=\"HEAD\" selected>"));
-            assert!(html.contains("value=\":worktree\" selected>"));
-            assert!(!html.contains("value=\":index\" selected>"));
+            assert!(option(base, "HEAD").contains("selected"));
+            assert!(option(head, ":worktree").contains("selected"));
+            assert!(!option(head, ":index").contains("selected"));
         }
 
         #[test]
@@ -529,6 +554,7 @@ mod tests {
             assert!(html.contains("<optgroup label=\"Tags\">"));
             assert!(html.contains("<optgroup label=\"Commits\">"));
             assert!(html.contains("value=\"refs/heads/main\""));
+            assert!(html.contains("data-timestamp=\"1723600000\""));
             assert!(html.contains(">main</option>"));
             assert!(html.contains("value=\"refs/tags/v0.5.3\""));
             assert!(html.contains("value=\"d888e48aaaa\""));

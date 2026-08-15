@@ -5,12 +5,16 @@ use std::path::Path;
 use std::process::Stdio;
 
 const MAX_OUTPUT_BYTES: usize = 256 * 1024;
+// Annotated tags use the peeled commit date; branches and lightweight tags
+// use the direct commit date.
+const REF_FORMAT: &str = "--format=%(refname)%1f%(refname:short)%1f%(if)%(*committerdate)%(then)%(*committerdate:unix)%(else)%(committerdate:unix)%(end)";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct RefList {
     pub(crate) branches: Vec<RefEntry>,
     pub(crate) tags: Vec<RefEntry>,
     pub(crate) commits: Vec<CommitEntry>,
+    pub(crate) head_timestamp: Option<u64>,
 }
 
 // value is the unambiguous revision a picker submits (a full ref name or a
@@ -20,6 +24,7 @@ pub(crate) struct RefList {
 pub(crate) struct RefEntry {
     pub(crate) value: String,
     pub(crate) label: String,
+    pub(crate) timestamp: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -45,12 +50,7 @@ enum GitOut {
 pub(crate) fn refs_for(root: &Path, rel: &str) -> Option<RefList> {
     let branches = match run_git(
         root,
-        &[
-            "for-each-ref",
-            "--count=100",
-            "--format=%(refname)%1f%(refname:short)",
-            "refs/heads",
-        ],
+        &["for-each-ref", "--count=100", REF_FORMAT, "refs/heads"],
     ) {
         GitOut::Unavailable => Vec::new(),
         GitOut::Broken => return None,
@@ -58,12 +58,7 @@ pub(crate) fn refs_for(root: &Path, rel: &str) -> Option<RefList> {
     };
     let tags = match run_git(
         root,
-        &[
-            "for-each-ref",
-            "--count=100",
-            "--format=%(refname)%1f%(refname:short)",
-            "refs/tags",
-        ],
+        &["for-each-ref", "--count=100", REF_FORMAT, "refs/tags"],
     ) {
         GitOut::Unavailable => Vec::new(),
         GitOut::Broken => return None,
@@ -84,10 +79,16 @@ pub(crate) fn refs_for(root: &Path, rel: &str) -> Option<RefList> {
         GitOut::Broken => return None,
         GitOut::Bytes(raw) => parse_commit_output(&raw)?,
     };
+    let head_timestamp = match run_git(root, &["show", "--no-patch", "--format=%ct", "HEAD"]) {
+        GitOut::Unavailable => None,
+        GitOut::Broken => return None,
+        GitOut::Bytes(raw) => Some(parse_timestamp_output(&raw)?),
+    };
     Some(RefList {
         branches,
         tags,
         commits,
+        head_timestamp,
     })
 }
 
@@ -139,19 +140,33 @@ fn parse_commit_output(raw: &[u8]) -> Option<Vec<CommitEntry>> {
     parse_commit_lines(&String::from_utf8_lossy(raw))
 }
 
+fn parse_timestamp_output(raw: &[u8]) -> Option<u64> {
+    let text = std::str::from_utf8(raw).ok()?;
+    let mut lines = text.lines();
+    let timestamp = lines.next()?.parse().ok()?;
+    (lines.next().is_none()).then_some(timestamp)
+}
+
 fn parse_ref_lines(text: &str, prefix: &str) -> Option<Vec<RefEntry>> {
     text.lines()
         .map(|line| {
-            let (full, short) = line.split_once('\x1f')?;
+            let (full, rest) = line.split_once('\x1f')?;
+            let (short, timestamp) = rest.split_once('\x1f')?;
             if !full.starts_with(prefix) || short.is_empty() {
                 return None;
             }
             let DiffTarget::Rev(value) = DiffTarget::parse(full)? else {
                 return None;
             };
+            let timestamp = if timestamp.is_empty() {
+                None
+            } else {
+                Some(timestamp.parse().ok()?)
+            };
             Some(RefEntry {
                 value,
                 label: short.to_string(),
+                timestamp,
             })
         })
         .collect()
@@ -186,7 +201,7 @@ mod tests {
 
     #[test]
     fn parse_ref_lines_keeps_full_value_and_short_label() {
-        let text = "refs/heads/main\x1fmain\nrefs/heads/feature/x\x1ffeature/x\n";
+        let text = "refs/heads/main\x1fmain\x1f1723600000\nrefs/heads/feature/x\x1ffeature/x\x1f\n";
 
         let branches = parse_ref_lines(text, "refs/heads/").unwrap();
 
@@ -196,10 +211,12 @@ mod tests {
                 RefEntry {
                     value: "refs/heads/main".to_string(),
                     label: "main".to_string(),
+                    timestamp: Some(1723600000),
                 },
                 RefEntry {
                     value: "refs/heads/feature/x".to_string(),
                     label: "feature/x".to_string(),
+                    timestamp: None,
                 },
             ]
         );
@@ -208,16 +225,26 @@ mod tests {
     #[test]
     fn parse_ref_lines_rejects_malformed_output() {
         assert!(parse_ref_lines("no separator line\n", "refs/heads/").is_none());
-        assert!(parse_ref_lines("refs/heads/empty\x1f\n", "refs/heads/").is_none());
-        assert!(parse_ref_lines("refs/remotes/origin/main\x1fmain\n", "refs/heads/").is_none());
+        assert!(parse_ref_lines("refs/heads/empty\x1f\x1f1\n", "refs/heads/").is_none());
+        assert!(
+            parse_ref_lines("refs/remotes/origin/main\x1fmain\x1f1\n", "refs/heads/").is_none()
+        );
+        assert!(parse_ref_lines("refs/heads/main\x1fmain\x1fbad\n", "refs/heads/").is_none());
 
-        let long = format!("refs/heads/{}\x1flong\n", "a".repeat(256));
+        let long = format!("refs/heads/{}\x1flong\x1f1\n", "a".repeat(256));
         assert!(parse_ref_lines(&long, "refs/heads/").is_none());
     }
 
     #[test]
     fn parse_ref_output_rejects_non_utf8_identity() {
-        assert!(parse_ref_output(b"refs/heads/bad\xff\x1fbad\n", "refs/heads/").is_none());
+        assert!(parse_ref_output(b"refs/heads/bad\xff\x1fbad\x1f1\n", "refs/heads/").is_none());
+    }
+
+    #[test]
+    fn parse_timestamp_output_accepts_one_unix_timestamp() {
+        assert_eq!(parse_timestamp_output(b"1723600000\n"), Some(1723600000));
+        assert!(parse_timestamp_output(b"not-a-time\n").is_none());
+        assert!(parse_timestamp_output(b"1\n2\n").is_none());
     }
 
     #[test]

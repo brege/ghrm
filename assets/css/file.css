@@ -186,43 +186,70 @@ body.ghrm-print .ghrm-file-tools {
   background: var(--bgColor-neutral-muted, #afb8c133);
 }
 
-.ghrm-page-shell {
-  container: ghrm-page / inline-size;
+.ghrm-page-shell > .ghrm-explorer-header {
+  flex-wrap: wrap;
 }
 
-/* Variant A inline morph: the bar unfolds between the breadcrumbs and the
-   header actions with a width and opacity transition. */
 .ghrm-compare {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  order: 1;
+  flex: 1 0 100%;
+  display: grid;
+  grid-template-rows: 1fr;
   min-width: 0;
-  max-width: 640px;
   opacity: 1;
-  overflow: hidden;
   transition:
-    max-width 0.28s ease,
+    grid-template-rows 0.26s cubic-bezier(0.2, 0.7, 0.3, 1),
     opacity 0.18s ease;
 }
 
 .ghrm-compare.is-collapsed {
-  max-width: 0;
+  grid-template-rows: 0fr;
   opacity: 0;
 }
 
+.ghrm-compare[hidden],
 body.ghrm-print .ghrm-compare {
   display: none;
 }
 
+.ghrm-compare-inner {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--borderColor-muted, #d0d7deb3);
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.2s ease 0.04s,
+    transform 0.24s ease,
+    padding-top 0.24s ease,
+    margin-top 0.24s ease;
+}
+
+.ghrm-compare.is-collapsed .ghrm-compare-inner {
+  margin-top: 0;
+  padding-top: 0;
+  border-color: transparent;
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 .ghrm-compare-side {
   position: relative;
-  display: inline-flex;
-  align-items: center;
+  flex: 0 1 260px;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 
 .ghrm-compare-side::before {
   content: "";
   position: absolute;
+  top: 13px;
   left: 9px;
   width: 7px;
   height: 7px;
@@ -248,8 +275,8 @@ body.ghrm-print .ghrm-compare {
 }
 
 .ghrm-compare select {
+  width: 100%;
   height: 32px;
-  max-width: 180px;
   padding: 0 6px 0 22px;
   border: 1px solid var(--borderColor-default, #d0d7de);
   border-radius: 6px;
@@ -260,79 +287,28 @@ body.ghrm-print .ghrm-compare {
 }
 
 .ghrm-compare-dots {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 8px;
   color: var(--fgColor-muted, #636c76);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 12px;
   user-select: none;
 }
 
-.ghrm-compare-apply {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--borderColor-default, #d0d7de);
-  border-radius: 6px;
-  background: var(--bgColor-default, #ffffff);
-  color: var(--fgColor-default, #1f2328);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.ghrm-compare-apply:hover {
-  background: var(--bgColor-neutral-muted, #afb8c133);
-}
-
-.ghrm-compare-close {
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
+.ghrm-compare-time {
+  min-height: 16px;
+  padding-left: 22px;
   color: var(--fgColor-muted, #636c76);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.ghrm-compare-close:hover {
-  color: var(--fgColor-default, #1f2328);
-  background: var(--bgColor-neutral-muted, #afb8c133);
-}
-
-/* Variant B fallback: in a narrow shell the expanded bar takes a full
-   second header row instead of compressing the pickers, and the motion
-   becomes a height reveal. The query tracks the page shell container, not
-   the viewport, so it also engages in wide windows whose header content
-   leaves no inline room. */
-@container ghrm-page (max-width: 960px) {
-  .ghrm-explorer-header:has(.ghrm-compare:not([hidden])) {
-    flex-wrap: wrap;
-  }
-
-  .ghrm-compare {
-    order: 1;
-    flex-basis: 100%;
-    flex-wrap: wrap;
-    max-width: none;
-    max-height: 96px;
-    transition:
-      max-height 0.26s ease,
-      opacity 0.18s ease;
-  }
-
-  .ghrm-compare.is-collapsed {
-    max-height: 0;
-    opacity: 0;
-  }
-
-  .ghrm-compare select {
-    flex: 1 1 auto;
-    max-width: none;
-  }
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ghrm-compare {
+  .ghrm-compare,
+  .ghrm-compare-inner {
     transition: none;
   }
 }

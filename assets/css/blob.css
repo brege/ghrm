@@ -56,6 +56,15 @@
   user-select: none;
 }
 
+.markdown-body .ghrm-blob-diff td.ghrm-blob-line-no {
+  min-width: calc(4ch + 12px);
+  padding: 0 6px;
+}
+
+.markdown-body .ghrm-blob-diff td.ghrm-blob-line-no-old {
+  padding-left: 12px;
+}
+
 .ghrm-blob-line-no-text,
 .ghrm-blob-line-text {
   display: inline-block;
@@ -176,6 +185,13 @@ body:is(.ghrm-wrap, .ghrm-print) .markdown-body .ghrm-blob-table {
 
 body:is(.ghrm-wrap, .ghrm-print) .markdown-body td.ghrm-blob-line-no {
   width: calc(4ch + 24px);
+}
+
+body:is(.ghrm-wrap, .ghrm-print)
+  .markdown-body
+  .ghrm-blob-diff
+  td.ghrm-blob-line-no {
+  width: calc(4ch + 12px);
 }
 
 body:is(.ghrm-wrap, .ghrm-print) .markdown-body td.ghrm-blob-line-code {

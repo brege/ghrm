@@ -121,6 +121,47 @@ describe('blob line rendering', () => {
       'ghrm-blob-row-add',
       '',
     ]);
+    expect(
+      rows.map((row) => [
+        row.querySelector('.ghrm-blob-line-no-old')?.textContent ?? '',
+        row.querySelector('.ghrm-blob-line-no-new')?.textContent ?? '',
+      ]),
+    ).toEqual([
+      ['', ''],
+      ['', ''],
+      ['', ''],
+      ['', ''],
+      ['1', ''],
+      ['', '1'],
+      ['2', '2'],
+    ]);
+  });
+
+  it('resets source line cursors at each unified diff hunk', () => {
+    const body = makeBlob(
+      '@@ -8,2 +11,3 @@\n context\n-old\n+new\n+extra\n@@ -20 +24 @@\n-last\n+next\n\\ No newline at end of file\n',
+      'diff',
+    );
+
+    renderBlobs();
+
+    const rows = [...body.querySelectorAll('tr')];
+    expect(
+      rows.map((row) => [
+        row.querySelector('.ghrm-blob-line-no-old')?.textContent ?? '',
+        row.querySelector('.ghrm-blob-line-no-new')?.textContent ?? '',
+      ]),
+    ).toEqual([
+      ['', ''],
+      ['8', '11'],
+      ['9', ''],
+      ['', '12'],
+      ['', '13'],
+      ['', ''],
+      ['20', ''],
+      ['', '24'],
+      ['', ''],
+    ]);
   });
 
   it('leaves rows unclassed outside the diff language', () => {
