@@ -91,7 +91,7 @@ hmac = "0.13"
 form_urlencoded = "1"
 percent-encoding = "2"
 sha2 = "0.11"
-base64 = "0.22"
+base64 = "0.23"
 ghrm-stat.workspace = true
 
 [profile.release]
