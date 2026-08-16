@@ -316,20 +316,21 @@ async function loadForm(
   button: HTMLButtonElement,
   url: string,
 ): Promise<void> {
+  const htmx = window.htmx;
+  if (!htmx) throw new Error('htmx is unavailable');
+  const actions = qselFrom(container, '.ghrm-header-actions');
+  if (!actions) throw new Error('missing file header actions');
+
   button.disabled = true;
   try {
-    const response = await fetch(url, {
-      headers: { Accept: 'text/html' },
-    }).catch(() => null);
-    if (!response || !response.ok) return;
-    const template = document.createElement('template');
-    template.innerHTML = (await response.text()).trim();
-    const form = template.content.querySelector('[data-ghrm-compare]');
-    const header = qselFrom(container, '.ghrm-explorer-header');
-    const actions = header ? qselFrom(header, '.ghrm-header-actions') : null;
-    if (!(form instanceof HTMLFormElement) || !header || !actions) return;
+    await htmx.ajax('GET', url, {
+      source: button,
+      target: actions,
+      swap: 'beforebegin',
+    });
+    const form = formOf(container);
+    if (!form) throw new Error('compare response is missing its form');
     form.classList.add('is-collapsed');
-    header.insertBefore(form, actions);
     restoreSelection(form);
     wireForm(form);
     expand(form, button);
@@ -349,6 +350,7 @@ export function setupCompare(container: HTMLElement, tools: HTMLElement): void {
   button.innerHTML = icon('compare');
   button.setAttribute('aria-controls', 'ghrm-compare');
   button.setAttribute('aria-label', 'Compare revisions');
+  button.setAttribute('hx-push-url', 'false');
   button.title = 'Compare revisions';
 
   const initial = formOf(container);

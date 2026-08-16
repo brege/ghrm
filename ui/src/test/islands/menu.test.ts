@@ -52,6 +52,19 @@ describe('ghrm-menus', () => {
     expect(toggles[1].getAttribute('aria-expanded')).toBe('true');
   });
 
+  it('closes an open panel when its toggle is activated again', () => {
+    const toggle = document.querySelector<HTMLButtonElement>(
+      '[data-ghrm-menu-toggle]',
+    )!;
+    const panel = document.getElementById('filter-menu') as HTMLElement;
+
+    toggle.click();
+    toggle.click();
+
+    expect(panel.hidden).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('toggles nested disclosures without closing the parent panel', () => {
     const toggle = document.querySelector<HTMLButtonElement>(
       '[data-ghrm-menu-toggle]',
@@ -117,6 +130,19 @@ describe('ghrm-menus', () => {
 
     expect(panel.hidden).toBe(true);
     expect(document.activeElement).toBe(toggle);
+  });
+
+  it('closes on the shared menu close event', () => {
+    const toggle = document.querySelector<HTMLButtonElement>(
+      '[data-ghrm-menu-toggle]',
+    )!;
+    const panel = document.getElementById('filter-menu') as HTMLElement;
+
+    toggle.click();
+    panel.dispatchEvent(new CustomEvent('ghrm:menu-close', { bubbles: true }));
+
+    expect(panel.hidden).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('repositions the active panel on resize', () => {

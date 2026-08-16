@@ -53,6 +53,28 @@ const FORM_HTML = `
   </form>
 `;
 
+interface HtmxContext {
+  source?: Element;
+  target?: Element | string;
+  swap?: string;
+}
+
+function stubHtmx(html = FORM_HTML) {
+  const ajax = vi.fn(
+    async (_verb: string, _url: string, context: HtmxContext) => {
+      if (!(context.target instanceof Element)) {
+        throw new Error('missing htmx target');
+      }
+      if (context.swap !== 'beforebegin') {
+        throw new Error('unexpected htmx swap');
+      }
+      context.target.insertAdjacentHTML('beforebegin', html);
+    },
+  );
+  vi.stubGlobal('htmx', { ajax });
+  return ajax;
+}
+
 function containerHtml(attrs: string, compare = ''): string {
   return `
     <section class="ghrm-page-shell" data-ghrm-view-kind="source" ${attrs}>
@@ -126,18 +148,15 @@ describe('compare controls', () => {
     );
   });
 
-  it('fetches the fragment, inserts it before the actions, and expands', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          ({ ok: true, text: async () => FORM_HTML }) as unknown as Response,
-      ),
-    );
+  it('loads the fragment through htmx before the actions and expands', async () => {
+    const ajax = stubHtmx();
     const { container, tools } = setup(
       'data-ghrm-compare-url="/_ghrm/compare?path=a.md"',
     );
     const button = toggleButton(tools) as HTMLButtonElement;
+    const actions = container.querySelector(
+      '.ghrm-header-actions',
+    ) as HTMLElement;
 
     button.click();
     await vi.waitFor(() => {
@@ -153,6 +172,12 @@ describe('compare controls', () => {
     );
     expect(form.classList.contains('is-collapsed')).toBe(false);
     expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(button.getAttribute('hx-push-url')).toBe('false');
+    expect(ajax).toHaveBeenCalledWith('GET', '/_ghrm/compare?path=a.md', {
+      source: button,
+      target: actions,
+      swap: 'beforebegin',
+    });
     expect(document.activeElement).toBe(
       form.querySelector('[data-ghrm-menu-toggle]'),
     );
@@ -347,13 +372,7 @@ describe('compare controls', () => {
     option(firstForm, 'head', ':index').click();
     (toggleButton(first.tools) as HTMLButtonElement).click();
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          ({ ok: true, text: async () => FORM_HTML }) as unknown as Response,
-      ),
-    );
+    stubHtmx();
     const second = setup('data-ghrm-compare-url="/_ghrm/compare?path=a.md"');
     (toggleButton(second.tools) as HTMLButtonElement).click();
     await vi.waitFor(() => {

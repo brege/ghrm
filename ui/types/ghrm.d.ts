@@ -92,6 +92,16 @@ export interface HtmxEventDetail {
   [key: string]: unknown;
 }
 
+export interface HtmxAjaxContext {
+  source?: Element;
+  target?: Element | string;
+  swap?: string;
+}
+
+export interface HtmxStatic {
+  ajax(verb: string, path: string, context: HtmxAjaxContext): Promise<void>;
+}
+
 declare global {
   interface Window {
     hljs?: HighlightJS;
@@ -100,6 +110,7 @@ declare global {
     renderMathInElement?: RenderMathInElement;
     L?: LeafletStatic;
     topojson?: TopoJSONStatic;
+    htmx?: HtmxStatic;
   }
 
   interface GlobalEventHandlersEventMap {

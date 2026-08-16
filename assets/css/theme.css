@@ -12,7 +12,12 @@
   --bgColor-default: #0d1117;
   --bgColor-muted: #161b22;
   --bgColor-neutral-muted: #6e768166;
+  --bgColor-success-muted: rgba(46, 160, 67, 0.15);
+  --bgColor-danger-muted: rgba(248, 81, 73, 0.1);
+  --bgColor-accent-muted: rgba(56, 139, 253, 0.1);
   --bgColor-attention-muted: #bb800926;
+  --ghrm-diff-addition-num-bg: rgba(63, 185, 80, 0.3);
+  --ghrm-diff-deletion-num-bg: rgba(248, 81, 73, 0.3);
   --borderColor-default: #30363d;
   --borderColor-muted: #30363db3;
   --borderColor-neutral-muted: #6e768166;
@@ -44,7 +49,12 @@
   --bgColor-default: #ffffff;
   --bgColor-muted: #f6f8fa;
   --bgColor-neutral-muted: #afb8c133;
+  --bgColor-success-muted: #e6ffec;
+  --bgColor-danger-muted: #ffebe9;
+  --bgColor-accent-muted: #ddf4ff;
   --bgColor-attention-muted: #fff8c5;
+  --ghrm-diff-addition-num-bg: #ccffd8;
+  --ghrm-diff-deletion-num-bg: #ffd7d5;
   --borderColor-default: #d0d7de;
   --borderColor-muted: #d0d7deb3;
   --borderColor-neutral-muted: #afb8c133;

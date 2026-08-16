@@ -87,7 +87,6 @@ export class GhrmMenus extends LitElement {
       Number.isFinite(width) && width > 0 ? width : undefined,
     );
     this.active = menu;
-    menu.panel.dispatchEvent(new CustomEvent('ghrm:menu-opened'));
   }
 
   private toggleDisclosure(toggle: HTMLElement): void {
