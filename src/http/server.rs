@@ -6,6 +6,7 @@ use crate::gist;
 use crate::http::{
     about, api, archive, assets, auth, delivery, diff, gist as http_gist, shell, vendor,
 };
+use crate::paths;
 use crate::render::{self, Rendered};
 use crate::repo::{self, RepoSet};
 use crate::runtime;
@@ -525,11 +526,8 @@ async fn any_path(
         return serve_file_mode(&s, &path, diff, view, hx, native).await;
     }
     let had_trailing = path.ends_with('/');
-    let clean = path.trim_matches('/').to_string();
-    let joined = if clean.is_empty() {
-        s.target.clone()
-    } else {
-        s.target.join(&clean)
+    let Some((joined, clean)) = dir_target(&s.target, &path) else {
+        return not_found();
     };
     let meta = match tokio::fs::metadata(&joined).await {
         Ok(m) => m,
@@ -567,6 +565,15 @@ async fn any_path(
         return delivery::stream_file(&joined).await;
     }
     dispatch_file(&s, &joined, &s.target, &clean, view, hx).await
+}
+
+fn dir_target(root: &Path, raw: &str) -> Option<(PathBuf, String)> {
+    let clean = raw.trim_matches('/');
+    if clean.is_empty() {
+        return Some((root.to_path_buf(), String::new()));
+    }
+    let rel = paths::safe_rel(clean)?;
+    Some((root.join(rel), clean.to_string()))
 }
 
 async fn serve_file_mode(
@@ -651,12 +658,8 @@ async fn render_file(
         .unwrap_or_default();
     let crumbs = page_crumbs(s, path, root, &rel, &view);
     let raw_html = delivery::raw_blob_html(&md, Some("markdown"));
-    let compare = s
-        .repos
-        .repo_for(path)
-        .map(|_| delivery::compare_attrs(&rel, None, &diff::view_pairs(&view, &s.view_cfg)));
-    let view = delivery::FileView::markdown();
-    let view_attrs = delivery::file_view_attrs(&rel, view, compare.as_ref());
+    let file_view = delivery::FileView::markdown();
+    let view_attrs = diff::file_view_attrs(s, path, &rel, file_view, &view);
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
@@ -664,8 +667,8 @@ async fn render_file(
         raw_html: &raw_html,
         view_attrs: &view_attrs,
         compare_html: "",
-        preview_hidden: view.preview_hidden,
-        raw_hidden: view.raw_hidden,
+        preview_hidden: file_view.preview_hidden,
+        raw_hidden: file_view.raw_hidden,
     }) {
         Ok(b) => b,
         Err(e) => {
@@ -748,12 +751,8 @@ async fn render_source_file(
     let features = vendor::feature_list(&rendered);
     let crumbs = page_crumbs(s, path, root, rel, &view);
     let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
-    let compare = s
-        .repos
-        .repo_for(path)
-        .map(|_| delivery::compare_attrs(rel, None, &diff::view_pairs(&view, &s.view_cfg)));
     let file_view = delivery::FileView::source();
-    let view_attrs = delivery::file_view_attrs(rel, file_view, compare.as_ref());
+    let view_attrs = diff::file_view_attrs(s, path, rel, file_view, &view);
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
@@ -825,12 +824,8 @@ async fn render_dual_file(
     let features = vendor::feature_list(&rendered);
     let crumbs = page_crumbs(s, path, root, rel, &view);
     let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
-    let compare = s
-        .repos
-        .repo_for(path)
-        .map(|_| delivery::compare_attrs(rel, None, &diff::view_pairs(&view, &s.view_cfg)));
     let file_view = delivery::FileView::dual();
-    let view_attrs = delivery::file_view_attrs(rel, file_view, compare.as_ref());
+    let view_attrs = diff::file_view_attrs(s, path, rel, file_view, &view);
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
@@ -1003,6 +998,24 @@ mod tests {
                 format!("{path}?diff=HEAD..%3Aworktree"),
                 "{path}"
             );
+        }
+    }
+
+    #[test]
+    fn dir_target_validates_nonempty_routes() {
+        let root = Path::new("/srv/ghrm");
+
+        assert_eq!(
+            dir_target(root, "/"),
+            Some((root.to_path_buf(), String::new()))
+        );
+        assert_eq!(
+            dir_target(root, "/docs/readme.md/"),
+            Some((root.join("docs/readme.md"), "docs/readme.md".to_string()))
+        );
+
+        for raw in ["../secret", "docs/../secret", "./readme.md"] {
+            assert!(dir_target(root, raw).is_none(), "{raw}");
         }
     }
 

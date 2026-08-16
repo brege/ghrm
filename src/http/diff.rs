@@ -14,7 +14,7 @@ use axum::{
     http::{StatusCode, header},
     response::Response,
 };
-use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
+use percent_encoding::{AsciiSet, CONTROLS, NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::Deserialize;
 use std::path::Path;
 use tracing::warn;
@@ -55,6 +55,46 @@ pub(crate) fn view_pairs(view: &ViewState, cfg: &ViewConfig) -> Vec<(String, Str
     let href = view::with_view("/", view, cfg);
     let query = href.split_once('?').map(|(_, query)| query).unwrap_or("");
     query::parse_pairs(query)
+}
+
+pub(crate) fn file_view_attrs(
+    s: &AppState,
+    path: &Path,
+    rel: &str,
+    file_view: delivery::FileView,
+    view: &ViewState,
+) -> String {
+    if s.repos.repo_for(path).is_none() {
+        return delivery::file_view_attrs(rel, file_view);
+    }
+    compare_view_attrs(rel, file_view, None, &view_pairs(view, &s.view_cfg))
+}
+
+fn compare_view_attrs(
+    rel: &str,
+    view: delivery::FileView,
+    spec: Option<&DiffSpec>,
+    pairs: &[(String, String)],
+) -> String {
+    let path = utf8_percent_encode(rel.trim_matches('/'), NON_ALPHANUMERIC);
+    let mut url = format!("/_ghrm/compare?path={path}");
+    if !pairs.is_empty() {
+        url.push('&');
+        url.push_str(&query::encode_pairs(pairs));
+    }
+
+    let mut attrs = delivery::file_view_attrs(rel, view);
+    attrs.push_str(&format!(
+        " data-ghrm-compare-url=\"{}\"",
+        html_escape::encode_double_quoted_attribute(&url),
+    ));
+    if let Some(spec) = spec {
+        attrs.push_str(&format!(
+            " data-ghrm-diff=\"{}\"",
+            html_escape::encode_double_quoted_attribute(&spec.token()),
+        ));
+    }
+    attrs
 }
 
 // The HTTP path keeps slash separators while each decoded filesystem
@@ -160,9 +200,8 @@ fn render_page(page: Page<'_>) -> Response {
     let crumbs = page_crumbs(page.s, page.path, page.root, page.rel, page.view);
     let raw_html = raw_html(page.outcome, page.spec);
     let hidden = view_pairs(page.view, &page.s.view_cfg);
-    let compare = delivery::compare_attrs(page.rel, Some(page.spec), &hidden);
     let file_view = delivery::FileView::source();
-    let view_attrs = delivery::file_view_attrs(page.rel, file_view, Some(&compare));
+    let view_attrs = compare_view_attrs(page.rel, file_view, Some(page.spec), &hidden);
     let action = file_action(page.rel);
     let compare_html = match compare_fragment(
         &action,
@@ -523,6 +562,34 @@ mod tests {
             compare_fragment(&action, "HEAD", ":worktree", &RefList::default(), &[]).unwrap();
 
         assert!(html.contains(r#"action="/docs/caf%C3%A9%20%3F%23%25%5C.md""#,));
+    }
+
+    #[test]
+    fn compare_view_attrs_include_fragment_url() {
+        let attrs = compare_view_attrs("docs/read me.md", delivery::FileView::source(), None, &[]);
+
+        assert!(
+            attrs.contains(r#"data-ghrm-compare-url="/_ghrm/compare?path=docs%2Fread%20me%2Emd""#)
+        );
+        assert!(!attrs.contains("data-ghrm-diff"));
+    }
+
+    #[test]
+    fn compare_view_attrs_preserve_view_state() {
+        let pairs = vec![("hidden".to_string(), "1".to_string())];
+        let attrs = compare_view_attrs("a.md", delivery::FileView::source(), None, &pairs);
+
+        assert!(
+            attrs.contains(r#"data-ghrm-compare-url="/_ghrm/compare?path=a%2Emd&amp;hidden=1""#)
+        );
+    }
+
+    #[test]
+    fn compare_view_attrs_include_diff_spec() {
+        let spec = DiffSpec::parse("HEAD..:worktree").unwrap();
+        let attrs = compare_view_attrs("a.md", delivery::FileView::source(), Some(&spec), &[]);
+
+        assert!(attrs.contains(r#"data-ghrm-diff="HEAD..:worktree""#));
     }
 
     #[test]
