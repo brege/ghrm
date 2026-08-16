@@ -1,61 +1,42 @@
-use super::root;
 use super::{Forge, SourceState};
 
-use std::fs;
+use gix::bstr::ByteSlice;
 use std::path::Path;
 
 pub(super) fn source_for_repo(root: &Path) -> SourceState {
-    let Some(config_path) = root::git_config_path(&root.join(".git")) else {
+    let Ok(repo) = gix::open(root) else {
         return SourceState::NoRepo;
     };
-    let remotes = parse_remotes(&config_path);
-    let selected = remotes
-        .iter()
-        .find(|(name, _)| name == "origin")
-        .or_else(|| remotes.first());
-
-    match selected {
-        Some((_, raw)) => classify_remote(raw),
+    match remote_url(&repo) {
+        Some(raw) => classify_remote(&raw),
         None => SourceState::NoRemote,
     }
 }
 
-fn parse_remotes(config_path: &Path) -> Vec<(String, String)> {
-    let text = match fs::read_to_string(config_path) {
-        Ok(text) => text,
-        Err(_) => return Vec::new(),
+// Selects origin, then the first remote with a configured url, skipping
+// remotes without one. gix sorts remote_names, so the fallback tie-break
+// is name order rather than config-file order. The value is gix's
+// effective config value; classify_remote receives it without passing
+// through gix's URL parser, so it sees the configured string rather than
+// a re-serialized URL.
+fn remote_url(repo: &gix::Repository) -> Option<String> {
+    let config = repo.config_snapshot();
+    let read = |name: &str| {
+        config
+            .string(format!("remote.{name}.url").as_str())
+            .map(|url| url.to_string())
     };
-
-    let mut remotes = Vec::new();
-    let mut current = None::<String>;
-    for raw_line in text.lines() {
-        let line = raw_line.trim();
-        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            current = parse_remote_section(line);
-            continue;
-        }
-        let Some(name) = current.as_ref() else {
-            continue;
-        };
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        if key.trim() != "url" {
-            continue;
-        }
-        remotes.push((name.clone(), value.trim().to_string()));
+    if let Some(url) = read("origin") {
+        return Some(url);
     }
-    remotes
-}
-
-fn parse_remote_section(section: &str) -> Option<String> {
-    let body = section.strip_prefix('[')?.strip_suffix(']')?.trim();
-    let rest = body.strip_prefix("remote ")?;
-    let name = rest.strip_prefix('"')?.strip_suffix('"')?;
-    Some(name.to_string())
+    for name in repo.remote_names().iter() {
+        if let Ok(name) = name.to_str()
+            && let Some(url) = read(name)
+        {
+            return Some(url);
+        }
+    }
+    None
 }
 
 fn classify_remote(raw: &str) -> SourceState {
@@ -211,6 +192,113 @@ fn strip_git_suffix(path: &str) -> String {
 mod tests {
     use super::*;
 
+    use crate::testutil::TempDir;
+    use std::fs;
+
+    // Builds a real repository through gix and appends the config body so
+    // source_for_repo reads remotes back through gix, not a parser.
+    fn repo_with_config(prefix: &str, body: &str) -> TempDir {
+        let td = TempDir::new(prefix);
+        gix::init(td.path()).expect("init repository");
+        let config = td.path().join(".git/config");
+        let mut text = fs::read_to_string(&config).expect("read repository config");
+        text.push_str(body);
+        fs::write(&config, text).unwrap();
+        td
+    }
+
+    fn selected_raw(state: SourceState) -> Option<String> {
+        match state {
+            SourceState::Web { raw, .. } | SourceState::Transport { raw } => Some(raw),
+            SourceState::NoRemote | SourceState::NoRepo => None,
+        }
+    }
+
+    #[test]
+    fn source_prefers_origin_over_other_remotes() {
+        let td = repo_with_config(
+            "ghrm-remote-origin",
+            "[remote \"origin\"]\n\turl = https://example.com/a/origin.git\n\
+             [remote \"upstream\"]\n\turl = https://example.com/a/upstream.git\n",
+        );
+        assert_eq!(
+            selected_raw(source_for_repo(td.path())),
+            Some("https://example.com/a/origin.git".to_string())
+        );
+    }
+
+    #[test]
+    fn source_falls_back_in_sorted_name_order() {
+        let td = repo_with_config(
+            "ghrm-remote-fallback",
+            "[remote \"zeta\"]\n\turl = https://example.com/a/zeta.git\n\
+             [remote \"alpha\"]\n\turl = https://example.com/a/alpha.git\n",
+        );
+        assert_eq!(
+            selected_raw(source_for_repo(td.path())),
+            Some("https://example.com/a/alpha.git".to_string())
+        );
+    }
+
+    #[test]
+    fn source_skips_remotes_without_a_url() {
+        let td = repo_with_config(
+            "ghrm-remote-skip",
+            "[remote \"alpha\"]\n\tfetch = +refs/heads/*:refs/remotes/alpha/*\n\
+             [remote \"zeta\"]\n\turl = https://example.com/a/zeta.git\n",
+        );
+        assert_eq!(
+            selected_raw(source_for_repo(td.path())),
+            Some("https://example.com/a/zeta.git".to_string())
+        );
+    }
+
+    #[test]
+    fn source_without_remotes_is_no_remote() {
+        let td = repo_with_config("ghrm-remote-none", "");
+        assert_eq!(source_for_repo(td.path()), SourceState::NoRemote);
+    }
+
+    #[test]
+    fn source_for_non_repo_is_no_repo() {
+        let td = TempDir::new("ghrm-remote-norepo");
+        assert_eq!(source_for_repo(td.path()), SourceState::NoRepo);
+    }
+
+    #[test]
+    fn source_reads_linked_worktree_remote() {
+        let td = TempDir::new("ghrm-remote-worktree");
+        let main = td.path().join("main");
+        let wt = td.path().join("wt");
+        gix::init(&main).expect("init repository");
+        let config = main.join(".git/config");
+        let mut text = fs::read_to_string(&config).expect("read repository config");
+        text.push_str("[remote \"origin\"]\n\turl = https://example.com/a/origin.git\n");
+        fs::write(&config, text).unwrap();
+
+        let wt_gitdir = main.join(".git/worktrees/w1");
+        fs::create_dir_all(&wt_gitdir).unwrap();
+        fs::create_dir_all(&wt).unwrap();
+        let head = fs::read_to_string(main.join(".git/HEAD")).unwrap();
+        fs::write(
+            wt.join(".git"),
+            format!("gitdir: {}\n", wt_gitdir.display()),
+        )
+        .unwrap();
+        fs::write(wt_gitdir.join("commondir"), "../..\n").unwrap();
+        fs::write(
+            wt_gitdir.join("gitdir"),
+            format!("{}\n", wt.join(".git").display()),
+        )
+        .unwrap();
+        fs::write(wt_gitdir.join("HEAD"), head).unwrap();
+
+        assert_eq!(
+            selected_raw(source_for_repo(&wt)),
+            Some("https://example.com/a/origin.git".to_string())
+        );
+    }
+
     #[test]
     fn github_scp_maps_to_web() {
         assert_eq!(
@@ -266,14 +354,6 @@ mod tests {
                 raw: "git@git.sr.ht:~sircmpwn/core.sr.ht".to_string(),
                 forge: Forge::SourceHut,
             }
-        );
-    }
-
-    #[test]
-    fn parse_remote_name_section() {
-        assert_eq!(
-            parse_remote_section(r#"[remote "origin"]"#),
-            Some("origin".to_string())
         );
     }
 }

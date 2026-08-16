@@ -1143,6 +1143,7 @@ dependencies = [
  "form_urlencoded",
  "futures-util",
  "ghrm-stat",
+ "gix",
  "grep-matcher",
  "grep-regex",
  "grep-searcher",
