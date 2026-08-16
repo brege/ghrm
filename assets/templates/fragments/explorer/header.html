@@ -7,6 +7,8 @@
         id="ghrm-view-menu-toggle"
         class="ghrm-view-menu-toggle{% if filter_menu_active %} is-active{% endif %}"
         type="button"
+        data-ghrm-menu-toggle
+        aria-controls="ghrm-view-menu"
         aria-expanded="false"
         aria-haspopup="menu"
         aria-label="Filter files"
@@ -16,7 +18,14 @@
           <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-filter"></use>
         </svg>
       </button>
-      <div id="ghrm-view-menu" class="ghrm-view-menu" role="menu" aria-label="Filter files" hidden>
+      <div
+        id="ghrm-view-menu"
+        class="ghrm-menu-panel ghrm-view-menu"
+        data-ghrm-menu-panel
+        role="menu"
+        aria-label="Filter files"
+        hidden
+      >
         {%- for option in filter_controls %}
         {{- menu::filter_option(option) -}}
         {%- endfor %}
@@ -28,6 +37,8 @@
         id="ghrm-archive-menu-toggle"
         class="ghrm-view-menu-toggle"
         type="button"
+        data-ghrm-menu-toggle
+        aria-controls="ghrm-archive-menu"
         aria-expanded="false"
         aria-haspopup="menu"
         aria-label="Download directory"
@@ -39,7 +50,8 @@
       </button>
       <div
         id="ghrm-archive-menu"
-        class="ghrm-view-menu"
+        class="ghrm-menu-panel ghrm-view-menu"
+        data-ghrm-menu-panel
         role="menu"
         aria-label="Download directory"
         hidden
@@ -48,6 +60,7 @@
           class="ghrm-view-option ghrm-archive-option"
           type="button"
           data-ghrm-archive-url="{{ archive_tar_zst_href }}"
+          data-ghrm-menu-close
           role="menuitem"
           title="Download directory as tar.zst"
         >
@@ -60,6 +73,7 @@
           class="ghrm-view-option ghrm-archive-option"
           type="button"
           data-ghrm-archive-url="{{ archive_zip_href }}"
+          data-ghrm-menu-close
           role="menuitem"
           title="Download directory as zip"
         >
@@ -76,6 +90,8 @@
         id="ghrm-column-menu-toggle"
         class="ghrm-view-menu-toggle{% if column_menu_active %} is-active{% endif %}"
         type="button"
+        data-ghrm-menu-toggle
+        aria-controls="ghrm-column-menu"
         aria-expanded="false"
         aria-haspopup="menu"
         aria-label="Display columns"
@@ -87,7 +103,8 @@
       </button>
       <div
         id="ghrm-column-menu"
-        class="ghrm-view-menu"
+        class="ghrm-menu-panel ghrm-view-menu"
+        data-ghrm-menu-panel
         role="menu"
         aria-label="Display columns"
         hidden

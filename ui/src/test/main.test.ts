@@ -18,7 +18,7 @@ describe('main entrypoint', () => {
     await import('../main');
     document.dispatchEvent(new Event('DOMContentLoaded'));
 
-    expect(customElements.get('ghrm-explorer-menus')).toBeDefined();
+    expect(customElements.get('ghrm-menus')).toBeDefined();
     expect(customElements.get('ghrm-archive-progress')).toBeDefined();
     expect(customElements.get('ghrm-search-panel')).toBeDefined();
     expect(customElements.get('ghrm-gist-editor')).toBeDefined();

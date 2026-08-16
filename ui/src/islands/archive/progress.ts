@@ -42,10 +42,26 @@ export class GhrmArchiveProgress extends LitElement {
     return this;
   }
 
+  connectedCallback(): void {
+    super.connectedCallback();
+    document.addEventListener('click', this.handleArchiveClick);
+  }
+
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    document.removeEventListener('click', this.handleArchiveClick);
     this.clearTimers();
   }
+
+  private handleArchiveClick = (event: MouseEvent): void => {
+    const target = event.target instanceof Element ? event.target : null;
+    const option = target?.closest('[data-ghrm-archive-url]');
+    if (!(option instanceof HTMLElement)) return;
+    const url = option.dataset.ghrmArchiveUrl;
+    if (!url) return;
+    event.preventDefault();
+    void this.startJob(url);
+  };
 
   private clearTimers(): void {
     if (this.pollTimer !== null) {
@@ -232,9 +248,9 @@ export class GhrmArchiveProgress extends LitElement {
               : nothing
           }
         </div>
-        <div class="ghrm-archive-progress-track">
+        <div class="ghrm-progress-track">
           <div
-            class="ghrm-archive-progress-fill"
+            class="ghrm-progress-fill"
             style="width: ${this.percent}%"
           ></div>
         </div>

@@ -115,6 +115,8 @@ pub struct CompareCtx<'a> {
     pub action: &'a str,
     pub base: &'a str,
     pub head: &'a str,
+    pub base_label: &'a str,
+    pub head_label: &'a str,
     pub base_extra: Option<&'a str>,
     pub head_extra: Option<&'a str>,
     pub hidden: &'a [(String, String)],
@@ -455,6 +457,8 @@ mod tests {
                 action: "/docs/readme.md",
                 base: "HEAD",
                 head: ":worktree",
+                base_label: "HEAD",
+                head_label: "Working tree",
                 base_extra: None,
                 head_extra: None,
                 hidden: &[],
@@ -503,38 +507,38 @@ mod tests {
         fn pseudo_refs_and_head_are_always_listed() {
             let html = compare(compare_ctx(&[], &[], &[])).unwrap();
 
-            assert!(html.contains("value=\":worktree\""));
-            assert!(html.contains("value=\":index\""));
-            assert!(html.contains("value=\"HEAD\""));
+            assert!(html.contains("data-ghrm-compare-option=\":worktree\""));
+            assert!(html.contains("data-ghrm-compare-option=\":index\""));
+            assert!(html.contains("data-ghrm-compare-option=\"HEAD\""));
             assert!(!html.contains("optgroup"));
+            assert!(!html.contains("<select"));
         }
 
         #[test]
         fn selection_marks_base_and_head_options() {
             let html = compare(compare_ctx(&[], &[], &[])).unwrap();
-            fn select<'a>(html: &'a str, name: &str) -> &'a str {
-                html.split_once(&format!("name=\"{name}\""))
+            fn menu<'a>(html: &'a str, name: &str) -> &'a str {
+                html.split_once(&format!("id=\"ghrm-compare-{name}-menu\""))
                     .unwrap()
                     .1
-                    .split_once("</select>")
+                    .split_once("</div>")
                     .unwrap()
                     .0
             }
-            fn option<'a>(select: &'a str, value: &str) -> &'a str {
-                select
-                    .split_once(&format!("value=\"{value}\""))
+            fn option<'a>(menu: &'a str, value: &str) -> &'a str {
+                menu.split_once(&format!("data-ghrm-compare-option=\"{value}\""))
                     .unwrap()
                     .1
-                    .split_once("</option>")
+                    .split_once("</button>")
                     .unwrap()
                     .0
             }
-            let base = select(&html, "base");
-            let head = select(&html, "head");
+            let base = menu(&html, "base");
+            let head = menu(&html, "head");
 
-            assert!(option(base, "HEAD").contains("selected"));
-            assert!(option(head, ":worktree").contains("selected"));
-            assert!(!option(head, ":index").contains("selected"));
+            assert!(option(base, "HEAD").contains("aria-checked=\"true\""));
+            assert!(option(head, ":worktree").contains("aria-checked=\"true\""));
+            assert!(option(head, ":index").contains("aria-checked=\"false\""));
         }
 
         #[test]
@@ -550,16 +554,23 @@ mod tests {
 
             let html = compare(compare_ctx(&branches, &tags, &commits)).unwrap();
 
-            assert!(html.contains("<optgroup label=\"Branches\">"));
-            assert!(html.contains("<optgroup label=\"Tags\">"));
-            assert!(html.contains("<optgroup label=\"Commits\">"));
-            assert!(html.contains("value=\"refs/heads/main\""));
+            assert!(html.contains(">Branches</span>"));
+            assert!(html.contains(">Tags</span>"));
+            assert!(html.contains(">Hashes</span>"));
+            assert!(html.contains("id=\"ghrm-compare-base-branches\""));
+            assert!(html.contains("id=\"ghrm-compare-base-tags\""));
+            assert!(html.contains("id=\"ghrm-compare-base-hashes\""));
+            assert!(html.contains("data-ghrm-compare-option=\"refs/heads/main\""));
             assert!(html.contains("data-timestamp=\"1723600000\""));
-            assert!(html.contains(">main</option>"));
-            assert!(html.contains("value=\"refs/tags/v0.5.3\""));
-            assert!(html.contains("value=\"d888e48aaaa\""));
+            assert!(html.contains(">main</span>"));
+            assert!(html.contains("data-ghrm-compare-option=\"refs/tags/v0.5.3\""));
+            assert!(html.contains("data-ghrm-compare-option=\"d888e48aaaa\""));
             assert!(html.contains("data-timestamp=\"1723600000\""));
-            assert!(html.contains(">d888e48 chore: upgrade benchmark tooling</option>"));
+            assert!(html.contains(">d888e48</span>"));
+            assert!(html.contains("chore: upgrade benchmark tooling"));
+            assert!(html.contains("data-ghrm-compare-message"));
+            assert!(html.contains("title=\"d888e48 chore: upgrade benchmark tooling\""));
+            assert!(html.contains("class=\"ghrm-compare-option-time\""));
         }
 
         #[test]
@@ -569,9 +580,9 @@ mod tests {
 
             let html = compare(compare_ctx(&branches, &tags, &[])).unwrap();
 
-            assert!(html.contains("value=\"refs/heads/v1\""));
-            assert!(html.contains("value=\"refs/tags/v1\""));
-            assert!(!html.contains("value=\"v1\""));
+            assert!(html.contains("data-ghrm-compare-option=\"refs/heads/v1\""));
+            assert!(html.contains("data-ghrm-compare-option=\"refs/tags/v1\""));
+            assert!(!html.contains("data-ghrm-compare-option=\"v1\""));
         }
 
         #[test]
@@ -600,7 +611,8 @@ mod tests {
 
             let html = compare(ctx).unwrap();
 
-            assert!(html.contains("value=\"HEAD~2\" selected>HEAD~2</option>"));
+            assert!(html.contains("data-ghrm-compare-option=\"HEAD~2\""));
+            assert!(html.contains("aria-checked=\"true\""));
         }
     }
 
@@ -726,6 +738,10 @@ mod tests {
                 html.contains("id=\"ghrm-toc-panel\""),
                 "missing #ghrm-toc-panel nav"
             );
+            assert!(
+                html.contains("<ghrm-menus>"),
+                "missing global menu island host"
+            );
         }
 
         #[test]
@@ -776,13 +792,18 @@ mod tests {
         }
 
         #[test]
-        fn explorer_menus_element() {
+        fn explorer_uses_global_menu_contract() {
             let fix = ExplorerFixture::new();
             let html = explorer(fix.ctx()).unwrap();
             assert!(
-                html.contains("<ghrm-explorer-menus>"),
-                "missing ghrm-explorer-menus element"
+                html.contains("data-ghrm-menu-toggle"),
+                "missing menu toggle contract"
             );
+            assert!(
+                html.contains("data-ghrm-menu-panel"),
+                "missing menu panel contract"
+            );
+            assert!(!html.contains("ghrm-explorer-menus"));
         }
 
         #[test]

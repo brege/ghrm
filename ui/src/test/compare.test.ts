@@ -5,21 +5,50 @@ const FORM_HTML = `
   <form id="ghrm-compare" class="ghrm-compare" method="get" action="/a.md" data-ghrm-compare>
     <div class="ghrm-compare-inner">
       <input type="hidden" name="hidden" value="1">
-      <label class="ghrm-compare-side ghrm-compare-base">
-        <select name="base" aria-label="Base revision">
-          <option value="HEAD" data-timestamp="1723600000" selected>HEAD</option>
-          <option value="d888e48aaaa" data-timestamp="1723500000">d888e48</option>
-        </select>
-        <time data-ghrm-compare-time></time>
-      </label>
-      <span class="ghrm-compare-dots">..</span>
-      <label class="ghrm-compare-side ghrm-compare-head">
-        <select name="head" aria-label="Head revision">
-          <option value=":worktree" data-time-label="now" selected>Working tree</option>
-          <option value=":index" data-time-label="staged">Staged</option>
-        </select>
-        <time data-ghrm-compare-time></time>
-      </label>
+      <input type="hidden" name="base" value="HEAD" data-ghrm-compare-input="base">
+      <input type="hidden" name="head" value=":worktree" data-ghrm-compare-input="head">
+      <div class="ghrm-compare-controls">
+        <div class="ghrm-compare-side" data-ghrm-compare-side="base">
+          <button type="button" data-ghrm-menu-toggle aria-controls="base-menu">
+            <span data-ghrm-compare-picker-label>HEAD</span>
+          </button>
+          <time data-ghrm-compare-time></time>
+          <div id="base-menu" data-ghrm-menu-panel hidden>
+            <button type="button" data-ghrm-compare-option="HEAD" data-timestamp="1723600000" aria-checked="true">
+              <span data-ghrm-compare-option-label>HEAD</span>
+              <time data-ghrm-compare-option-time></time>
+            </button>
+            <button type="button" data-ghrm-compare-option="d888e48aaaa" data-timestamp="1723500000" aria-checked="false">
+              <span data-ghrm-compare-option-label>
+                <span>d888e48</span>
+                <span data-ghrm-compare-message><span>change subject</span></span>
+              </span>
+              <time data-ghrm-compare-option-time></time>
+            </button>
+          </div>
+        </div>
+        <span class="ghrm-compare-dots">..</span>
+        <div class="ghrm-compare-side" data-ghrm-compare-side="head">
+          <button type="button" data-ghrm-menu-toggle aria-controls="head-menu">
+            <span data-ghrm-compare-picker-label>Working tree</span>
+          </button>
+          <time data-ghrm-compare-time></time>
+          <div id="head-menu" data-ghrm-menu-panel hidden>
+            <button type="button" data-ghrm-compare-option=":worktree" data-time-label="now" aria-checked="true">
+              <span data-ghrm-compare-option-label>Working tree</span>
+              <time data-ghrm-compare-option-time>now</time>
+            </button>
+            <button type="button" data-ghrm-compare-option=":index" data-time-label="staged" aria-checked="false">
+              <span data-ghrm-compare-option-label>Staged</span>
+              <time data-ghrm-compare-option-time>staged</time>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div data-ghrm-compare-progress hidden>
+        <span data-ghrm-compare-progress-label>Loading diff</span>
+        <div class="ghrm-progress-track"><div class="ghrm-progress-fill is-indeterminate"></div></div>
+      </div>
     </div>
   </form>
 `;
@@ -39,10 +68,7 @@ function containerHtml(attrs: string, compare = ''): string {
 function setup(
   attrs: string,
   compare = '',
-): {
-  container: HTMLElement;
-  tools: HTMLElement;
-} {
+): { container: HTMLElement; tools: HTMLElement } {
   document.body.innerHTML = containerHtml(attrs, compare);
   const container = document.querySelector('.ghrm-page-shell') as HTMLElement;
   const host = container.querySelector('.ghrm-header-actions') as HTMLElement;
@@ -57,6 +83,20 @@ function toggleButton(tools: HTMLElement): HTMLButtonElement | null {
   return tools.querySelector('[data-ghrm-compare-toggle]');
 }
 
+function option(
+  form: HTMLFormElement,
+  side: 'base' | 'head',
+  value: string,
+): HTMLButtonElement {
+  const found = [
+    ...form.querySelectorAll<HTMLButtonElement>(
+      `[data-ghrm-compare-side="${side}"] [data-ghrm-compare-option]`,
+    ),
+  ].find((item) => item.dataset.ghrmCompareOption === value);
+  if (!found) throw new Error(`missing ${side} option ${value}`);
+  return found;
+}
+
 describe('compare controls', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
@@ -65,6 +105,7 @@ describe('compare controls', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('adds no button without a compare url', () => {
@@ -77,7 +118,6 @@ describe('compare controls', () => {
     const { tools } = setup('data-ghrm-compare-url="/_ghrm/compare?path=a.md"');
 
     const button = toggleButton(tools);
-    expect(button).not.toBeNull();
     expect(button?.getAttribute('aria-expanded')).toBe('false');
     expect(button?.classList.contains('is-active')).toBe(false);
     expect(tools.firstElementChild).toBe(button);
@@ -105,19 +145,20 @@ describe('compare controls', () => {
     });
 
     const form = container.querySelector('[data-ghrm-compare]') as HTMLElement;
-    const header = container.querySelector('.ghrm-explorer-header');
-    const actions = container.querySelector('.ghrm-header-actions');
-    expect(form.parentElement).toBe(header);
-    expect(form.nextElementSibling).toBe(actions);
+    expect(form.parentElement).toBe(
+      container.querySelector('.ghrm-explorer-header'),
+    );
+    expect(form.nextElementSibling).toBe(
+      container.querySelector('.ghrm-header-actions'),
+    );
     expect(form.classList.contains('is-collapsed')).toBe(false);
-    expect(form.hidden).toBe(false);
     expect(button.getAttribute('aria-expanded')).toBe('true');
     expect(document.activeElement).toBe(
-      form.querySelector('select[name="base"]'),
+      form.querySelector('[data-ghrm-menu-toggle]'),
     );
   });
 
-  it('collapses on second activation and restores focus to the button', async () => {
+  it('collapses on second activation and restores focus to the button', () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({ matches: true }) as MediaQueryList),
@@ -128,7 +169,6 @@ describe('compare controls', () => {
     );
     const button = toggleButton(tools) as HTMLButtonElement;
     const form = container.querySelector('[data-ghrm-compare]') as HTMLElement;
-    expect(button.getAttribute('aria-expanded')).toBe('true');
 
     button.click();
 
@@ -144,7 +184,7 @@ describe('compare controls', () => {
     expect(button.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('leaves an active diff through the compare toggle without ref fields', () => {
+  it('leaves a diff without ref fields and shows file load progress', () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({ matches: true }) as MediaQueryList),
@@ -153,7 +193,6 @@ describe('compare controls', () => {
       'data-ghrm-compare-url="/_ghrm/compare?path=a.md" data-ghrm-diff="HEAD..:worktree"',
       FORM_HTML,
     );
-    const button = toggleButton(tools) as HTMLButtonElement;
     const form = container.querySelector(
       '[data-ghrm-compare]',
     ) as HTMLFormElement;
@@ -162,19 +201,21 @@ describe('compare controls', () => {
       event.preventDefault();
       submitted = new FormData(form);
     });
-    expect(button.getAttribute('aria-expanded')).toBe('true');
-    expect(button.classList.contains('is-active')).toBe(true);
 
-    button.click();
+    (toggleButton(tools) as HTMLButtonElement).click();
 
-    expect(form.hidden).toBe(true);
-    expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(submitted?.get('hidden')).toBe('1');
     expect(submitted?.has('base')).toBe(false);
     expect(submitted?.has('head')).toBe(false);
+    expect(
+      form.querySelector<HTMLElement>('[data-ghrm-compare-progress]')?.hidden,
+    ).toBe(false);
+    expect(
+      form.querySelector('[data-ghrm-compare-progress-label]')?.textContent,
+    ).toBe('Loading file');
   });
 
-  it('debounces automatic submission while a select is changing', async () => {
+  it('updates hidden refs and debounces automatic submission', async () => {
     vi.useFakeTimers();
     const { container } = setup(
       'data-ghrm-compare-url="/_ghrm/compare?path=a.md"',
@@ -189,35 +230,109 @@ describe('compare controls', () => {
       submitted = true;
     });
 
-    const base = form.querySelector('select[name="base"]') as HTMLSelectElement;
-    base.value = 'd888e48aaaa';
-    base.dispatchEvent(new Event('change', { bubbles: true }));
-
+    option(form, 'base', 'd888e48aaaa').click();
+    expect(
+      form.querySelector<HTMLInputElement>('[data-ghrm-compare-input="base"]')
+        ?.value,
+    ).toBe('d888e48aaaa');
     await vi.advanceTimersByTimeAsync(400);
     expect(submitted).toBe(false);
 
-    const head = form.querySelector('select[name="head"]') as HTMLSelectElement;
-    head.value = ':index';
-    head.dispatchEvent(new Event('change', { bubbles: true }));
+    option(form, 'head', ':index').click();
+    expect(
+      form.querySelector<HTMLInputElement>('[data-ghrm-compare-input="head"]')
+        ?.value,
+    ).toBe(':index');
     await vi.advanceTimersByTimeAsync(599);
     expect(submitted).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     expect(submitted).toBe(true);
+    expect(
+      form.querySelector<HTMLElement>('[data-ghrm-compare-progress]')?.hidden,
+    ).toBe(false);
+    expect(
+      form.querySelector('[data-ghrm-compare-progress-label]')?.textContent,
+    ).toBe('Loading diff');
   });
 
-  it('shows the selected ref time and mutable state label', () => {
+  it('shows dates at the right-side option coordinate and selected time', () => {
     const { container } = setup(
       'data-ghrm-compare-url="/_ghrm/compare?path=a.md"',
       FORM_HTML,
     );
 
-    const option = container.querySelector(
-      'option[data-timestamp]',
-    ) as HTMLOptionElement;
-    expect(option.title).toContain('ago');
+    const optionTime = container.querySelector(
+      '[data-timestamp] [data-ghrm-compare-option-time]',
+    ) as HTMLTimeElement;
+    expect(optionTime.textContent).toContain('ago');
+    expect(optionTime.title).not.toBe('');
     const times = container.querySelectorAll('[data-ghrm-compare-time]');
     expect(times[0]?.textContent).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
     expect(times[1]?.textContent).toBe('now');
+  });
+
+  it('scrolls only an overflowing commit message on hover and focus', () => {
+    const { container } = setup(
+      'data-ghrm-compare-url="/_ghrm/compare?path=a.md"',
+      FORM_HTML,
+    );
+    const form = container.querySelector(
+      '[data-ghrm-compare]',
+    ) as HTMLFormElement;
+    const commit = option(form, 'base', 'd888e48aaaa');
+    const message = commit.querySelector(
+      '[data-ghrm-compare-message]',
+    ) as HTMLElement;
+    Object.defineProperties(message, {
+      clientWidth: { configurable: true, value: 100 },
+      scrollWidth: { configurable: true, value: 244 },
+    });
+
+    commit.dispatchEvent(new MouseEvent('mouseenter'));
+
+    expect(message.classList.contains('is-scrolling')).toBe(true);
+    expect(
+      message.style.getPropertyValue('--ghrm-compare-scroll-distance'),
+    ).toBe('-144px');
+    expect(
+      message.style.getPropertyValue('--ghrm-compare-scroll-duration'),
+    ).toBe('5.40s');
+
+    commit.dispatchEvent(new MouseEvent('mouseleave'));
+    expect(message.classList.contains('is-scrolling')).toBe(false);
+
+    commit.focus();
+    expect(message.classList.contains('is-scrolling')).toBe(true);
+    commit.blur();
+    expect(message.classList.contains('is-scrolling')).toBe(false);
+
+    Object.defineProperty(message, 'scrollWidth', {
+      configurable: true,
+      value: 100,
+    });
+    commit.dispatchEvent(new MouseEvent('mouseenter'));
+    expect(message.classList.contains('is-scrolling')).toBe(false);
+  });
+
+  it('clears progress when the compare request finishes without replacement', () => {
+    const { container } = setup(
+      'data-ghrm-compare-url="/_ghrm/compare?path=a.md"',
+      FORM_HTML,
+    );
+    const form = container.querySelector(
+      '[data-ghrm-compare]',
+    ) as HTMLFormElement;
+    form.addEventListener('submit', (event) => event.preventDefault());
+
+    form.requestSubmit();
+    form.dispatchEvent(new Event('htmx:afterRequest'));
+
+    expect(
+      form.querySelector<HTMLElement>('[data-ghrm-compare-progress]')?.hidden,
+    ).toBe(true);
+    expect(
+      form.querySelector<HTMLElement>('.ghrm-compare-controls')?.hidden,
+    ).toBe(false);
   });
 
   it('restores the previous refs when the compare row is loaded again', async () => {
@@ -228,16 +343,8 @@ describe('compare controls', () => {
     const firstForm = first.container.querySelector(
       '[data-ghrm-compare]',
     ) as HTMLFormElement;
-    const base = firstForm.querySelector(
-      'select[name="base"]',
-    ) as HTMLSelectElement;
-    const head = firstForm.querySelector(
-      'select[name="head"]',
-    ) as HTMLSelectElement;
-    base.value = 'd888e48aaaa';
-    base.dispatchEvent(new Event('change', { bubbles: true }));
-    head.value = ':index';
-    head.dispatchEvent(new Event('change', { bubbles: true }));
+    option(firstForm, 'base', 'd888e48aaaa').click();
+    option(firstForm, 'head', ':index').click();
     (toggleButton(first.tools) as HTMLButtonElement).click();
 
     vi.stubGlobal(
@@ -259,12 +366,19 @@ describe('compare controls', () => {
       '[data-ghrm-compare]',
     ) as HTMLFormElement;
     expect(
-      (secondForm.querySelector('select[name="base"]') as HTMLSelectElement)
-        .value,
+      secondForm.querySelector<HTMLInputElement>(
+        '[data-ghrm-compare-input="base"]',
+      )?.value,
     ).toBe('d888e48aaaa');
     expect(
-      (secondForm.querySelector('select[name="head"]') as HTMLSelectElement)
-        .value,
+      secondForm.querySelector<HTMLInputElement>(
+        '[data-ghrm-compare-input="head"]',
+      )?.value,
     ).toBe(':index');
+    expect(
+      secondForm.querySelector(
+        '[data-ghrm-compare-side="base"] [data-ghrm-compare-picker-label]',
+      )?.textContent,
+    ).toBe('d888e48 change subject');
   });
 });

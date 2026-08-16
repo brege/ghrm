@@ -1,62 +1,189 @@
-{%- macro ref_options(branches, tags, commits, selected, extra, head_timestamp) -%}
-{%- if let Some(token) = extra %}
-<option value="{{ token }}" selected>{{ token }}</option>
-{%- endif %}
-<option
-  value=":worktree"
-  data-time-label="now"
-  {%- if selected == ":worktree" %} selected{% endif -%}
->Working tree</option>
-<option
-  value=":index"
-  data-time-label="staged"
-  {%- if selected == ":index" %} selected{% endif -%}
->Staged</option>
-<option
-  value="HEAD"
+{%- macro check_icon() -%}
+<svg class="ghrm-compare-option-check" aria-hidden="true" focusable="false">
+  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-check"></use>
+</svg>
+{%- endmacro %}
+
+{%- macro fixed_option(value, label, time_label, active) -%}
+<button
+  class="ghrm-compare-option{% if active %} is-active{% endif %}"
+  type="button"
+  data-ghrm-compare-option="{{ value }}"
+  data-time-label="{{ time_label }}"
+  data-ghrm-menu-close
+  role="menuitemradio"
+  aria-checked="{% if active %}true{% else %}false{% endif %}"
+>
+  {{- check_icon() -}}
+  <span class="ghrm-compare-option-label" data-ghrm-compare-option-label>{{ label }}</span>
+  <time class="ghrm-compare-option-time" data-ghrm-compare-option-time>{{ time_label }}</time>
+</button>
+{%- endmacro %}
+
+{%- macro head_option(active, head_timestamp) -%}
+<button
+  class="ghrm-compare-option{% if active %} is-active{% endif %}"
+  type="button"
+  data-ghrm-compare-option="HEAD"
   {%- if let Some(timestamp) = head_timestamp %}
   data-timestamp="{{ timestamp }}"
   {%- endif %}
-  {%- if selected == "HEAD" %} selected{% endif -%}
->HEAD</option>
+  data-ghrm-menu-close
+  role="menuitemradio"
+  aria-checked="{% if active %}true{% else %}false{% endif %}"
+>
+  {{- check_icon() -}}
+  <span class="ghrm-compare-option-label" data-ghrm-compare-option-label>HEAD</span>
+  <time class="ghrm-compare-option-time" data-ghrm-compare-option-time></time>
+</button>
+{%- endmacro %}
+
+{%- macro ref_option(entry, active) -%}
+<button
+  class="ghrm-compare-option{% if active %} is-active{% endif %}"
+  type="button"
+  data-ghrm-compare-option="{{ entry.value }}"
+  {%- if let Some(timestamp) = entry.timestamp %}
+  data-timestamp="{{ timestamp }}"
+  {%- endif %}
+  data-ghrm-menu-close
+  role="menuitemradio"
+  aria-checked="{% if active %}true{% else %}false{% endif %}"
+>
+  {{- check_icon() -}}
+  <span class="ghrm-compare-option-label" data-ghrm-compare-option-label>{{ entry.label }}</span>
+  <time class="ghrm-compare-option-time" data-ghrm-compare-option-time></time>
+</button>
+{%- endmacro %}
+
+{%- macro commit_option(commit, active) -%}
+<button
+  class="ghrm-compare-option{% if active %} is-active{% endif %}"
+  type="button"
+  data-ghrm-compare-option="{{ commit.value }}"
+  data-timestamp="{{ commit.timestamp }}"
+  data-ghrm-menu-close
+  role="menuitemradio"
+  aria-checked="{% if active %}true{% else %}false{% endif %}"
+  title="{{ commit.label }} {{ commit.subject }}"
+>
+  {{- check_icon() -}}
+  <span
+    class="ghrm-compare-option-label ghrm-compare-commit-label"
+    data-ghrm-compare-option-label
+  >
+    <span class="ghrm-compare-hash">{{ commit.label }}</span>
+    <span class="ghrm-compare-message" data-ghrm-compare-message>
+      <span class="ghrm-compare-message-text">{{ commit.subject }}</span>
+    </span>
+  </span>
+  <time class="ghrm-compare-option-time" data-ghrm-compare-option-time></time>
+</button>
+{%- endmacro %}
+
+{%- macro disclosure(kind, group, label, count) -%}
+<button
+  class="ghrm-compare-section-toggle"
+  type="button"
+  data-ghrm-menu-disclosure
+  aria-controls="ghrm-compare-{{ kind }}-{{ group }}"
+  aria-expanded="false"
+  role="menuitem"
+>
+  <svg aria-hidden="true" focusable="false">
+    <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-right"></use>
+  </svg>
+  <span>{{ label }}</span>
+  <span class="ghrm-compare-section-count">{{ count }}</span>
+</button>
+{%- endmacro %}
+
+{%- macro ref_menu(kind, selected, extra, branches, tags, commits, head_timestamp) -%}
+{%- if let Some(token) = extra %}
+{{- fixed_option(token, token, "", true) -}}
+{%- endif %}
+{{- fixed_option(":worktree", "Working tree", "now", selected == ":worktree") -}}
+{{- fixed_option(":index", "Staged", "staged", selected == ":index") -}}
+{{- head_option(selected == "HEAD", head_timestamp) -}}
 {%- if !branches.is_empty() %}
-<optgroup label="Branches">
+{{- disclosure(kind, "branches", "Branches", branches.len()) -}}
+<div
+  id="ghrm-compare-{{ kind }}-branches"
+  class="ghrm-compare-section"
+  role="group"
+  aria-label="Branches"
+  hidden
+>
   {%- for branch in branches %}
-  <option
-    value="{{ branch.value }}"
-    {%- if let Some(timestamp) = branch.timestamp %}
-    data-timestamp="{{ timestamp }}"
-    {%- endif %}
-    {%- if selected == branch.value.as_str() %} selected{% endif -%}
-  >{{ branch.label }}</option>
+  {{- ref_option(branch, selected == branch.value.as_str()) -}}
   {%- endfor %}
-</optgroup>
+</div>
 {%- endif %}
 {%- if !tags.is_empty() %}
-<optgroup label="Tags">
+{{- disclosure(kind, "tags", "Tags", tags.len()) -}}
+<div
+  id="ghrm-compare-{{ kind }}-tags"
+  class="ghrm-compare-section"
+  role="group"
+  aria-label="Tags"
+  hidden
+>
   {%- for tag in tags %}
-  <option
-    value="{{ tag.value }}"
-    {%- if let Some(timestamp) = tag.timestamp %}
-    data-timestamp="{{ timestamp }}"
-    {%- endif %}
-    {%- if selected == tag.value.as_str() %} selected{% endif -%}
-  >{{ tag.label }}</option>
+  {{- ref_option(tag, selected == tag.value.as_str()) -}}
   {%- endfor %}
-</optgroup>
+</div>
 {%- endif %}
 {%- if !commits.is_empty() %}
-<optgroup label="Commits">
+{{- disclosure(kind, "hashes", "Hashes", commits.len()) -}}
+<div
+  id="ghrm-compare-{{ kind }}-hashes"
+  class="ghrm-compare-section"
+  role="group"
+  aria-label="Hashes"
+  hidden
+>
   {%- for commit in commits %}
-  <option
-    value="{{ commit.value }}"
-    data-timestamp="{{ commit.timestamp }}"
-    {%- if selected == commit.value.as_str() %} selected{% endif -%}
-  >{{ commit.label }} {{ commit.subject }}</option>
+  {{- commit_option(commit, selected == commit.value.as_str()) -}}
   {%- endfor %}
-</optgroup>
+</div>
 {%- endif %}
 {%- endmacro %}
+
+{%- macro picker(kind, tag, selected, label, extra, branches, tags, commits, head_timestamp) -%}
+<div
+  class="ghrm-compare-side ghrm-compare-{{ kind }}"
+  data-ghrm-compare-side="{{ kind }}"
+>
+  <span class="ghrm-compare-tag">{{ tag }}</span>
+  <button
+    class="ghrm-compare-picker"
+    type="button"
+    data-ghrm-menu-toggle
+    aria-controls="ghrm-compare-{{ kind }}-menu"
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="{{ tag }} revision"
+  >
+    <span data-ghrm-compare-picker-label>{{ label }}</span>
+    <svg aria-hidden="true" focusable="false">
+      <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-down"></use>
+    </svg>
+  </button>
+  <time class="ghrm-compare-time" data-ghrm-compare-time></time>
+  <div
+    id="ghrm-compare-{{ kind }}-menu"
+    class="ghrm-menu-panel ghrm-compare-menu"
+    data-ghrm-menu-panel
+    data-ghrm-menu-width="440"
+    role="menu"
+    aria-label="{{ tag }} revision"
+    hidden
+  >
+    {{- ref_menu(kind, selected, extra, branches, tags, commits, head_timestamp) -}}
+  </div>
+</div>
+{%- endmacro %}
+
 <form
   id="ghrm-compare"
   class="ghrm-compare"
@@ -66,26 +193,22 @@
 >
   <div class="ghrm-compare-inner">
     {%- for pair in hidden %}
-    <input
-      type="hidden"
-      name="{{ pair.0 }}"
-      value="{{ pair.1 }}"
-    >
+    <input type="hidden" name="{{ pair.0 }}" value="{{ pair.1 }}">
     {%- endfor %}
-    <label class="ghrm-compare-side ghrm-compare-base">
-      <span class="ghrm-compare-tag">base</span>
-      <select name="base" aria-label="Base revision">
-        {%- call ref_options(branches, tags, commits, base, base_extra, head_timestamp) %}{% endcall %}
-      </select>
-      <time class="ghrm-compare-time" data-ghrm-compare-time></time>
-    </label>
-    <span class="ghrm-compare-dots" aria-hidden="true">..</span>
-    <label class="ghrm-compare-side ghrm-compare-head">
-      <span class="ghrm-compare-tag">head</span>
-      <select name="head" aria-label="Head revision">
-        {%- call ref_options(branches, tags, commits, head, head_extra, head_timestamp) %}{% endcall %}
-      </select>
-      <time class="ghrm-compare-time" data-ghrm-compare-time></time>
-    </label>
+    <input type="hidden" name="base" value="{{ base }}" data-ghrm-compare-input="base">
+    <input type="hidden" name="head" value="{{ head }}" data-ghrm-compare-input="head">
+    <div class="ghrm-compare-controls">
+      {{- picker("base", "base", base, base_label, base_extra, branches, tags, commits, head_timestamp) -}}
+      <span class="ghrm-compare-dots" aria-hidden="true">..</span>
+      {{- picker("head", "head", head, head_label, head_extra, branches, tags, commits, head_timestamp) -}}
+    </div>
+    <div class="ghrm-compare-progress" data-ghrm-compare-progress hidden aria-live="polite">
+      <div class="ghrm-compare-progress-row">
+        <span data-ghrm-compare-progress-label>Loading diff</span>
+      </div>
+      <div class="ghrm-progress-track">
+        <div class="ghrm-progress-fill is-indeterminate"></div>
+      </div>
+    </div>
   </div>
 </form>

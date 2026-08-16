@@ -128,7 +128,9 @@ function setupFileView(container: FileViewContainer): void {
       buildToc();
       const panel = document.getElementById('ghrm-toc-panel');
       if (panel) {
-        panel.hidden = true;
+        panel.dispatchEvent(
+          new CustomEvent('ghrm:menu-close', { bubbles: true }),
+        );
       }
     });
   } else {

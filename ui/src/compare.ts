@@ -1,4 +1,4 @@
-import { formatRelative, icon, qselFrom } from './dom';
+import { formatAbsolute, formatRelative, icon, qselFrom } from './dom';
 
 const COLLAPSE_MS = 280;
 const SUBMIT_MS = 600;
@@ -7,6 +7,11 @@ interface Selection {
   key: string;
   base: string;
   head: string;
+}
+
+interface Inputs {
+  base: HTMLInputElement;
+  head: HTMLInputElement;
 }
 
 const collapseTimers = new WeakMap<
@@ -30,12 +35,10 @@ function reducedMotion(): boolean {
   );
 }
 
-function selectsOf(
-  form: HTMLFormElement,
-): { base: HTMLSelectElement; head: HTMLSelectElement } | null {
-  const base = form.querySelector('select[name="base"]');
-  const head = form.querySelector('select[name="head"]');
-  return base instanceof HTMLSelectElement && head instanceof HTMLSelectElement
+function inputsOf(form: HTMLFormElement): Inputs | null {
+  const base = form.querySelector('[data-ghrm-compare-input="base"]');
+  const head = form.querySelector('[data-ghrm-compare-input="head"]');
+  return base instanceof HTMLInputElement && head instanceof HTMLInputElement
     ? { base, head }
     : null;
 }
@@ -45,25 +48,69 @@ function selectionKey(form: HTMLFormElement): string {
 }
 
 function rememberSelection(form: HTMLFormElement): void {
-  const selects = selectsOf(form);
-  if (!selects) return;
+  const inputs = inputsOf(form);
+  if (!inputs) return;
   selection = {
     key: selectionKey(form),
-    base: selects.base.value,
-    head: selects.head.value,
+    base: inputs.base.value,
+    head: inputs.head.value,
   };
 }
 
-function restoreSelection(form: HTMLFormElement): void {
-  const saved = selection;
-  const selects = selectsOf(form);
-  if (!saved || saved.key !== selectionKey(form) || !selects) return;
-  if ([...selects.base.options].some((option) => option.value === saved.base)) {
-    selects.base.value = saved.base;
+function sideOptions(side: Element): HTMLElement[] {
+  return [...side.querySelectorAll('[data-ghrm-compare-option]')].filter(
+    (option): option is HTMLElement => option instanceof HTMLElement,
+  );
+}
+
+function optionLabel(option: HTMLElement): string {
+  const label = option.querySelector('[data-ghrm-compare-option-label]');
+  return (label?.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function setMessageScroll(option: HTMLElement, active: boolean): void {
+  const message = option.querySelector('[data-ghrm-compare-message]');
+  if (!(message instanceof HTMLElement)) return;
+  message.classList.remove('is-scrolling');
+  message.style.removeProperty('--ghrm-compare-scroll-distance');
+  message.style.removeProperty('--ghrm-compare-scroll-duration');
+  if (!active) return;
+
+  const distance = message.scrollWidth - message.clientWidth;
+  if (distance <= 0) return;
+  const duration = Math.max(2.4, distance / 36 + 1.4);
+  message.style.setProperty('--ghrm-compare-scroll-distance', `${-distance}px`);
+  message.style.setProperty(
+    '--ghrm-compare-scroll-duration',
+    `${duration.toFixed(2)}s`,
+  );
+  // Restart the measured animation when pointer or keyboard focus returns.
+  void message.offsetWidth;
+  message.classList.add('is-scrolling');
+}
+
+function wireMessageScroll(form: HTMLFormElement): void {
+  for (const option of form.querySelectorAll('[data-ghrm-compare-option]')) {
+    if (!(option instanceof HTMLElement)) continue;
+    if (!option.querySelector('[data-ghrm-compare-message]')) continue;
+    option.addEventListener('mouseenter', () => setMessageScroll(option, true));
+    option.addEventListener('mouseleave', () =>
+      setMessageScroll(option, false),
+    );
+    option.addEventListener('focus', () => setMessageScroll(option, true));
+    option.addEventListener('blur', () => setMessageScroll(option, false));
   }
-  if ([...selects.head.options].some((option) => option.value === saved.head)) {
-    selects.head.value = saved.head;
-  }
+}
+
+function inputForSide(
+  form: HTMLFormElement,
+  side: HTMLElement,
+): HTMLInputElement | null {
+  const kind = side.dataset.ghrmCompareSide;
+  const input = kind
+    ? form.querySelector(`[data-ghrm-compare-input="${kind}"]`)
+    : null;
+  return input instanceof HTMLInputElement ? input : null;
 }
 
 function localDateTime(date: Date): string {
@@ -71,38 +118,88 @@ function localDateTime(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function decorateTimes(form: HTMLFormElement): void {
-  for (const option of form.querySelectorAll('option[data-timestamp]')) {
-    if (!(option instanceof HTMLOptionElement)) continue;
-    const ts = Number(option.dataset.timestamp);
-    if (Number.isFinite(ts) && ts > 0) {
-      option.title = formatRelative(ts);
-    }
+function setSelectedTime(side: HTMLElement, option: HTMLElement): void {
+  const output = side.querySelector('[data-ghrm-compare-time]');
+  if (!(output instanceof HTMLTimeElement)) return;
+  const timestamp = Number(option.dataset.timestamp);
+  const date = new Date(timestamp * 1000);
+  if (
+    Number.isFinite(timestamp) &&
+    timestamp > 0 &&
+    Number.isFinite(date.getTime())
+  ) {
+    output.textContent = localDateTime(date);
+    output.dateTime = date.toISOString();
+    output.title = formatAbsolute(timestamp);
+  } else {
+    output.textContent = option.dataset.timeLabel ?? '';
+    output.removeAttribute('datetime');
+    output.removeAttribute('title');
   }
+}
 
-  for (const side of form.querySelectorAll('.ghrm-compare-side')) {
-    const select = side.querySelector('select');
-    const output = side.querySelector('[data-ghrm-compare-time]');
+function selectOption(
+  form: HTMLFormElement,
+  side: HTMLElement,
+  option: HTMLElement,
+): void {
+  const input = inputForSide(form, side);
+  const value = option.dataset.ghrmCompareOption;
+  if (!input || value === undefined) return;
+  input.value = value;
+  for (const current of sideOptions(side)) {
+    const active = current === option;
+    current.classList.toggle('is-active', active);
+    current.setAttribute('aria-checked', active ? 'true' : 'false');
+  }
+  const label = side.querySelector('[data-ghrm-compare-picker-label]');
+  if (label) label.textContent = optionLabel(option);
+  setSelectedTime(side, option);
+}
+
+function restoreSelection(form: HTMLFormElement): void {
+  const saved = selection;
+  const inputs = inputsOf(form);
+  if (!saved || saved.key !== selectionKey(form) || !inputs) return;
+  for (const side of form.querySelectorAll('[data-ghrm-compare-side]')) {
+    if (!(side instanceof HTMLElement)) continue;
+    const input = inputForSide(form, side);
+    if (!input) continue;
+    const value = input === inputs.base ? saved.base : saved.head;
+    const option = sideOptions(side).find(
+      (current) => current.dataset.ghrmCompareOption === value,
+    );
+    if (option) selectOption(form, side, option);
+  }
+}
+
+function decorateTimes(form: HTMLFormElement): void {
+  for (const option of form.querySelectorAll(
+    '[data-ghrm-compare-option][data-timestamp]',
+  )) {
+    if (!(option instanceof HTMLElement)) continue;
+    const timestamp = Number(option.dataset.timestamp);
+    const time = option.querySelector('[data-ghrm-compare-option-time]');
     if (
-      !(select instanceof HTMLSelectElement) ||
-      !(output instanceof HTMLElement)
+      !(time instanceof HTMLTimeElement) ||
+      !Number.isFinite(timestamp) ||
+      timestamp <= 0
     ) {
       continue;
     }
-    const option = select.selectedOptions.item(0);
-    const timestamp = Number(option?.dataset.timestamp);
     const date = new Date(timestamp * 1000);
-    if (
-      Number.isFinite(timestamp) &&
-      timestamp > 0 &&
-      Number.isFinite(date.getTime())
-    ) {
-      output.textContent = localDateTime(date);
-      output.setAttribute('datetime', date.toISOString());
-    } else {
-      output.textContent = option?.dataset.timeLabel ?? '';
-      output.removeAttribute('datetime');
-    }
+    time.textContent = formatRelative(timestamp);
+    time.dateTime = date.toISOString();
+    time.title = formatAbsolute(timestamp);
+  }
+
+  for (const side of form.querySelectorAll('[data-ghrm-compare-side]')) {
+    if (!(side instanceof HTMLElement)) continue;
+    const input = inputForSide(form, side);
+    const option = sideOptions(side).find(
+      (current) => current.dataset.ghrmCompareOption === input?.value,
+    );
+    if (option) setSelectedTime(side, option);
   }
 }
 
@@ -118,13 +215,12 @@ function expand(form: HTMLFormElement, button: HTMLButtonElement): void {
     collapseTimers.delete(form);
   }
   form.hidden = false;
-  // A reflow between unhiding and dropping the class lets the row
-  // transition run instead of snapping open.
+  // Force layout before removing the collapsed class so the row animates.
   void form.offsetWidth;
   form.classList.remove('is-collapsed');
   setExpanded(button, true);
   decorateTimes(form);
-  qselFrom(form, 'select[name="base"]')?.focus();
+  qselFrom(form, '[data-ghrm-menu-toggle]')?.focus();
 }
 
 function collapse(form: HTMLFormElement, button: HTMLButtonElement): void {
@@ -162,12 +258,34 @@ function scheduleSubmit(form: HTMLFormElement): void {
   );
 }
 
-function leaveDiff(form: HTMLFormElement): void {
-  for (const select of form.querySelectorAll('select')) {
-    if (select instanceof HTMLSelectElement) {
-      select.removeAttribute('name');
-    }
+function setLoading(form: HTMLFormElement, loading: boolean): void {
+  const controls = form.querySelector('.ghrm-compare-controls');
+  const progress = form.querySelector('[data-ghrm-compare-progress]');
+  if (
+    !(controls instanceof HTMLElement) ||
+    !(progress instanceof HTMLElement)
+  ) {
+    return;
   }
+  controls.hidden = loading;
+  progress.hidden = !loading;
+  form.classList.toggle('is-loading', loading);
+  if (loading) {
+    const label = progress.querySelector('[data-ghrm-compare-progress-label]');
+    if (label) {
+      label.textContent =
+        form.dataset.ghrmCompareExit === '1' ? 'Loading file' : 'Loading diff';
+    }
+  } else {
+    delete form.dataset.ghrmCompareExit;
+  }
+}
+
+function leaveDiff(form: HTMLFormElement): void {
+  for (const input of form.querySelectorAll('[data-ghrm-compare-input]')) {
+    input.removeAttribute('name');
+  }
+  form.dataset.ghrmCompareExit = '1';
   form.requestSubmit();
 }
 
@@ -175,13 +293,22 @@ function wireForm(form: HTMLFormElement): void {
   if (form.dataset.ghrmCompareWired === '1') return;
   form.dataset.ghrmCompareWired = '1';
   decorateTimes(form);
+  wireMessageScroll(form);
 
-  form.addEventListener('change', (event) => {
-    if (!(event.target instanceof HTMLSelectElement)) return;
+  form.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const option = target?.closest('[data-ghrm-compare-option]');
+    const side = option?.closest('[data-ghrm-compare-side]');
+    if (!(option instanceof HTMLElement) || !(side instanceof HTMLElement)) {
+      return;
+    }
+    selectOption(form, side, option);
     rememberSelection(form);
-    decorateTimes(form);
     scheduleSubmit(form);
   });
+
+  form.addEventListener('submit', () => setLoading(form, true));
+  form.addEventListener('htmx:afterRequest', () => setLoading(form, false));
 }
 
 async function loadForm(

@@ -100,7 +100,15 @@
     </div>
   </header>
   {{- about|safe }}
-  <nav id="ghrm-toc-panel" class="ghrm-toc-panel" hidden aria-label="Table of contents"></nav>
+  <nav
+    id="ghrm-toc-panel"
+    class="ghrm-menu-panel ghrm-toc-panel"
+    data-ghrm-menu-panel
+    data-ghrm-menu-width="248"
+    hidden
+    aria-label="Table of contents"
+  ></nav>
+  <ghrm-menus></ghrm-menus>
   <main class="ghrm-layout{% if !layout_class.is_empty() %} {{ layout_class }}{% endif %}">
     {{- body|safe -}}
     {{- sidebar|safe }}

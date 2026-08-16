@@ -37,6 +37,24 @@ describe('ghrm-archive-progress', () => {
   });
 
   describe('job start', () => {
+    it('owns archive option activation', () => {
+      const option = document.createElement('button');
+      option.dataset.ghrmArchiveUrl = '/_ghrm/archive/start';
+      document.body.prepend(option);
+      const startJob = vi
+        .spyOn(element, 'startJob')
+        .mockResolvedValue(undefined);
+      const event = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+      });
+
+      option.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(startJob).toHaveBeenCalledWith('/_ghrm/archive/start');
+    });
+
     it('sends POST request with JSON accept header', async () => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         jsonResponse({
@@ -152,7 +170,7 @@ describe('ghrm-archive-progress', () => {
       await element.updateComplete;
 
       const fillEl = element.querySelector(
-        '.ghrm-archive-progress-fill',
+        '.ghrm-progress-fill',
       ) as HTMLElement;
       expect(fillEl?.style.width).toBe('65%');
     });

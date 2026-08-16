@@ -1,9 +1,4 @@
-import {
-  positionFloatingPanel,
-  scrollOffset,
-  scrollToHash,
-  visiblePane,
-} from './dom';
+import { scrollOffset, scrollToHash, visiblePane } from './dom';
 
 function fileViewRoot(): Element | null {
   return visiblePane('.ghrm-page-content [data-ghrm-preview-pane]');
@@ -105,51 +100,19 @@ export function buildToc(): void {
     link.className = `toc-h${heading.tagName[1]}`;
     link.href = `#${heading.id}`;
     link.textContent = text;
+    link.dataset.ghrmMenuClose = '1';
+    link.setAttribute('role', 'menuitem');
     panel.append(link);
   }
   syncTocActive();
-}
-
-function positionToc(panel: HTMLElement, btn: Element): void {
-  positionFloatingPanel(panel, btn, 248);
 }
 
 export function setupToc(): void {
   const panel = document.getElementById('ghrm-toc-panel');
   if (!panel) return;
 
-  panel.addEventListener('click', (e) => {
-    const target = e.target instanceof Element ? e.target : null;
-    if (target?.tagName === 'A') panel.hidden = true;
-  });
-
-  document.addEventListener('click', (e) => {
-    const target = e.target instanceof Element ? e.target : null;
-    if (!target) return;
-    const btnEl = target.closest('[data-ghrm-toc-btn]');
-    if (btnEl instanceof HTMLButtonElement) {
-      if (btnEl.hidden || btnEl.disabled) return;
-      buildToc();
-      const nextHidden = !panel.hidden;
-      panel.hidden = nextHidden;
-      if (!nextHidden && panel.childElementCount > 0) {
-        positionToc(panel, btnEl);
-      }
-      return;
-    }
-    if (!panel.contains(target)) {
-      panel.hidden = true;
-    }
-  });
-
-  window.addEventListener('resize', () => {
-    if (panel.hidden) return;
-    const btn = tocButton();
-    if (btn) positionToc(panel, btn);
-  });
-
   window.addEventListener('hashchange', () => {
-    panel.hidden = true;
+    panel.dispatchEvent(new CustomEvent('ghrm:menu-close', { bubbles: true }));
     scrollToHash(location.hash);
     syncTocActive();
   });

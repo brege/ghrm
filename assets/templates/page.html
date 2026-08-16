@@ -4,7 +4,18 @@
       <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs|safe }}</nav>
       {{- compare_html|safe }}
       <div class="ghrm-header-actions">
-        <button type="button" class="ghrm-toc-btn" data-ghrm-toc-btn="page" hidden title="Table of contents" aria-label="Table of contents">
+        <button
+          type="button"
+          class="ghrm-toc-btn"
+          data-ghrm-toc-btn="page"
+          data-ghrm-menu-toggle
+          aria-controls="ghrm-toc-panel"
+          aria-expanded="false"
+          aria-haspopup="menu"
+          hidden
+          title="Table of contents"
+          aria-label="Table of contents"
+        >
           <svg aria-hidden="true" focusable="false">
             <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-list"></use>
           </svg>

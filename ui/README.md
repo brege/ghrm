@@ -48,10 +48,12 @@ The UI workspace owns maintained browser source, icon declarations, and the vali
 | --- | --- |
 | src/islands/define.ts | registers all custom elements |
 | src/islands/archive/progress.ts | archive download progress island |
-| src/islands/explorer/menu.ts | explorer menu island |
+| src/islands/menu.ts | shared floating-menu island for TOC, explorer, and compare panels |
 | src/islands/search/panel.ts | search panel island |
 | src/islands/gist/editor.ts | gist editor island |
 | src/islands/gist/stash.ts | gist stash island |
+
+The global `ghrm-menus` island controls elements that declare `data-ghrm-menu-toggle`, `data-ghrm-menu-panel`, and optional nested `data-ghrm-menu-disclosure` attributes. It owns open state, dismissal, focus restoration, and floating-panel positioning. About and ghrm-stat expansions retain their dedicated behavior.
 
 ## Tests
 

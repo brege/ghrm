@@ -26,9 +26,9 @@ pub(crate) fn spec_from_query(raw_query: Option<&str>) -> Option<DiffSpec> {
         .and_then(|(_, value)| DiffSpec::parse(value))
 }
 
-// The compare form's two native selects submit base and head; the server
-// canonicalizes that spelling into the single rendered URL grammar with a
-// redirect, so diff=<base>..<head> stays the only public state.
+// The compare form submits base and head; the server canonicalizes that
+// spelling into the single rendered URL grammar with a redirect, so
+// diff=<base>..<head> stays the only public state.
 pub(crate) fn canonical_query(raw_query: Option<&str>) -> Option<String> {
     let mut pairs = query::parse_pairs(raw_query.unwrap_or(""));
     if pairs.iter().any(|(name, _)| name.as_str() == "diff") {
@@ -297,10 +297,14 @@ fn compare_fragment(
             timestamp: commit.timestamp,
         })
         .collect::<Vec<_>>();
+    let base_label = ref_label(base, refs);
+    let head_label = ref_label(head, refs);
     tmpl::compare(tmpl::CompareCtx {
         action,
         base,
         head,
+        base_label: &base_label,
+        head_label: &head_label,
         base_extra: unlisted(base, refs),
         head_extra: unlisted(head, refs),
         hidden,
@@ -311,8 +315,29 @@ fn compare_fragment(
     })
 }
 
+fn ref_label(token: &str, refs: &RefList) -> String {
+    match token {
+        WORKTREE => return "Working tree".to_string(),
+        INDEX => return "Staged".to_string(),
+        "HEAD" => return "HEAD".to_string(),
+        _ => {}
+    }
+    if let Some(entry) = refs
+        .branches
+        .iter()
+        .chain(&refs.tags)
+        .find(|entry| entry.value == token)
+    {
+        return entry.label.clone();
+    }
+    if let Some(commit) = refs.commits.iter().find(|commit| commit.value == token) {
+        return format!("{} {}", commit.label, commit.subject);
+    }
+    token.to_string()
+}
+
 // A hand-typed revision like HEAD~2 is valid but absent from the listing;
-// a synthetic first option keeps the select displaying the URL state.
+// a synthetic first option keeps the picker displaying the URL state.
 fn unlisted<'a>(token: &'a str, refs: &RefList) -> Option<&'a str> {
     let listed = token == WORKTREE
         || token == INDEX
@@ -568,7 +593,7 @@ mod tests {
         assert!(body.contains(r#"class="language-diff""#));
         assert!(body.contains("data-ghrm-preview-pane hidden"));
         assert!(body.contains("id=\"ghrm-compare\""));
-        assert!(body.contains("value=\"refs/heads/main\""));
+        assert!(body.contains("data-ghrm-compare-option=\"refs/heads/main\""));
     }
 
     #[tokio::test]

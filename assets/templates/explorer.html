@@ -8,7 +8,6 @@
 >
   <section class="ghrm-explorer-shell">
     {% include "fragments/explorer/header.html" %}
-    <ghrm-explorer-menus></ghrm-explorer-menus>
     <ghrm-archive-progress></ghrm-archive-progress>
 
     {% if entries.is_empty() && !has_parent %}
@@ -116,6 +115,10 @@
           type="button"
           class="ghrm-toc-btn"
           data-ghrm-toc-btn="readme"
+          data-ghrm-menu-toggle
+          aria-controls="ghrm-toc-panel"
+          aria-expanded="false"
+          aria-haspopup="menu"
           hidden
           title="Table of contents"
           aria-label="Table of contents"
