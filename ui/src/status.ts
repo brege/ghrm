@@ -167,6 +167,16 @@ export function setupAboutPanelMenu(): void {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
 
+    const close = target.closest('[data-ghrm-about-panel-close]');
+    if (close instanceof HTMLElement) {
+      event.preventDefault();
+      const name = validAboutPanel(close.dataset.ghrmAboutPanelClose);
+      if (name) {
+        toggleAboutPanel(name);
+      }
+      return;
+    }
+
     const option = target.closest('[data-ghrm-about-panel-option]');
     if (option instanceof HTMLElement) {
       event.preventDefault();

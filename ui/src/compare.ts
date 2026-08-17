@@ -157,10 +157,11 @@ function selectOption(
   setSelectedTime(side, option);
 }
 
-function restoreSelection(form: HTMLFormElement): void {
+function restoreSelection(form: HTMLFormElement): boolean {
   const saved = selection;
   const inputs = inputsOf(form);
-  if (!saved || saved.key !== selectionKey(form) || !inputs) return;
+  if (!saved || saved.key !== selectionKey(form) || !inputs) return false;
+  let restored = false;
   for (const side of form.querySelectorAll('[data-ghrm-compare-side]')) {
     if (!(side instanceof HTMLElement)) continue;
     const input = inputForSide(form, side);
@@ -169,8 +170,12 @@ function restoreSelection(form: HTMLFormElement): void {
     const option = sideOptions(side).find(
       (current) => current.dataset.ghrmCompareOption === value,
     );
-    if (option) selectOption(form, side, option);
+    if (option) {
+      selectOption(form, side, option);
+      restored = true;
+    }
   }
+  return restored;
 }
 
 function decorateTimes(form: HTMLFormElement): void {
@@ -330,9 +335,13 @@ async function loadForm(
     });
     const form = formOf(container);
     if (!form) throw new Error('compare response is missing its form');
-    form.classList.add('is-collapsed');
-    restoreSelection(form);
     wireForm(form);
+    if (restoreSelection(form)) {
+      // Re-render the diff the compare bar was showing before it was closed.
+      form.requestSubmit();
+      return;
+    }
+    form.classList.add('is-collapsed');
     expand(form, button);
   } finally {
     button.disabled = false;

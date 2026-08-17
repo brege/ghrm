@@ -87,6 +87,43 @@ describe('ghrm-menus', () => {
     expect(disclosure.getAttribute('aria-expanded')).toBe('false');
   });
 
+  it('reveals the disclosure holding the checked option on open', () => {
+    const host = document.createElement('div');
+    host.innerHTML = `
+      <button data-ghrm-menu-toggle aria-controls="rev-menu" aria-expanded="false">Head</button>
+      <div id="rev-menu" data-ghrm-menu-panel hidden>
+        <button type="button" role="menuitemradio" aria-checked="false">Working tree</button>
+        <button type="button" data-ghrm-menu-disclosure aria-controls="rev-branches" aria-expanded="false">Branches</button>
+        <div id="rev-branches" role="group" hidden>
+          <button type="button" role="menuitemradio" aria-checked="false">main</button>
+        </div>
+        <button type="button" data-ghrm-menu-disclosure aria-controls="rev-hashes" aria-expanded="false">Hashes</button>
+        <div id="rev-hashes" role="group" hidden>
+          <button type="button" role="menuitemradio" aria-checked="true">abc1234</button>
+        </div>
+      </div>
+    `;
+    element.before(host);
+    const toggle = host.querySelector<HTMLButtonElement>(
+      '[data-ghrm-menu-toggle]',
+    )!;
+    const branches = host.querySelector('#rev-branches') as HTMLElement;
+    const hashes = host.querySelector('#rev-hashes') as HTMLElement;
+    const branchesToggle = host.querySelector<HTMLElement>(
+      '[aria-controls="rev-branches"]',
+    )!;
+    const hashesToggle = host.querySelector<HTMLElement>(
+      '[aria-controls="rev-hashes"]',
+    )!;
+
+    toggle.click();
+
+    expect(hashes.hidden).toBe(false);
+    expect(hashesToggle.getAttribute('aria-expanded')).toBe('true');
+    expect(branches.hidden).toBe(true);
+    expect(branchesToggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('closes after a menu item without preventing its default action', () => {
     const toggle = document.querySelector<HTMLButtonElement>(
       '[data-ghrm-menu-toggle]',

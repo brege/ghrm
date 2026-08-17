@@ -360,7 +360,7 @@ describe('compare controls', () => {
     ).toBe(false);
   });
 
-  it('restores the previous refs when the compare row is loaded again', async () => {
+  it('restores the previous refs and re-submits the diff when reloaded', async () => {
     const first = setup(
       'data-ghrm-compare-url="/_ghrm/compare?path=a.md"',
       FORM_HTML,
@@ -373,6 +373,12 @@ describe('compare controls', () => {
     (toggleButton(first.tools) as HTMLButtonElement).click();
 
     stubHtmx();
+    let resubmitted = false;
+    const guard = (event: Event) => {
+      event.preventDefault();
+      resubmitted = true;
+    };
+    document.addEventListener('submit', guard);
     const second = setup('data-ghrm-compare-url="/_ghrm/compare?path=a.md"');
     (toggleButton(second.tools) as HTMLButtonElement).click();
     await vi.waitFor(() => {
@@ -380,6 +386,7 @@ describe('compare controls', () => {
         second.container.querySelector('[data-ghrm-compare]'),
       ).not.toBeNull();
     });
+    document.removeEventListener('submit', guard);
 
     const secondForm = second.container.querySelector(
       '[data-ghrm-compare]',
@@ -399,5 +406,6 @@ describe('compare controls', () => {
         '[data-ghrm-compare-side="base"] [data-ghrm-compare-picker-label]',
       )?.textContent,
     ).toBe('d888e48 change subject');
+    expect(resubmitted).toBe(true);
   });
 });

@@ -231,10 +231,53 @@ body.ghrm-about-open article[data-explorer] .ghrm-explorer-header {
 }
 
 .ghrm-about-tile {
+  position: relative;
   gap: 8px;
   padding: 14px;
   border: 1px solid var(--borderColor-default, #d0d7de);
   background: var(--bgColor-default, #ffffff);
+}
+
+.ghrm-about-tile .ghrm-about-heading {
+  padding-right: 24px;
+}
+
+.ghrm-about-tile-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fgColor-muted, #636c76);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease;
+}
+
+.ghrm-about-tile:hover .ghrm-about-tile-close,
+.ghrm-about-tile-close:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ghrm-about-tile-close:hover {
+  background: var(--bgColor-neutral-muted, #afb8c133);
+}
+
+.ghrm-about-tile-close-icon {
+  width: 14px;
+  height: 14px;
+  transform: rotate(45deg);
 }
 
 .ghrm-about-stats {

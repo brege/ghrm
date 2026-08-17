@@ -1,3 +1,17 @@
+{% macro tile_close(panel, label) -%}
+<button
+  class="ghrm-about-tile-close"
+  type="button"
+  data-ghrm-about-panel-close="{{ panel }}"
+  aria-label="Hide {{ label }} panel"
+  title="Hide panel"
+>
+  <svg class="ghrm-about-tile-close-icon" aria-hidden="true" focusable="false">
+    <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-plus"></use>
+  </svg>
+</button>
+{%- endmacro %}
+
 {% macro stat_section(panel, heading, aria_label, panel_class, rows) -%}
 {%- if !rows.is_empty() %}
 <section
@@ -6,6 +20,7 @@
   aria-label="{{ aria_label }}"
 >
   <div class="ghrm-about-heading">{{ heading }}</div>
+  {{- tile_close(panel, heading) -}}
   <dl class="ghrm-stat-list">
     {%- for row in rows %}
     {{- stat_row(row) -}}
@@ -23,6 +38,7 @@
   aria-label="Languages"
 >
   <div class="ghrm-about-heading">Languages</div>
+  {{- tile_close(panel, "Languages") -}}
   <div class="ghrm-lang-bar" aria-hidden="true">
     {%- for lang in languages %}
     <span title="{{ lang.title }}" style="{{ lang.style }}"></span>

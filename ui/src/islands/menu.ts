@@ -80,6 +80,7 @@ export class GhrmMenus extends LitElement {
     this.closeAll();
     menu.panel.hidden = false;
     menu.toggle.setAttribute('aria-expanded', 'true');
+    this.revealSelectedDisclosure(menu.panel);
     const width = Number(menu.panel.dataset.ghrmMenuWidth);
     positionFloatingPanel(
       menu.panel,
@@ -87,6 +88,20 @@ export class GhrmMenus extends LitElement {
       Number.isFinite(width) && width > 0 ? width : undefined,
     );
     this.active = menu;
+  }
+
+  // On open, expand the disclosure whose section holds the checked option so a
+  // menu reopened after a branch, tag, or hash selection shows that group and
+  // collapses the others.
+  private revealSelectedDisclosure(panel: HTMLElement): void {
+    for (const toggle of panel.querySelectorAll(DISCLOSURE_SELECTOR)) {
+      if (!(toggle instanceof HTMLElement)) continue;
+      const section = controlledElement(toggle);
+      if (!section) continue;
+      const expanded = section.querySelector('[aria-checked="true"]') !== null;
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      section.hidden = !expanded;
+    }
   }
 
   private toggleDisclosure(toggle: HTMLElement): void {

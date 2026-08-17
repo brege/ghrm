@@ -1,3 +1,5 @@
+{% import "macros/stat.html" as stat %}
+
 {% macro detail_item(item, row_class, linked) -%}
 <div{%- if !row_class.is_empty() %} class="{{ row_class }}"{% endif %}>
   <dt>{{ item.label }}</dt>
@@ -19,6 +21,7 @@
   aria-label="{{ aria_label }}"
 >
   <div class="ghrm-about-heading">{{ heading }}</div>
+  {{- stat::tile_close(panel, heading) -}}
   <div class="ghrm-detail-panel-body">
     <dl class="ghrm-detail-list">
       {%- for item in rows %}

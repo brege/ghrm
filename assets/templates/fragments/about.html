@@ -23,7 +23,7 @@
     </button>
     <div
       id="ghrm-about-panel-menu"
-      class="ghrm-view-menu ghrm-about-panel-menu"
+      class="ghrm-menu-panel ghrm-about-panel-menu"
       role="menu"
       aria-label="Choose about panels"
       hidden
@@ -144,6 +144,7 @@
         aria-label="Directory metrics"
       >
         <div class="ghrm-about-heading">Directory Metrics</div>
+        {{- stat::tile_close("directory", "Directory Metrics") -}}
         <div class="ghrm-detail-panel-body">
           <table class="ghrm-detail-table">
             <thead>
@@ -172,6 +173,7 @@
         aria-label="Available filters"
       >
         <div class="ghrm-about-heading">Available Filters</div>
+        {{- stat::tile_close("filters", "Available Filters") -}}
         <div class="ghrm-detail-panel-body">
           <table class="ghrm-detail-table">
             <thead>
