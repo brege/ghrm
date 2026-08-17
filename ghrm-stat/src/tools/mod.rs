@@ -3,7 +3,6 @@ pub mod churn;
 pub mod commits;
 pub mod created;
 pub mod description;
-pub mod git;
 pub mod head;
 pub mod history;
 pub mod languages;
