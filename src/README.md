@@ -14,7 +14,6 @@ Shared app contracts and binary-level support stay flat.
 | options.rs | CLI and config resolution |
 | paths.rs | path safety helpers |
 | runtime.rs | runtime paths shown in UI |
-| repo.rs | git source metadata |
 | tmpl.rs | Askama template structs |
 
 ## Render
@@ -72,3 +71,16 @@ Search code sits behind the search namespace.
 | search/content.rs | repository content grep |
 | search/path.rs | path query ranking |
 | search/view.rs | HTML fragments for search results |
+
+## Repo
+
+Git repository code sits behind the repo namespace.
+
+| Path | Purpose |
+| --- | --- |
+| repo.rs | repo namespace |
+| repo/diff.rs | unified diff engine |
+| repo/history.rs | commit history walk |
+| repo/refs.rs | refs and commit metadata |
+| repo/remote.rs | remote URL and forge detection |
+| repo/root.rs | repository discovery and source metadata |
