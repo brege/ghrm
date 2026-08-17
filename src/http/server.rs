@@ -657,7 +657,7 @@ async fn render_file(
         .or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_default();
     let crumbs = page_crumbs(s, path, root, &rel, &view);
-    let raw_html = delivery::raw_blob_html(&md, Some("markdown"));
+    let raw_html = delivery::raw_blob_html(&md, Some("markdown"), None);
     let file_view = delivery::FileView::markdown();
     let view_attrs = diff::file_view_attrs(s, path, &rel, file_view, &view);
     let body = match tmpl::page(tmpl::PageCtx {
@@ -750,7 +750,7 @@ async fn render_source_file(
     let rendered = render::render_text(filename, &text);
     let features = vendor::feature_list(&rendered);
     let crumbs = page_crumbs(s, path, root, rel, &view);
-    let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
+    let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref(), None);
     let file_view = delivery::FileView::source();
     let view_attrs = diff::file_view_attrs(s, path, rel, file_view, &view);
     let body = match tmpl::page(tmpl::PageCtx {
@@ -823,7 +823,7 @@ async fn render_dual_file(
     };
     let features = vendor::feature_list(&rendered);
     let crumbs = page_crumbs(s, path, root, rel, &view);
-    let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref());
+    let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref(), None);
     let file_view = delivery::FileView::dual();
     let view_attrs = diff::file_view_attrs(s, path, rel, file_view, &view);
     let body = match tmpl::page(tmpl::PageCtx {

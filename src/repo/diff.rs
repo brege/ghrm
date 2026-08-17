@@ -75,9 +75,78 @@ impl DiffSpec {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum DiffOutcome {
-    Patch(String),
+    Patch(Patch),
     Clean,
     Failed(String),
+}
+
+// A rendered unified patch plus one gutter row per emitted line, recorded
+// as the producer appends each line so the browser applies coordinates
+// without re-parsing the patch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Patch {
+    pub(crate) text: String,
+    pub(crate) rows: Vec<Row>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Row {
+    pub(crate) old: Option<u32>,
+    pub(crate) new: Option<u32>,
+    pub(crate) kind: RowKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RowKind {
+    // Preamble, no-newline, binary, mode, and truncation lines have no
+    // source line and no tint.
+    Meta,
+    Hunk,
+    Context,
+    Addition,
+    Deletion,
+}
+
+impl Row {
+    fn meta() -> Self {
+        Self {
+            old: None,
+            new: None,
+            kind: RowKind::Meta,
+        }
+    }
+
+    fn hunk() -> Self {
+        Self {
+            old: None,
+            new: None,
+            kind: RowKind::Hunk,
+        }
+    }
+
+    fn context(old: u32, new: u32) -> Self {
+        Self {
+            old: Some(old),
+            new: Some(new),
+            kind: RowKind::Context,
+        }
+    }
+
+    fn addition(new: u32) -> Self {
+        Self {
+            old: None,
+            new: Some(new),
+            kind: RowKind::Addition,
+        }
+    }
+
+    fn deletion(old: u32) -> Self {
+        Self {
+            old: Some(old),
+            new: None,
+            kind: RowKind::Deletion,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -168,25 +237,32 @@ pub(crate) fn unified_diff(root: &Path, spec: &DiffSpec, rel: &str) -> DiffOutco
         return DiffOutcome::Clean;
     }
 
-    let mut patch = patch_header(rel, base, head, !data_equal);
-    match prepared.operation {
+    let text = patch_header(rel, base, head, !data_equal);
+    let rows = vec![Row::meta(); text.matches('\n').count()];
+    let (text, rows) = match prepared.operation {
         gix::diff::blob::platform::prepare_diff::Operation::InternalDiff { algorithm } => {
             let old = prepared.old.data.as_slice().unwrap_or_default();
             let new = prepared.new.data.as_slice().unwrap_or_default();
             if old != new {
-                patch = unified_patch(patch, &prepared, algorithm);
+                unified_patch(text, rows, &prepared, algorithm)
+            } else {
+                (text, rows)
             }
         }
         gix::diff::blob::platform::prepare_diff::Operation::SourceOrDestinationIsBinary => {
+            let mut text = text;
+            let mut rows = rows;
             let old = patch_label(base.present, "a", rel);
             let new = patch_label(head.present, "b", rel);
-            writeln!(patch, "Binary files {old} and {new} differ").unwrap();
+            writeln!(text, "Binary files {old} and {new} differ").unwrap();
+            rows.push(Row::meta());
+            (text, rows)
         }
         gix::diff::blob::platform::prepare_diff::Operation::ExternalCommand { .. } => {
             return DiffOutcome::Failed("external diff drivers are disabled".to_string());
         }
-    }
-    DiffOutcome::Patch(finish_patch(patch))
+    };
+    DiffOutcome::Patch(Patch { text, rows })
 }
 
 fn side(
@@ -455,10 +531,11 @@ fn patch_path(prefix: &str, rel: &str) -> String {
 }
 
 fn unified_patch(
-    patch: String,
+    text: String,
+    rows: Vec<Row>,
     prepared: &gix::diff::blob::platform::prepare_diff::Outcome<'_>,
     algorithm: gix::diff::blob::Algorithm,
-) -> String {
+) -> (String, Vec<Row>) {
     use gix::diff::blob::unified_diff::ContextSize;
     use gix::diff::blob::{UnifiedDiff, diff_with_slider_heuristics};
 
@@ -467,7 +544,8 @@ fn unified_patch(
     let old = prepared.old.data.as_slice().unwrap_or_default();
     let new = prepared.new.data.as_slice().unwrap_or_default();
     let writer = HunkWriter::new(
-        patch,
+        text,
+        rows,
         input.before.len(),
         input.after.len(),
         old.ends_with(b"\n"),
@@ -478,8 +556,12 @@ fn unified_patch(
         .expect("writing diff hunks into memory cannot fail")
 }
 
+// Accumulates the patch text and one gutter row per line together, so a row
+// is recorded only when its line is successfully appended and is omitted
+// for lines rejected by the output limit.
 struct HunkWriter {
-    patch: Vec<u8>,
+    text: Vec<u8>,
+    rows: Vec<Row>,
     truncated: bool,
     old_lines: usize,
     new_lines: usize,
@@ -489,14 +571,16 @@ struct HunkWriter {
 
 impl HunkWriter {
     fn new(
-        patch: String,
+        text: String,
+        rows: Vec<Row>,
         old_lines: usize,
         new_lines: usize,
         old_ends_with_newline: bool,
         new_ends_with_newline: bool,
     ) -> Self {
         Self {
-            patch: patch.into_bytes(),
+            text: text.into_bytes(),
+            rows,
             truncated: false,
             old_lines,
             new_lines,
@@ -505,61 +589,66 @@ impl HunkWriter {
         }
     }
 
-    fn push(&mut self, bytes: &[u8]) {
+    fn push(&mut self, bytes: &[u8], row: Row) {
         let limit = MAX_PATCH_BYTES - TRUNCATION_MARKER.len();
-        if self.truncated || self.patch.len().saturating_add(bytes.len()) > limit {
+        if self.truncated || self.text.len().saturating_add(bytes.len()) > limit {
             self.truncated = true;
             return;
         }
-        self.patch.extend_from_slice(bytes);
+        self.text.extend_from_slice(bytes);
+        self.rows.push(row);
     }
 
     fn no_newline(&mut self) {
-        self.push(b"\\ No newline at end of file\n");
+        self.push(b"\\ No newline at end of file\n", Row::meta());
     }
 
-    fn push_line(&mut self, prefix: u8, content: &[u8]) {
+    fn push_line(&mut self, prefix: u8, content: &[u8], row: Row) {
         let limit = MAX_PATCH_BYTES - TRUNCATION_MARKER.len();
         let len = content.len().saturating_add(2);
-        if self.truncated || self.patch.len().saturating_add(len) > limit {
+        if self.truncated || self.text.len().saturating_add(len) > limit {
             self.truncated = true;
             return;
         }
-        self.patch.push(prefix);
-        self.patch.extend_from_slice(content);
-        self.patch.push(b'\n');
+        self.text.push(prefix);
+        self.text.extend_from_slice(content);
+        self.text.push(b'\n');
+        self.rows.push(row);
     }
 }
 
 impl gix::diff::blob::unified_diff::ConsumeHunk for HunkWriter {
-    type Out = String;
+    type Out = (String, Vec<Row>);
 
     fn consume_hunk(
         &mut self,
         header: gix::diff::blob::unified_diff::HunkHeader,
         lines: &[(gix::diff::blob::unified_diff::DiffLineKind, &[u8])],
     ) -> std::io::Result<()> {
-        self.push(format!("{header}\n").as_bytes());
-        let mut old_line = header.before_hunk_start as usize;
-        let mut new_line = header.after_hunk_start as usize;
+        self.push(format!("{header}\n").as_bytes(), Row::hunk());
+        let mut old_line = header.before_hunk_start;
+        let mut new_line = header.after_hunk_start;
         for &(kind, content) in lines {
-            self.push_line(kind.to_prefix() as u8, content);
+            let prefix = kind.to_prefix() as u8;
             match kind {
                 gix::diff::blob::unified_diff::DiffLineKind::Remove => {
-                    if old_line == self.old_lines && !self.old_ends_with_newline {
+                    self.push_line(prefix, content, Row::deletion(old_line));
+                    if old_line as usize == self.old_lines && !self.old_ends_with_newline {
                         self.no_newline();
                     }
                     old_line += 1;
                 }
                 gix::diff::blob::unified_diff::DiffLineKind::Add => {
-                    if new_line == self.new_lines && !self.new_ends_with_newline {
+                    self.push_line(prefix, content, Row::addition(new_line));
+                    if new_line as usize == self.new_lines && !self.new_ends_with_newline {
                         self.no_newline();
                     }
                     new_line += 1;
                 }
                 gix::diff::blob::unified_diff::DiffLineKind::Context => {
-                    if (old_line == self.old_lines && !self.old_ends_with_newline)
-                        || (new_line == self.new_lines && !self.new_ends_with_newline)
+                    self.push_line(prefix, content, Row::context(old_line, new_line));
+                    if (old_line as usize == self.old_lines && !self.old_ends_with_newline)
+                        || (new_line as usize == self.new_lines && !self.new_ends_with_newline)
                     {
                         self.no_newline();
                     }
@@ -573,21 +662,11 @@ impl gix::diff::blob::unified_diff::ConsumeHunk for HunkWriter {
 
     fn finish(mut self) -> Self::Out {
         if self.truncated {
-            self.patch.extend_from_slice(TRUNCATION_MARKER.as_bytes());
+            self.text.extend_from_slice(TRUNCATION_MARKER.as_bytes());
+            self.rows.push(Row::meta());
         }
-        String::from_utf8_lossy(&self.patch).into_owned()
+        (String::from_utf8_lossy(&self.text).into_owned(), self.rows)
     }
-}
-
-fn finish_patch(mut patch: String) -> String {
-    if patch.len() > MAX_PATCH_BYTES {
-        patch.truncate(MAX_PATCH_BYTES - TRUNCATION_MARKER.len());
-        if let Some(end) = patch.rfind('\n') {
-            patch.truncate(end + 1);
-        }
-        patch.push_str(TRUNCATION_MARKER);
-    }
-    patch
 }
 
 #[cfg(test)]
@@ -669,7 +748,14 @@ mod tests {
         let DiffOutcome::Patch(patch) = outcome else {
             panic!("expected patch, got {outcome:?}");
         };
-        patch
+        patch.text
+    }
+
+    fn patch_rows(outcome: DiffOutcome) -> (String, Vec<Row>) {
+        let DiffOutcome::Patch(patch) = outcome else {
+            panic!("expected patch, got {outcome:?}");
+        };
+        (patch.text, patch.rows)
     }
 
     fn assert_change(patch: &str, old: &str, new: &str) {
@@ -760,6 +846,40 @@ mod tests {
         assert!(patch.contains("--- a/a.txt\n+++ b/a.txt\n"), "{patch}");
         assert!(patch.contains("@@"), "{patch}");
         assert_change(&patch, "b", "B");
+    }
+
+    #[test]
+    fn records_gutter_rows_as_lines_are_emitted() {
+        let td = TempDir::new("ghrm-diff-rows");
+        let repo = init_repo(td.path());
+        commit(&repo, &[("a.txt", b"a\nb\nc\n")], "add a");
+        fs::write(td.path().join("a.txt"), b"a\nB\nc\n").unwrap();
+
+        let (text, rows) = patch_rows(unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "a.txt",
+        ));
+
+        // one gutter row per emitted patch line
+        assert_eq!(rows.len(), text.matches('\n').count());
+        // the preamble and hunk header carry no source coordinates
+        let hunk = rows
+            .iter()
+            .find(|row| row.kind == RowKind::Hunk)
+            .expect("hunk row");
+        assert_eq!((hunk.old, hunk.new), (None, None));
+        // deletions and additions carry their own side's line number
+        let del = rows
+            .iter()
+            .find(|row| row.kind == RowKind::Deletion)
+            .expect("deletion row");
+        assert_eq!((del.old, del.new), (Some(2), None));
+        let add = rows
+            .iter()
+            .find(|row| row.kind == RowKind::Addition)
+            .expect("addition row");
+        assert_eq!((add.old, add.new), (None, Some(2)));
     }
 
     #[test]
@@ -1106,12 +1226,14 @@ mod tests {
 
     #[test]
     fn hunk_writer_caps_complete_output_lines() {
-        let mut writer = HunkWriter::new("header\n".to_string(), 0, 0, true, true);
-        writer.push(&vec![b'x'; MAX_PATCH_BYTES]);
-        let patch = gix::diff::blob::unified_diff::ConsumeHunk::finish(writer);
+        let mut writer =
+            HunkWriter::new("header\n".to_string(), vec![Row::meta()], 0, 0, true, true);
+        writer.push(&vec![b'x'; MAX_PATCH_BYTES], Row::context(1, 1));
+        let (patch, rows) = gix::diff::blob::unified_diff::ConsumeHunk::finish(writer);
 
         assert!(patch.starts_with("header\n"));
         assert!(patch.ends_with(TRUNCATION_MARKER));
         assert!(patch.len() <= MAX_PATCH_BYTES);
+        assert_eq!(rows, vec![Row::meta(), Row::meta()]);
     }
 }

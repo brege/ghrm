@@ -3,10 +3,10 @@
   "algorithm": "sha256",
   "archive": {
     "path": "js.tar.zst",
-    "sha256": "eebb7460e335a33b450c52e3967208f0272f266a504e3bd00f70a056a57a61cd"
+    "sha256": "c5b160cefa8d06d8b7a782817a55bcbb031be10e18189ce4579fdbf055f8f5e7"
   },
   "files": {
-    "js/chunks/adapters.js": "569bc3c7c2c358fe9ce66f597841e2167adfe6590574a0ed80b87145cdbe9208",
+    "js/chunks/adapters.js": "3651bf7bec16c54650207091c2a20f72db9d93bd2133a97b4f61a8cf890a71a0",
     "js/chunks/explorer.js": "09dceec3fc8f7a8d12a96efcc879a74888baa44fd08490b91452923f947ce767",
     "js/chunks/gist.js": "eeaac229de093fb8e15e04fca17af4c9dcc743010e81729c04ecc8ca8df152fc",
     "js/chunks/shared.js": "d41d2c71bdf38987c5de04d80e325fc1c6d9f1d0ad3ed0c5a1e40c47729d59c7",

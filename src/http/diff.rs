@@ -3,7 +3,9 @@ use crate::http::server::{AppState, HtmxContext, page_crumbs};
 use crate::http::{delivery, shell, vendor};
 use crate::query;
 use crate::render::Rendered;
-use crate::repo::diff::{DiffOutcome, DiffSpec, DiffTarget, INDEX, WORKTREE, unified_diff};
+use crate::repo::diff::{
+    DiffOutcome, DiffSpec, DiffTarget, INDEX, Row, RowKind, WORKTREE, unified_diff,
+};
 use crate::repo::refs::{RefList, refs_for};
 use crate::tmpl;
 
@@ -389,7 +391,11 @@ fn unlisted<'a>(token: &'a str, refs: &RefList) -> Option<&'a str> {
 
 fn raw_html(outcome: &DiffOutcome, spec: &DiffSpec) -> String {
     match outcome {
-        DiffOutcome::Patch(patch) => delivery::raw_blob_html(patch, Some("diff")),
+        DiffOutcome::Patch(patch) => delivery::raw_blob_html(
+            &patch.text,
+            Some("diff"),
+            Some(&diff_rows_attr(&patch.rows)),
+        ),
         DiffOutcome::Clean => format!(
             "<div class=\"ghrm-diff-notice\">No changes between {base} and {head} for this file.</div>",
             base = html_escape::encode_text(spec.base.token()),
@@ -401,6 +407,26 @@ fn raw_html(outcome: &DiffOutcome, spec: &DiffSpec) -> String {
             reason = html_escape::encode_text(reason),
         ),
     }
+}
+
+// Serializes the producer's typed gutter rows into `old,new,kind` cells
+// joined by ';'; the browser deserializes them to render the diff gutter
+// without re-parsing the patch. Meta and context lines carry no tint.
+fn diff_rows_attr(rows: &[Row]) -> String {
+    rows.iter()
+        .map(|row| {
+            let old = row.old.map(|line| line.to_string()).unwrap_or_default();
+            let new = row.new.map(|line| line.to_string()).unwrap_or_default();
+            let kind = match row.kind {
+                RowKind::Hunk => "h",
+                RowKind::Addition => "a",
+                RowKind::Deletion => "d",
+                RowKind::Meta | RowKind::Context => "",
+            };
+            format!("{old},{new},{kind}")
+        })
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 fn html_response(html: String) -> Response {
@@ -436,6 +462,7 @@ mod tests {
     use crate::http::archive;
     use crate::http::server::Mode;
     use crate::repo::RepoSet;
+    use crate::repo::diff::Patch;
     use crate::repo::refs::{CommitEntry, RefEntry};
     use crate::runtime;
     use crate::testutil::TempDir;
@@ -603,14 +630,34 @@ mod tests {
     }
 
     #[test]
-    fn raw_html_wraps_patch_as_diff_blob() {
+    fn raw_html_serializes_diff_rows_into_the_blob() {
         let spec = DiffSpec::parse("HEAD..:worktree").unwrap();
-        let outcome = DiffOutcome::Patch("diff --git a/x b/x\n".to_string());
+        let outcome = DiffOutcome::Patch(Patch {
+            text: "@@ -1 +1 @@\n-a\n+b\n".to_string(),
+            rows: vec![
+                Row {
+                    old: None,
+                    new: None,
+                    kind: RowKind::Hunk,
+                },
+                Row {
+                    old: Some(1),
+                    new: None,
+                    kind: RowKind::Deletion,
+                },
+                Row {
+                    old: None,
+                    new: Some(1),
+                    kind: RowKind::Addition,
+                },
+            ],
+        });
 
         let html = raw_html(&outcome, &spec);
 
         assert!(html.contains("ghrm-blob"));
         assert!(html.contains(r#"class="language-diff""#));
+        assert!(html.contains(r#"data-ghrm-diff-rows=",,h;1,,d;,1,a""#));
     }
 
     #[test]
@@ -636,7 +683,14 @@ mod tests {
 
         let s = app_state(&root);
         let spec = DiffSpec::parse("HEAD..:worktree").unwrap();
-        let outcome = DiffOutcome::Patch("diff --git a/a.md b/a.md\n".to_string());
+        let outcome = DiffOutcome::Patch(Patch {
+            text: "diff --git a/a.md b/a.md\n".to_string(),
+            rows: vec![Row {
+                old: None,
+                new: None,
+                kind: RowKind::Meta,
+            }],
+        });
         let refs = sample_refs();
         let view = view_state();
 

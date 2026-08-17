@@ -42,10 +42,15 @@ describe('code highlighting', () => {
 });
 
 describe('blob line rendering', () => {
-  function makeBlob(source: string, lang = ''): HTMLTableSectionElement {
+  function makeBlob(
+    source: string,
+    lang = '',
+    diffRows = '',
+  ): HTMLTableSectionElement {
     const cls = lang ? ` class="language-${lang}"` : '';
+    const rowsAttr = diffRows ? ` data-ghrm-diff-rows="${diffRows}"` : '';
     document.body.innerHTML = `
-      <div class="ghrm-blob">
+      <div class="ghrm-blob"${rowsAttr}>
         <div class="ghrm-blob-source"><pre><code${cls}></code></pre></div>
         <table class="ghrm-blob-table"><tbody></tbody></table>
       </div>
@@ -103,10 +108,11 @@ describe('blob line rendering', () => {
     expect(body.querySelectorAll('tr')).toHaveLength(0);
   });
 
-  it('classes unified diff rows for add, delete, and hunk tinting', () => {
+  it('applies server diff coordinates for add, delete, and hunk rows', () => {
     const body = makeBlob(
       'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-old\n+new\n context\n',
       'diff',
+      ',,;,,;,,;,,h;1,,d;,1,a;2,2,;,,',
     );
 
     renderBlobs();
@@ -137,10 +143,11 @@ describe('blob line rendering', () => {
     ]);
   });
 
-  it('resets source line cursors at each unified diff hunk', () => {
+  it('applies server diff coordinates across multiple hunks', () => {
     const body = makeBlob(
       '@@ -8,2 +11,3 @@\n context\n-old\n+new\n+extra\n@@ -20 +24 @@\n-last\n+next\n\\ No newline at end of file\n',
       'diff',
+      ',,h;8,11,;9,,d;,12,a;,13,a;,,h;20,,d;,24,a;,,;,,',
     );
 
     renderBlobs();

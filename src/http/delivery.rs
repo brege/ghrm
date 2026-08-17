@@ -199,7 +199,7 @@ pub(crate) async fn previews_text(path: &Path) -> bool {
     )
 }
 
-pub(crate) fn raw_blob_html(text: &str, lang: Option<&str>) -> String {
+pub(crate) fn raw_blob_html(text: &str, lang: Option<&str>, diff_rows: Option<&str>) -> String {
     let attrs = lang
         .map(|lang| {
             format!(
@@ -208,11 +208,17 @@ pub(crate) fn raw_blob_html(text: &str, lang: Option<&str>) -> String {
             )
         })
         .unwrap_or_default();
+    // The diff feature supplies pre-serialized per-line gutter coordinates;
+    // delivery only emits them and stays independent of unified-diff syntax.
+    let diff_attr = diff_rows
+        .map(|rows| format!(" data-ghrm-diff-rows=\"{rows}\""))
+        .unwrap_or_default();
     format!(
-        "<div class=\"ghrm-blob\">{}<div class=\"highlight ghrm-blob-source\" hidden><pre tabindex=\"0\" class=\"chroma\"><code{attrs}>{body}</code></pre></div><table class=\"ghrm-blob-table\" role=\"presentation\"><tbody></tbody></table></div>",
-        raw_source_html(text),
+        "<div class=\"ghrm-blob\"{diff_attr}>{source}<div class=\"highlight ghrm-blob-source\" hidden><pre tabindex=\"0\" class=\"chroma\"><code{attrs}>{body}</code></pre></div><table class=\"ghrm-blob-table\" role=\"presentation\"><tbody></tbody></table></div>",
+        source = raw_source_html(text),
         attrs = attrs,
         body = html_escape::encode_text(text),
+        diff_attr = diff_attr,
     )
 }
 
@@ -366,10 +372,18 @@ mod tests {
 
     #[test]
     fn raw_blob_includes_hidden_source_block() {
-        let html = raw_blob_html("fn main() {}\n", Some("rust"));
+        let html = raw_blob_html("fn main() {}\n", Some("rust"), None);
         assert!(html.contains("ghrm-blob-source"));
         assert!(html.contains(r#"class="language-rust""#));
         assert!(html.contains("<tbody></tbody>"));
+        assert!(!html.contains("data-ghrm-diff-rows"));
+    }
+
+    #[test]
+    fn raw_blob_emits_supplied_diff_rows() {
+        let html = raw_blob_html("@@ -1 +1 @@\n", Some("diff"), Some("1,1,;2,,d"));
+        assert!(html.contains(r#"data-ghrm-diff-rows="1,1,;2,,d""#));
+        assert!(html.contains(r#"class="language-diff""#));
     }
 
     #[tokio::test]

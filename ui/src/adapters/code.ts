@@ -208,56 +208,35 @@ function pushHighlightedNode(
   lines[lines.length - 1] += `</${el.tagName.toLowerCase()}>`;
 }
 
-interface DiffLineNumber {
+interface DiffRow {
   old: number | null;
   new: number | null;
+  cls: string;
 }
 
-// Unified hunk headers define the old and new cursors. Context advances both
-// cursors, deletions advance only the old cursor, and additions advance only
-// the new cursor. Patch metadata and no-newline markers have no source line.
-function diffLineNumbers(lines: string[]): DiffLineNumber[] {
-  let oldLine: number | null = null;
-  let newLine: number | null = null;
-  // The optional counts do not affect cursor initialization.
-  const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
-
-  return lines.map((line) => {
-    if (line.startsWith('diff --git ')) {
-      oldLine = null;
-      newLine = null;
-      return { old: null, new: null };
-    }
-    const header = hunk.exec(line);
-    if (header) {
-      oldLine = Number(header[1]);
-      newLine = Number(header[2]);
-      return { old: null, new: null };
-    }
-    if (oldLine === null || newLine === null) {
-      return { old: null, new: null };
-    }
-    if (line.startsWith('\\ No newline at end of file')) {
-      return { old: null, new: null };
-    }
-    if (line.startsWith('-')) {
-      const current = oldLine;
-      oldLine += 1;
-      return { old: current, new: null };
-    }
-    if (line.startsWith('+')) {
-      const current = newLine;
-      newLine += 1;
-      return { old: null, new: current };
-    }
-    if (line.startsWith(' ')) {
-      const current = { old: oldLine, new: newLine };
-      oldLine += 1;
-      newLine += 1;
-      return current;
-    }
-    return { old: null, new: null };
+// The server emits per-line coordinates as `old,new,kind` cells joined by
+// ';' on data-ghrm-diff-rows, so the browser applies them by row index
+// instead of re-parsing the unified patch.
+function parseDiffRows(block: Element): DiffRow[] {
+  const raw = (block as HTMLElement).dataset.ghrmDiffRows;
+  if (!raw) {
+    return [];
+  }
+  return raw.split(';').map((cell) => {
+    const [oldStr = '', newStr = '', kind = ''] = cell.split(',');
+    return {
+      old: oldStr === '' ? null : Number(oldStr),
+      new: newStr === '' ? null : Number(newStr),
+      cls: rowClassFor(kind),
+    };
   });
+}
+
+function rowClassFor(kind: string): string {
+  if (kind === 'h') return 'ghrm-blob-row-hunk';
+  if (kind === 'a') return 'ghrm-blob-row-add';
+  if (kind === 'd') return 'ghrm-blob-row-del';
+  return '';
 }
 
 function diffLineCell(side: 'old' | 'new', line: number | null): string {
@@ -299,23 +278,15 @@ function renderBlob(block: Element): void {
 
   const diffBlob = code.classList.contains('language-diff');
   block.classList.toggle('ghrm-blob-diff', diffBlob);
-  const plainLines = source.split('\n');
-  if (
-    terminated &&
-    plainLines.length > 1 &&
-    plainLines[plainLines.length - 1] === ''
-  ) {
-    plainLines.pop();
-  }
-  const diffNumbers = diffBlob ? diffLineNumbers(plainLines) : [];
+  const diffRows = diffBlob ? parseDiffRows(block) : [];
 
   const rows = lines.map((line, idx) => {
     const content = line || '&#8203;';
     const lineNo = idx + 1;
-    const rowClass = diffBlob ? diffRowClass(plainLines[idx] ?? '') : '';
-    const rowAttr = rowClass ? ` class="${rowClass}"` : '';
+    const info = diffRows[idx];
+    const rowAttr = info?.cls ? ` class="${info.cls}"` : '';
     const gutter = diffBlob
-      ? `${diffLineCell('old', diffNumbers[idx]?.old ?? null)}${diffLineCell('new', diffNumbers[idx]?.new ?? null)}`
+      ? `${diffLineCell('old', info?.old ?? null)}${diffLineCell('new', info?.new ?? null)}`
       : `<td class="ghrm-blob-line-no" data-line-number="${lineNo}"><span class="ghrm-blob-line-no-text">${lineNo}</span></td>`;
     return `<tr${rowAttr}>${gutter}<td class="ghrm-blob-line-code"><code class="ghrm-blob-line-text">${content}</code></td></tr>`;
   });
@@ -330,20 +301,6 @@ function renderBlob(block: Element): void {
   }
 
   body.innerHTML = rows.join('');
-}
-
-// Unified diff row classes come from the raw first characters so whole
-// rows, including the number gutter, carry add, delete, and hunk tinting;
-// the +++/--- file header lines stay untinted.
-function diffRowClass(line: string): string {
-  if (line.startsWith('@@')) return 'ghrm-blob-row-hunk';
-  if (line.startsWith('+') && !line.startsWith('+++')) {
-    return 'ghrm-blob-row-add';
-  }
-  if (line.startsWith('-') && !line.startsWith('---')) {
-    return 'ghrm-blob-row-del';
-  }
-  return '';
 }
 
 export function renderBlobs(): void {

@@ -105,7 +105,7 @@ fn show_paste(
         .as_ref()
         .map(|paste| paste.body.as_str())
         .unwrap_or("");
-    let raw_html = delivery::raw_blob_html(paste_body, None);
+    let raw_html = delivery::raw_blob_html(paste_body, None, None);
     let body = match tmpl::gist(GistCtx {
         has_paste: current.is_some(),
         paste_id,
