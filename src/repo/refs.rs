@@ -1,11 +1,9 @@
+use super::commit_time;
 use super::diff::DiffTarget;
 
 use gix::bstr::ByteSlice;
-use std::io::Read;
 use std::path::Path;
-use std::process::Stdio;
 
-const MAX_OUTPUT_BYTES: usize = 256 * 1024;
 const MAX_REFS: usize = 100;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -34,18 +32,11 @@ pub(crate) struct CommitEntry {
     pub(crate) subject: String,
 }
 
-enum GitOut {
-    Unavailable,
-    Broken,
-    Bytes(Vec<u8>),
-}
-
 // Branches, tags, and the HEAD commit time come from the reference
 // store, bounded to MAX_REFS per class; peel_to_commit resolves both
-// lightweight and annotated tags to their commit timestamp. Recent
-// commits come from git log. A reference-store read failure fails the
-// listing; for commits a broken pipe fails while a failed spawn or
-// nonzero status yields an empty list.
+// lightweight and annotated tags to their commit timestamp. The recent
+// commits touching rel come from the history walk. A read failure in any
+// source fails the whole listing.
 pub(crate) fn refs_for(root: &Path, rel: &str) -> Option<RefList> {
     let repo = gix::open(root).ok()?;
     let branches = collect_refs(&repo, RefKind::Branches)?;
@@ -54,21 +45,7 @@ pub(crate) fn refs_for(root: &Path, rel: &str) -> Option<RefList> {
         .head_commit()
         .ok()
         .and_then(|commit| commit_time(&commit));
-    let commits = match run_git(
-        root,
-        &[
-            "log",
-            "-n",
-            "30",
-            "--format=%H%x1f%h%x1f%ct%x1f%s",
-            "--",
-            rel,
-        ],
-    ) {
-        GitOut::Unavailable => Vec::new(),
-        GitOut::Broken => return None,
-        GitOut::Bytes(raw) => parse_commit_output(&raw)?,
-    };
+    let commits = super::history::recent_commits(root, rel, 30)?;
     Some(RefList {
         branches,
         tags,
@@ -130,77 +107,6 @@ fn ref_entry(mut reference: gix::Reference<'_>, prefix: &str) -> Option<RefEntry
         label,
         timestamp,
     })
-}
-
-fn commit_time(commit: &gix::Commit<'_>) -> Option<u64> {
-    u64::try_from(commit.time().ok()?.seconds).ok()
-}
-
-fn run_git(root: &Path, args: &[&str]) -> GitOut {
-    let mut cmd = super::git_command(root);
-    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::null());
-    let Ok(mut child) = cmd.spawn() else {
-        return GitOut::Unavailable;
-    };
-    let Some(stdout) = child.stdout.take() else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return GitOut::Broken;
-    };
-    let mut raw = Vec::new();
-    let read_ok = stdout
-        .take(MAX_OUTPUT_BYTES as u64)
-        .read_to_end(&mut raw)
-        .is_ok();
-    let capped = raw.len() >= MAX_OUTPUT_BYTES;
-    if capped {
-        let _ = child.kill();
-    }
-    let Ok(status) = child.wait() else {
-        return GitOut::Broken;
-    };
-    if !read_ok {
-        return GitOut::Broken;
-    }
-    if !status.success() && !capped {
-        return GitOut::Unavailable;
-    }
-    if capped {
-        // A capped read can end mid-record; the torn tail is dropped so
-        // the parser only sees complete lines.
-        match raw.iter().rposition(|byte| *byte == b'\n') {
-            Some(idx) => raw.truncate(idx + 1),
-            None => raw.clear(),
-        }
-    }
-    GitOut::Bytes(raw)
-}
-
-fn parse_commit_output(raw: &[u8]) -> Option<Vec<CommitEntry>> {
-    parse_commit_lines(&String::from_utf8_lossy(raw))
-}
-
-fn parse_commit_lines(text: &str) -> Option<Vec<CommitEntry>> {
-    text.lines()
-        .map(|line| {
-            let (value, rest) = line.split_once('\x1f')?;
-            let (label, rest) = rest.split_once('\x1f')?;
-            let (timestamp, subject) = rest.split_once('\x1f')?;
-            let hex = |raw: &str| !raw.is_empty() && raw.chars().all(|c| c.is_ascii_hexdigit());
-            if !hex(value) || !hex(label) {
-                return None;
-            }
-            let DiffTarget::Rev(value) = DiffTarget::parse(value)? else {
-                return None;
-            };
-            Some(CommitEntry {
-                value,
-                label: label.to_string(),
-                timestamp: timestamp.parse().ok()?,
-                subject: subject.to_string(),
-            })
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -342,40 +248,5 @@ mod tests {
 
         assert!(collect_refs(&repo, RefKind::Branches).unwrap().is_empty());
         assert!(collect_refs(&repo, RefKind::Tags).unwrap().is_empty());
-    }
-
-    #[test]
-    fn parse_commit_lines_keeps_full_and_short_ids_in_order() {
-        let text = "d888e48aaaa\x1fd888e48\x1f1723600000\x1fchore: upgrade benchmark tooling\n\
-                    1ae8e74bbbb\x1f1ae8e74\x1f1723500000\x1ffeat: save icon\x1fstray separator\n";
-
-        let commits = parse_commit_lines(text).unwrap();
-
-        assert_eq!(commits.len(), 2);
-        assert_eq!(commits[0].value, "d888e48aaaa");
-        assert_eq!(commits[0].label, "d888e48");
-        assert_eq!(commits[0].timestamp, 1723600000);
-        assert_eq!(commits[0].subject, "chore: upgrade benchmark tooling");
-        assert_eq!(commits[1].subject, "feat: save icon\x1fstray separator");
-    }
-
-    #[test]
-    fn parse_commit_lines_rejects_malformed_output() {
-        assert!(parse_commit_lines("junk without separators\n").is_none());
-        assert!(parse_commit_lines("d888e48\x1fd888e48\x1fnot-a-number\x1fsubject\n").is_none());
-        assert!(parse_commit_lines("nothex!\x1fd888e48\x1f1723600000\x1fsubject\n").is_none());
-        assert!(parse_commit_lines("\x1fd888e48\x1f1723600000\x1fsubject\n").is_none());
-
-        let long = format!("{}\x1fd888e48\x1f1723600000\x1fsubject\n", "a".repeat(257));
-        assert!(parse_commit_lines(&long).is_none());
-    }
-
-    #[test]
-    fn parse_commit_output_replaces_non_utf8_subject_bytes() {
-        let commits =
-            parse_commit_output(b"d888e48aaaa\x1fd888e48\x1f1723600000\x1fsubject \xff\n").unwrap();
-
-        assert_eq!(commits[0].value, "d888e48aaaa");
-        assert_eq!(commits[0].subject, "subject \u{fffd}");
     }
 }

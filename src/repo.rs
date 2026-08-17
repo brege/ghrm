@@ -1,5 +1,5 @@
 pub(crate) mod diff;
-mod log;
+mod history;
 pub(crate) mod refs;
 mod remote;
 mod root;
@@ -85,7 +85,7 @@ impl RepoSet {
                 .filter(|path| !out.contains_key(*path) && path.starts_with(&entry.root))
                 .cloned()
                 .collect::<Vec<_>>();
-            out.extend(log::commit_info(&entry.root, &pending));
+            out.extend(history::commit_info(&entry.root, &pending));
         }
         out
     }
@@ -93,6 +93,10 @@ impl RepoSet {
 
 fn path_key(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
+}
+
+fn commit_time(commit: &gix::Commit<'_>) -> Option<u64> {
+    u64::try_from(commit.time().ok()?.seconds).ok()
 }
 
 // Non-execution settings shared by every compare-feature git spawn: no

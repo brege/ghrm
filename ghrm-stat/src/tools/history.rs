@@ -1,10 +1,10 @@
 use crate::{Row, RowMetric};
-use anyhow::Result;
-use std::collections::{HashMap, HashSet};
+use anyhow::{Context, Result};
+use gix::bstr::ByteSlice;
+use std::collections::HashMap;
+use std::ops::ControlFlow;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use super::git;
 
 #[derive(Clone, Debug, Default)]
 pub struct History {
@@ -36,12 +36,48 @@ struct Signature {
     email: String,
 }
 
+// Every commit contributes to the aggregate metadata. Changed paths
+// contribute only within the configured newest-commit churn window.
 pub fn load(root: &Path, churn_limit: usize) -> Result<History> {
-    let output = git::output(
-        root,
-        &["log", "--format=%x1e%H%x1f%an%x1f%ae%x1f%ct", "--name-only"],
-    )?;
-    Ok(parse(&output, churn_limit))
+    let repo = gix::open(root).context("open repository")?;
+    let mut commits = 0;
+    let mut authors = HashMap::<Signature, usize>::new();
+    let mut churn = HashMap::<String, usize>::new();
+    let mut churn_commits = 0;
+    let mut first_commit = None;
+    let mut last_commit = None;
+
+    ghrm_git::walk(&repo, |commit| {
+        commits += 1;
+        last_commit.get_or_insert(commit.time);
+        first_commit = Some(commit.time);
+        *authors
+            .entry(Signature {
+                name: commit.author_name,
+                email: commit.author_email,
+            })
+            .or_insert(0) += 1;
+        if churn_limit == 0 || churn_commits < churn_limit {
+            churn_commits += 1;
+            for path in commit.changed {
+                *churn.entry(path.to_str_lossy().into_owned()).or_insert(0) += 1;
+            }
+        }
+        ControlFlow::Continue(())
+    })?;
+
+    Ok(History {
+        commits,
+        authors: authors_vec(authors, commits),
+        churn: churn_vec(churn),
+        churn_limit: if churn_limit == 0 {
+            churn_commits
+        } else {
+            churn_limit.min(commits)
+        },
+        first_commit,
+        last_commit,
+    })
 }
 
 pub fn time_row(key: &str, epoch: Option<u64>) -> Row {
@@ -71,58 +107,6 @@ pub fn relative_time(epoch: Option<u64>) -> String {
         _ => (seconds / 31556952, "year"),
     };
     plural(amount, unit)
-}
-
-fn parse(output: &str, churn_limit: usize) -> History {
-    let mut authors = HashMap::<Signature, usize>::new();
-    let mut churn = HashMap::<String, usize>::new();
-    let mut current_paths = HashSet::<String>::new();
-    let mut commits = 0;
-    let mut churn_commits = 0;
-    let mut count_churn = false;
-    let mut first_commit = None;
-    let mut last_commit = None;
-
-    for line in output.lines() {
-        if let Some(header) = line.strip_prefix('\x1e') {
-            current_paths.clear();
-            count_churn = churn_limit == 0 || churn_commits < churn_limit;
-            if count_churn {
-                churn_commits += 1;
-            }
-            let mut fields = header.split('\x1f');
-            let _hash = fields.next();
-            let name = fields.next().unwrap_or_default().to_string();
-            let email = fields.next().unwrap_or_default().to_string();
-            let timestamp = fields.next().and_then(|value| value.parse::<u64>().ok());
-
-            commits += 1;
-            if let Some(timestamp) = timestamp {
-                last_commit.get_or_insert(timestamp);
-                first_commit = Some(timestamp);
-            }
-            *authors.entry(Signature { name, email }).or_insert(0) += 1;
-            continue;
-        }
-
-        if !count_churn || line.is_empty() || !current_paths.insert(line.to_string()) {
-            continue;
-        }
-        *churn.entry(line.to_string()).or_insert(0) += 1;
-    }
-
-    History {
-        commits,
-        authors: authors_vec(authors, commits),
-        churn: churn_vec(churn),
-        churn_limit: if churn_limit == 0 {
-            churn_commits
-        } else {
-            churn_limit.min(commits)
-        },
-        first_commit,
-        last_commit,
-    }
 }
 
 fn authors_vec(authors: HashMap<Signature, usize>, total: usize) -> Vec<Author> {
@@ -166,31 +150,142 @@ fn plural(amount: u64, unit: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gix::objs::tree::EntryKind;
+    use std::fs;
 
-    #[test]
-    fn parses_authors_and_churn() {
-        let history = parse(
-            "\x1eabc\x1fA\x1fa@example.com\x1f10\nsrc/lib.rs\n\n\x1edef\x1fA\x1fa@example.com\x1f20\nsrc/lib.rs\nREADME.md\n",
-            30,
-        );
+    fn init_repo(dir: &Path) -> gix::Repository {
+        gix::init(dir).expect("init repository");
+        let config = dir.join(".git/config");
+        let mut text = fs::read_to_string(&config).expect("read repository config");
+        text.push_str("[user]\n\tname = Test\n\temail = test@example.com\n");
+        fs::write(&config, text).unwrap();
+        gix::open(dir).expect("open repository")
+    }
 
-        assert_eq!(history.commits, 2);
-        assert_eq!(history.authors[0].commits, 2);
-        assert_eq!(history.churn[0].path, "src/lib.rs");
-        assert_eq!(history.first_commit, Some(20));
-        assert_eq!(history.last_commit, Some(10));
+    fn write_tree(repo: &gix::Repository, files: &[(&str, &[u8])]) -> gix::ObjectId {
+        let empty = gix::ObjectId::empty_tree(repo.object_hash());
+        let mut editor = repo.edit_tree(empty).expect("edit tree");
+        for (path, bytes) in files {
+            let blob = repo.write_blob(bytes).expect("write blob").detach();
+            editor.upsert(*path, EntryKind::Blob, blob).expect("upsert");
+        }
+        editor.write().expect("write tree").detach()
+    }
+
+    fn commit(
+        repo: &gix::Repository,
+        files: &[(&str, &[u8])],
+        parents: &[gix::ObjectId],
+        author: &str,
+        seconds: u64,
+        message: &str,
+    ) -> gix::ObjectId {
+        let tree = write_tree(repo, files);
+        let time = format!("{seconds} +0000");
+        let sig = gix::actor::SignatureRef {
+            name: author.into(),
+            email: "dev@example.com".into(),
+            time: &time,
+        };
+        repo.commit_as(sig, sig, "HEAD", message, tree, parents.iter().copied())
+            .expect("commit")
+            .detach()
+    }
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let base = std::env::temp_dir().join(format!("ghrm-stat-history-{name}"));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        base
     }
 
     #[test]
-    fn limits_churn_window_without_limiting_commits() {
-        let history = parse(
-            "\x1eabc\x1fA\x1fa@example.com\x1f10\nsrc/lib.rs\n\n\x1edef\x1fA\x1fa@example.com\x1f20\nREADME.md\n",
-            1,
+    fn load_accumulates_commits_authors_churn_and_bounds() {
+        let dir = temp_dir("accumulate");
+        let repo = init_repo(&dir);
+        let c1 = commit(
+            &repo,
+            &[("src/lib.rs", b"a\n")],
+            &[],
+            "Ada",
+            1000,
+            "add lib",
         );
+        commit(
+            &repo,
+            &[("src/lib.rs", b"b\n"), ("README.md", b"# x\n")],
+            &[c1],
+            "Ada",
+            2000,
+            "edit lib, add readme",
+        );
+
+        let history = load(&dir, 30).expect("history");
+
+        assert_eq!(history.commits, 2);
+        assert_eq!(history.authors.len(), 1);
+        assert_eq!(history.authors[0].name, "Ada");
+        assert_eq!(history.authors[0].commits, 2);
+        assert_eq!(history.first_commit, Some(1000));
+        assert_eq!(history.last_commit, Some(2000));
+        // Both commits affect src/lib.rs; only the second affects README.md.
+        assert_eq!(history.churn[0].path, "src/lib.rs");
+        assert_eq!(history.churn[0].commits, 2);
+        let readme = history
+            .churn
+            .iter()
+            .find(|c| c.path == "README.md")
+            .expect("readme churn");
+        assert_eq!(readme.commits, 1);
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn load_limits_churn_window_without_limiting_commits() {
+        let dir = temp_dir("window");
+        let repo = init_repo(&dir);
+        let c1 = commit(
+            &repo,
+            &[("src/lib.rs", b"a\n")],
+            &[],
+            "Ada",
+            1000,
+            "add lib",
+        );
+        commit(
+            &repo,
+            &[("src/lib.rs", b"a\n"), ("README.md", b"# x\n")],
+            &[c1],
+            "Ada",
+            2000,
+            "add readme",
+        );
+
+        // churn window of one only counts the newest commit, which adds
+        // only README.md relative to its parent
+        let history = load(&dir, 1).expect("history");
 
         assert_eq!(history.commits, 2);
         assert_eq!(history.churn_limit, 1);
         assert_eq!(history.churn.len(), 1);
-        assert_eq!(history.churn[0].path, "src/lib.rs");
+        assert_eq!(history.churn[0].path, "README.md");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn load_is_empty_for_an_unborn_head() {
+        let dir = temp_dir("empty");
+        init_repo(&dir);
+
+        let history = load(&dir, 30).expect("history");
+
+        assert_eq!(history.commits, 0);
+        assert!(history.authors.is_empty());
+        assert!(history.churn.is_empty());
+        assert_eq!(history.first_commit, None);
+
+        fs::remove_dir_all(&dir).ok();
     }
 }
