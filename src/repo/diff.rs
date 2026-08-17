@@ -1,19 +1,19 @@
+use std::fmt::Write as _;
 use std::io::Read;
 use std::path::Path;
-use std::process::Stdio;
+
+use gix::bstr::ByteSlice;
+use gix::diff::blob::ResourceKind;
+use gix::diff::blob::platform::resource::Data;
+use gix::objs::tree::EntryKind;
 
 pub(crate) const WORKTREE: &str = ":worktree";
 pub(crate) const INDEX: &str = ":index";
 
 const MAX_PATCH_BYTES: usize = 1024 * 1024;
-const MAX_STDERR_BYTES: usize = 4096;
+const MAX_DIFF_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_TARGET_LEN: usize = 256;
-
-// --no-ext-diff and --no-textconv disable the diff drivers a repository
-// config could point at external programs; the shared repo::git_command
-// prefix disables fsmonitor for every spawned command, including the
-// index-reading ls-files probe.
-const DIFF_FLAGS: &[&str] = &["--no-color", "--no-ext-diff", "--no-textconv"];
+const TRUNCATION_MARKER: &str = "[patch truncated at 1 MiB]\n";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum DiffTarget {
@@ -25,9 +25,9 @@ pub(crate) enum DiffTarget {
 impl DiffTarget {
     // A colon never appears in a valid ref name, so the pseudo-ref tokens
     // cannot collide with a real ref, and rejecting remaining colons also
-    // rejects git's rev:path blob syntax. A leading hyphen would read as a
-    // git option, and a leading dot covers the three-dot range syntax that
-    // DiffSpec::parse would otherwise split into a dotted ref.
+    // rejects git's rev:path blob syntax. A leading hyphen and a leading
+    // dot are rejected so a target can never read as an option or a
+    // three-dot range that DiffSpec::parse would split into a dotted ref.
     pub(crate) fn parse(raw: &str) -> Option<Self> {
         match raw {
             WORKTREE => return Some(Self::Worktree),
@@ -80,236 +80,522 @@ pub(crate) enum DiffOutcome {
     Failed(String),
 }
 
-// git diff has three fixed comparison forms: no selector is index vs
-// worktree, "--cached <rev>" is rev vs index, and "<rev>" alone is rev vs
-// worktree. -R swaps sides for the pairings that reverse a fixed form, and
-// equal sides never spawn because their diff is empty by definition.
-fn selector_args(spec: &DiffSpec) -> Option<Vec<String>> {
-    use DiffTarget::{Index, Rev, Worktree};
-    let owned = |args: &[&str]| Some(args.iter().map(|arg| arg.to_string()).collect());
-    match (&spec.base, &spec.head) {
-        (Worktree, Worktree) | (Index, Index) => None,
-        (Rev(a), Rev(b)) if a == b => None,
-        (Rev(a), Rev(b)) => owned(&[a, b]),
-        (Rev(a), Worktree) => owned(&[a]),
-        (Rev(a), Index) => owned(&["--cached", a]),
-        (Index, Worktree) => owned(&[]),
-        (Worktree, Rev(a)) => owned(&["-R", a]),
-        (Index, Rev(a)) => owned(&["--cached", "-R", a]),
-        (Worktree, Index) => owned(&["-R"]),
-    }
-}
-
-fn diff_flags() -> Vec<String> {
-    let mut argv = vec!["diff".to_string()];
-    argv.extend(DIFF_FLAGS.iter().map(|flag| flag.to_string()));
-    argv
-}
-
-fn diff_argv(spec: &DiffSpec, rel: &str) -> Option<Vec<String>> {
-    let selector = selector_args(spec)?;
-    let mut argv = diff_flags();
-    argv.extend(selector);
-    argv.push("--".to_string());
-    argv.push(rel.to_string());
-    Some(argv)
-}
-
-// --no-index reads both sides from the filesystem, so /dev/null supplies
-// the empty side of an untracked file's patch.
-fn untracked_argv(rel: &str, reversed: bool) -> Vec<String> {
-    let mut argv = diff_flags();
-    argv.push("--no-index".to_string());
-    if reversed {
-        argv.push("-R".to_string());
-    }
-    argv.push("--".to_string());
-    argv.push("/dev/null".to_string());
-    argv.push(rel.to_string());
-    argv
-}
-
-fn tracked_argv(rel: &str) -> Vec<String> {
-    vec![
-        "ls-files".to_string(),
-        "--error-unmatch".to_string(),
-        "--".to_string(),
-        rel.to_string(),
-    ]
-}
-
-// Exactly one worktree side makes an untracked file comparable: the file
-// is wholly an addition (or a deletion when the worktree is the base).
-fn worktree_direction(spec: &DiffSpec) -> Option<bool> {
-    match (&spec.base, &spec.head) {
-        (DiffTarget::Worktree, DiffTarget::Worktree) => None,
-        (_, DiffTarget::Worktree) => Some(false),
-        (DiffTarget::Worktree, _) => Some(true),
-        _ => None,
-    }
+#[derive(Clone, Copy, Debug)]
+struct Side {
+    id: gix::ObjectId,
+    mode: EntryKind,
+    present: bool,
 }
 
 pub(crate) fn unified_diff(root: &Path, spec: &DiffSpec, rel: &str) -> DiffOutcome {
-    let Some(argv) = diff_argv(spec, rel) else {
+    if spec.base == spec.head {
         return DiffOutcome::Clean;
-    };
-    let outcome = spawn_diff(root, &argv, false);
-    if !matches!(outcome, DiffOutcome::Clean) {
-        return outcome;
     }
-    let Some(reversed) = worktree_direction(spec) else {
-        return DiffOutcome::Clean;
+    let Ok(repo) = gix::open(root) else {
+        return DiffOutcome::Failed("repository is unavailable".to_string());
     };
-    match tracked_state(root, rel) {
-        TrackedState::Tracked => DiffOutcome::Clean,
-        TrackedState::Untracked => spawn_diff(root, &untracked_argv(rel, reversed), true),
-        TrackedState::Failed(reason) => DiffOutcome::Failed(reason),
+    let base = match side(&repo, &spec.base, root, rel) {
+        Ok(side) => side,
+        Err(reason) => return DiffOutcome::Failed(reason),
+    };
+    let head = match side(&repo, &spec.head, root, rel) {
+        Ok(side) => side,
+        Err(reason) => return DiffOutcome::Failed(reason),
+    };
+    if !base.present && !head.present {
+        return DiffOutcome::Clean;
+    }
+
+    let roots = gix::diff::blob::pipeline::WorktreeRoots {
+        old_root: matches!(spec.base, DiffTarget::Worktree).then(|| root.to_owned()),
+        new_root: matches!(spec.head, DiffTarget::Worktree).then(|| root.to_owned()),
+    };
+    let mut platform = match repo.diff_resource_cache(gix::diff::blob::pipeline::Mode::ToGit, roots)
+    {
+        Ok(platform) => platform,
+        Err(_) => return DiffOutcome::Failed("cannot prepare diff resources".to_string()),
+    };
+    let threshold = &mut platform.filter.options.large_file_threshold_bytes;
+    if *threshold == 0 || *threshold > MAX_DIFF_INPUT_BYTES {
+        *threshold = MAX_DIFF_INPUT_BYTES;
+    }
+    platform
+        .filter
+        .worktree_filter
+        .options_mut()
+        .drivers
+        .clear();
+
+    let rel_bytes = rel.as_bytes().as_bstr();
+    if platform
+        .set_resource(
+            base.id,
+            base.mode,
+            rel_bytes,
+            ResourceKind::OldOrSource,
+            &repo.objects,
+        )
+        .is_err()
+        || platform
+            .set_resource(
+                head.id,
+                head.mode,
+                rel_bytes,
+                ResourceKind::NewOrDestination,
+                &repo.objects,
+            )
+            .is_err()
+    {
+        return DiffOutcome::Failed("cannot read diff resources".to_string());
+    }
+
+    let prepared = match platform.prepare_diff() {
+        Ok(prepared) => prepared,
+        Err(_) => return DiffOutcome::Failed("cannot prepare file diff".to_string()),
+    };
+    let data_equal = match (prepared.old.data, prepared.new.data) {
+        (Data::Missing, Data::Missing) => true,
+        (Data::Buffer { buf: old, .. }, Data::Buffer { buf: new, .. }) => old == new,
+        (Data::Binary { .. }, Data::Binary { .. }) => {
+            match binary_equal(&repo, &spec.base, base, &spec.head, head, root, rel) {
+                Ok(equal) => equal,
+                Err(reason) => return DiffOutcome::Failed(reason),
+            }
+        }
+        _ => false,
+    };
+    if base.present == head.present && base.mode == head.mode && data_equal {
+        return DiffOutcome::Clean;
+    }
+
+    let mut patch = patch_header(rel, base, head, !data_equal);
+    match prepared.operation {
+        gix::diff::blob::platform::prepare_diff::Operation::InternalDiff { algorithm } => {
+            let old = prepared.old.data.as_slice().unwrap_or_default();
+            let new = prepared.new.data.as_slice().unwrap_or_default();
+            if old != new {
+                patch = unified_patch(patch, &prepared, algorithm);
+            }
+        }
+        gix::diff::blob::platform::prepare_diff::Operation::SourceOrDestinationIsBinary => {
+            let old = patch_label(base.present, "a", rel);
+            let new = patch_label(head.present, "b", rel);
+            writeln!(patch, "Binary files {old} and {new} differ").unwrap();
+        }
+        gix::diff::blob::platform::prepare_diff::Operation::ExternalCommand { .. } => {
+            return DiffOutcome::Failed("external diff drivers are disabled".to_string());
+        }
+    }
+    DiffOutcome::Patch(finish_patch(patch))
+}
+
+fn side(
+    repo: &gix::Repository,
+    target: &DiffTarget,
+    root: &Path,
+    rel: &str,
+) -> Result<Side, String> {
+    match target {
+        DiffTarget::Worktree => worktree_side(repo, root, rel),
+        DiffTarget::Index => index_side(repo, rel),
+        DiffTarget::Rev(rev) => rev_side(repo, rev, rel),
     }
 }
 
-enum TrackedState {
-    Tracked,
-    Untracked,
-    Failed(String),
+fn missing_side(repo: &gix::Repository) -> Side {
+    Side {
+        id: gix::ObjectId::null(repo.object_hash()),
+        mode: EntryKind::Blob,
+        present: false,
+    }
 }
 
-// ls-files --error-unmatch exits 0 for a tracked path and 1 for an
-// unmatched one; every other exit is a repository failure, not an
-// untracked file.
-fn tracked_state(root: &Path, rel: &str) -> TrackedState {
-    let mut cmd = super::git_command(root);
-    cmd.args(tracked_argv(rel))
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-    let Ok(mut child) = cmd.spawn() else {
-        return TrackedState::Failed("git is unavailable".to_string());
+fn rev_side(repo: &gix::Repository, rev: &str, rel: &str) -> Result<Side, String> {
+    let tree = repo
+        .rev_parse_single(rev)
+        .map_err(|_| format!("cannot resolve revision '{rev}'"))?
+        .object()
+        .map_err(|_| "cannot read revision".to_string())?
+        .peel_to_tree()
+        .map_err(|_| "revision has no tree".to_string())?;
+    let Some(entry) = tree
+        .lookup_entry_by_path(rel)
+        .map_err(|_| "cannot read revision tree".to_string())?
+    else {
+        return Ok(missing_side(repo));
     };
-    let Some(stderr) = child.stderr.take() else {
-        let _ = child.kill();
-        return match child.wait() {
-            Ok(_) => TrackedState::Failed("git stderr pipe missing".to_string()),
-            Err(_) => TrackedState::Failed("git did not exit cleanly".to_string()),
+    let mode = entry.mode().kind();
+    regular_mode(mode)?;
+    Ok(Side {
+        id: entry.object_id(),
+        mode,
+        present: true,
+    })
+}
+
+fn index_side(repo: &gix::Repository, rel: &str) -> Result<Side, String> {
+    let index = repo
+        .index_or_empty()
+        .map_err(|_| "cannot read index".to_string())?;
+    let Some(entry) = index.entry_by_path(rel.into()) else {
+        return Ok(missing_side(repo));
+    };
+    let mode = entry
+        .mode
+        .to_tree_entry_mode()
+        .ok_or_else(|| "staged file has an invalid mode".to_string())?
+        .kind();
+    regular_mode(mode)?;
+    Ok(Side {
+        id: entry.id,
+        mode,
+        present: true,
+    })
+}
+
+fn worktree_side(repo: &gix::Repository, root: &Path, rel: &str) -> Result<Side, String> {
+    let metadata = match gix::index::fs::Metadata::from_path_no_follow(&root.join(rel)) {
+        Ok(metadata) => metadata,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(missing_side(repo)),
+        Err(_) => return Err("cannot read worktree file metadata".to_string()),
+    };
+    if metadata.is_dir() {
+        return Err("worktree target is not a file".to_string());
+    }
+    let fs = repo
+        .filesystem_options()
+        .map_err(|_| "cannot read repository filesystem options".to_string())?;
+    let mode = if fs.symlink && metadata.is_symlink() {
+        EntryKind::Link
+    } else if fs.executable_bit && metadata.is_executable() {
+        EntryKind::BlobExecutable
+    } else {
+        EntryKind::Blob
+    };
+    Ok(Side {
+        id: gix::ObjectId::null(repo.object_hash()),
+        mode,
+        present: true,
+    })
+}
+
+fn binary_equal(
+    repo: &gix::Repository,
+    old_target: &DiffTarget,
+    old: Side,
+    new_target: &DiffTarget,
+    new: Side,
+    root: &Path,
+    rel: &str,
+) -> Result<bool, String> {
+    if old.mode != new.mode || old.present != new.present {
+        return Ok(false);
+    }
+    if !old.id.is_null() && old.id == new.id {
+        return Ok(true);
+    }
+    let old = raw_content(repo, old_target, old, root, rel)?;
+    let new = raw_content(repo, new_target, new, root, rel)?;
+    Ok(matches!((old, new), (Some(old), Some(new)) if old == new))
+}
+
+fn raw_content(
+    repo: &gix::Repository,
+    target: &DiffTarget,
+    side: Side,
+    root: &Path,
+    rel: &str,
+) -> Result<Option<Vec<u8>>, String> {
+    if !side.present {
+        return Ok(Some(Vec::new()));
+    }
+    if matches!(target, DiffTarget::Worktree) {
+        let path = root.join(rel);
+        let metadata = std::fs::symlink_metadata(&path)
+            .map_err(|_| "cannot read worktree file metadata".to_string())?;
+        if metadata.len() > MAX_DIFF_INPUT_BYTES {
+            return Ok(None);
+        }
+        return if side.mode == EntryKind::Link {
+            std::fs::read_link(path)
+                .map(|target| Some(target.as_os_str().as_encoded_bytes().to_vec()))
+                .map_err(|_| "cannot read worktree symbolic link".to_string())
+        } else {
+            canonical_worktree_content(repo, root, rel)
         };
-    };
+    }
+    let header = repo
+        .find_header(side.id)
+        .map_err(|_| "cannot read file object header".to_string())?;
+    if header.size() > MAX_DIFF_INPUT_BYTES {
+        return Ok(None);
+    }
+    repo.find_object(side.id)
+        .map(|object| Some(object.data.clone()))
+        .map_err(|_| "cannot read file object".to_string())
+}
 
-    let stderr_read = read_capped(stderr, MAX_STDERR_BYTES);
-    if !matches!(stderr_read, Ok((_, false))) {
-        let _ = child.kill();
-    }
-    let Ok(status) = child.wait() else {
-        return TrackedState::Failed("git did not exit cleanly".to_string());
+fn canonical_worktree_content(
+    repo: &gix::Repository,
+    root: &Path,
+    rel: &str,
+) -> Result<Option<Vec<u8>>, String> {
+    let roots = gix::diff::blob::pipeline::WorktreeRoots {
+        old_root: Some(root.to_owned()),
+        new_root: None,
     };
-    let Ok((stderr, truncated)) = stderr_read else {
-        return TrackedState::Failed("failed to read git diagnostics".to_string());
+    let mut platform = repo
+        .diff_resource_cache(gix::diff::blob::pipeline::Mode::ToGit, roots)
+        .map_err(|_| "cannot prepare worktree conversion".to_string())?;
+    platform
+        .filter
+        .worktree_filter
+        .options_mut()
+        .drivers
+        .clear();
+    let attrs = platform
+        .attr_stack
+        .at_entry(rel.as_bytes().as_bstr(), None, &repo.objects)
+        .map_err(|_| "cannot read file attributes".to_string())?;
+    let file =
+        std::fs::File::open(root.join(rel)).map_err(|_| "cannot read worktree file".to_string())?;
+    let mut match_attrs = |_: &gix::bstr::BStr, out: &mut gix::attrs::search::Outcome| {
+        attrs.matching_attributes(out);
     };
-    if truncated {
-        return TrackedState::Failed("git ls-files diagnostics exceeded 4 KiB".to_string());
-    }
-    match status.code() {
-        Some(0) => TrackedState::Tracked,
-        Some(1) => TrackedState::Untracked,
-        _ => TrackedState::Failed(failure_line(&stderr, "git ls-files failed")),
+    let mut no_index_object = |_: &mut Vec<u8>| Ok(None);
+    let mut converted = platform
+        .filter
+        .worktree_filter
+        .convert_to_git(file, Path::new(rel), &mut match_attrs, &mut no_index_object)
+        .map_err(|_| "cannot convert worktree file".to_string())?;
+    let mut content = Vec::new();
+    converted
+        .read_to_end(&mut content)
+        .map_err(|_| "cannot read converted worktree file".to_string())?;
+    Ok(Some(content))
+}
+
+fn regular_mode(mode: EntryKind) -> Result<(), String> {
+    match mode {
+        EntryKind::Blob | EntryKind::BlobExecutable | EntryKind::Link => Ok(()),
+        EntryKind::Tree | EntryKind::Commit => Err("target is not a regular file".to_string()),
     }
 }
 
-fn spawn_diff(root: &Path, argv: &[String], allow_exit_one: bool) -> DiffOutcome {
-    let mut cmd = super::git_command(root);
-    cmd.args(argv).stdout(Stdio::piped()).stderr(Stdio::piped());
-
-    let Ok(mut child) = cmd.spawn() else {
-        return DiffOutcome::Failed("git is unavailable".to_string());
-    };
-
-    let Some(stdout) = child.stdout.take() else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return DiffOutcome::Failed("git stdout pipe missing".to_string());
-    };
-    let Some(stderr) = child.stderr.take() else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return DiffOutcome::Failed("git stderr pipe missing".to_string());
-    };
-
-    // stderr drains on its own thread so a chatty child can never block on
-    // a full stderr pipe while stdout is still streaming.
-    let stderr_thread = std::thread::spawn(move || -> std::io::Result<Vec<u8>> {
-        let mut limited = stderr.take(MAX_STDERR_BYTES as u64);
-        let mut buf = Vec::new();
-        limited.read_to_end(&mut buf)?;
-        std::io::copy(&mut limited.into_inner(), &mut std::io::sink())?;
-        Ok(buf)
-    });
-
-    let stdout_read = read_capped(stdout, MAX_PATCH_BYTES);
-    if !matches!(stdout_read, Ok((_, false))) {
-        let _ = child.kill();
-    }
-
-    let stderr_read = stderr_thread.join();
-
-    let Ok(status) = child.wait() else {
-        return DiffOutcome::Failed("git did not exit cleanly".to_string());
-    };
-    let Ok((raw, truncated)) = stdout_read else {
-        return DiffOutcome::Failed("failed to read git diff output".to_string());
-    };
-    let stderr_raw = match stderr_read {
-        Ok(Ok(buf)) => buf,
-        Ok(Err(_)) => {
-            return DiffOutcome::Failed("failed to read git diagnostics".to_string());
+fn patch_header(rel: &str, old: Side, new: Side, content_changed: bool) -> String {
+    let old_path = patch_path("a", rel);
+    let new_path = patch_path("b", rel);
+    let mut patch = format!("diff --git {old_path} {new_path}\n");
+    match (old.present, new.present) {
+        (false, true) => {
+            writeln!(patch, "new file mode {}", mode_str(new.mode)).unwrap();
         }
-        Err(_) => {
-            return DiffOutcome::Failed("git diagnostics thread panicked".to_string());
+        (true, false) => {
+            writeln!(patch, "deleted file mode {}", mode_str(old.mode)).unwrap();
         }
-    };
-    if truncated {
-        return DiffOutcome::Patch(shape_truncated_patch(&raw));
+        (true, true) if old.mode != new.mode => {
+            writeln!(patch, "old mode {}", mode_str(old.mode)).unwrap();
+            writeln!(patch, "new mode {}", mode_str(new.mode)).unwrap();
+        }
+        _ => {}
     }
-    if !status.success() && !(allow_exit_one && status.code() == Some(1)) {
-        return DiffOutcome::Failed(failure_line(&stderr_raw, "git diff failed"));
+    if content_changed || old.present != new.present {
+        writeln!(patch, "--- {}", patch_label(old.present, "a", rel)).unwrap();
+        writeln!(patch, "+++ {}", patch_label(new.present, "b", rel)).unwrap();
     }
-    let patch = String::from_utf8_lossy(&raw).into_owned();
-    if patch.trim().is_empty() {
-        return DiffOutcome::Clean;
-    }
-    DiffOutcome::Patch(patch)
-}
-
-fn read_capped(reader: impl Read, cap: usize) -> std::io::Result<(Vec<u8>, bool)> {
-    let mut raw = Vec::new();
-    reader.take((cap + 1) as u64).read_to_end(&mut raw)?;
-    let truncated = raw.len() > cap;
-    if truncated {
-        raw.truncate(cap);
-    }
-    Ok((raw, truncated))
-}
-
-// A byte cap can split a line and a UTF-8 sequence; cutting back to the
-// last full line removes both before the truncation marker is appended.
-fn shape_truncated_patch(raw: &[u8]) -> String {
-    let mut patch = String::from_utf8_lossy(raw).into_owned();
-    match patch.rfind('\n') {
-        Some(idx) => patch.truncate(idx),
-        None => patch.clear(),
-    }
-    patch.push_str("\n[patch truncated at 1 MiB]\n");
     patch
 }
 
-fn failure_line(stderr: &[u8], fallback: &str) -> String {
-    String::from_utf8_lossy(stderr)
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .map(|line| line.trim_start_matches("fatal:").trim().to_string())
-        .unwrap_or_else(|| fallback.to_string())
+fn mode_str(mode: EntryKind) -> &'static str {
+    match mode {
+        EntryKind::Blob => "100644",
+        EntryKind::BlobExecutable => "100755",
+        EntryKind::Link => "120000",
+        EntryKind::Tree => "040000",
+        EntryKind::Commit => "160000",
+    }
+}
+
+fn patch_label(present: bool, prefix: &str, rel: &str) -> String {
+    if present {
+        patch_path(prefix, rel)
+    } else {
+        "/dev/null".to_string()
+    }
+}
+
+// Git patch paths use double-quoted C escapes when whitespace, control
+// characters, quotes, or backslashes would make the header ambiguous.
+fn patch_path(prefix: &str, rel: &str) -> String {
+    let path = format!("{prefix}/{rel}");
+    if !path
+        .chars()
+        .any(|ch| ch.is_whitespace() || ch.is_control() || matches!(ch, '\\' | '"'))
+    {
+        return path;
+    }
+    let mut quoted = String::from("\"");
+    for ch in path.chars() {
+        match ch {
+            '\\' => quoted.push_str("\\\\"),
+            '"' => quoted.push_str("\\\""),
+            '\n' => quoted.push_str("\\n"),
+            '\r' => quoted.push_str("\\r"),
+            '\t' => quoted.push_str("\\t"),
+            ch if ch.is_control() => {
+                for byte in ch.to_string().bytes() {
+                    write!(quoted, "\\{byte:03o}").unwrap();
+                }
+            }
+            ch => quoted.push(ch),
+        }
+    }
+    quoted.push('"');
+    quoted
+}
+
+fn unified_patch(
+    patch: String,
+    prepared: &gix::diff::blob::platform::prepare_diff::Outcome<'_>,
+    algorithm: gix::diff::blob::Algorithm,
+) -> String {
+    use gix::diff::blob::unified_diff::ContextSize;
+    use gix::diff::blob::{UnifiedDiff, diff_with_slider_heuristics};
+
+    let input = prepared.interned_input();
+    let diff = diff_with_slider_heuristics(algorithm, &input);
+    let old = prepared.old.data.as_slice().unwrap_or_default();
+    let new = prepared.new.data.as_slice().unwrap_or_default();
+    let writer = HunkWriter::new(
+        patch,
+        input.before.len(),
+        input.after.len(),
+        old.ends_with(b"\n"),
+        new.ends_with(b"\n"),
+    );
+    UnifiedDiff::new(&diff, &input, writer, ContextSize::symmetrical(3))
+        .consume()
+        .expect("writing diff hunks into memory cannot fail")
+}
+
+struct HunkWriter {
+    patch: Vec<u8>,
+    truncated: bool,
+    old_lines: usize,
+    new_lines: usize,
+    old_ends_with_newline: bool,
+    new_ends_with_newline: bool,
+}
+
+impl HunkWriter {
+    fn new(
+        patch: String,
+        old_lines: usize,
+        new_lines: usize,
+        old_ends_with_newline: bool,
+        new_ends_with_newline: bool,
+    ) -> Self {
+        Self {
+            patch: patch.into_bytes(),
+            truncated: false,
+            old_lines,
+            new_lines,
+            old_ends_with_newline,
+            new_ends_with_newline,
+        }
+    }
+
+    fn push(&mut self, bytes: &[u8]) {
+        let limit = MAX_PATCH_BYTES - TRUNCATION_MARKER.len();
+        if self.truncated || self.patch.len().saturating_add(bytes.len()) > limit {
+            self.truncated = true;
+            return;
+        }
+        self.patch.extend_from_slice(bytes);
+    }
+
+    fn no_newline(&mut self) {
+        self.push(b"\\ No newline at end of file\n");
+    }
+
+    fn push_line(&mut self, prefix: u8, content: &[u8]) {
+        let limit = MAX_PATCH_BYTES - TRUNCATION_MARKER.len();
+        let len = content.len().saturating_add(2);
+        if self.truncated || self.patch.len().saturating_add(len) > limit {
+            self.truncated = true;
+            return;
+        }
+        self.patch.push(prefix);
+        self.patch.extend_from_slice(content);
+        self.patch.push(b'\n');
+    }
+}
+
+impl gix::diff::blob::unified_diff::ConsumeHunk for HunkWriter {
+    type Out = String;
+
+    fn consume_hunk(
+        &mut self,
+        header: gix::diff::blob::unified_diff::HunkHeader,
+        lines: &[(gix::diff::blob::unified_diff::DiffLineKind, &[u8])],
+    ) -> std::io::Result<()> {
+        self.push(format!("{header}\n").as_bytes());
+        let mut old_line = header.before_hunk_start as usize;
+        let mut new_line = header.after_hunk_start as usize;
+        for &(kind, content) in lines {
+            self.push_line(kind.to_prefix() as u8, content);
+            match kind {
+                gix::diff::blob::unified_diff::DiffLineKind::Remove => {
+                    if old_line == self.old_lines && !self.old_ends_with_newline {
+                        self.no_newline();
+                    }
+                    old_line += 1;
+                }
+                gix::diff::blob::unified_diff::DiffLineKind::Add => {
+                    if new_line == self.new_lines && !self.new_ends_with_newline {
+                        self.no_newline();
+                    }
+                    new_line += 1;
+                }
+                gix::diff::blob::unified_diff::DiffLineKind::Context => {
+                    if (old_line == self.old_lines && !self.old_ends_with_newline)
+                        || (new_line == self.new_lines && !self.new_ends_with_newline)
+                    {
+                        self.no_newline();
+                    }
+                    old_line += 1;
+                    new_line += 1;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn finish(mut self) -> Self::Out {
+        if self.truncated {
+            self.patch.extend_from_slice(TRUNCATION_MARKER.as_bytes());
+        }
+        String::from_utf8_lossy(&self.patch).into_owned()
+    }
+}
+
+fn finish_patch(mut patch: String) -> String {
+    if patch.len() > MAX_PATCH_BYTES {
+        patch.truncate(MAX_PATCH_BYTES - TRUNCATION_MARKER.len());
+        if let Some(end) = patch.rfind('\n') {
+            patch.truncate(end + 1);
+        }
+        patch.push_str(TRUNCATION_MARKER);
+    }
+    patch
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutil::TempDir;
+    use gix::objs::tree::EntryKind;
+    use std::fs;
 
     fn rev(name: &str) -> DiffTarget {
         DiffTarget::Rev(name.to_string())
@@ -317,6 +603,78 @@ mod tests {
 
     fn spec(base: DiffTarget, head: DiffTarget) -> DiffSpec {
         DiffSpec { base, head }
+    }
+
+    fn init_repo(dir: &Path) -> gix::Repository {
+        gix::init(dir).expect("init repository");
+        let config = dir.join(".git/config");
+        let mut text = fs::read_to_string(&config).expect("read repository config");
+        text.push_str("[user]\n\tname = Test\n\temail = test@example.com\n");
+        fs::write(&config, text).unwrap();
+        gix::open(dir).expect("open repository")
+    }
+
+    fn commit_entries(
+        repo: &gix::Repository,
+        files: &[(&str, EntryKind, &[u8])],
+        message: &str,
+    ) -> gix::ObjectId {
+        let parent = repo.head_id().ok().map(|id| id.detach());
+        let base = parent
+            .map(|id| {
+                repo.find_commit(id)
+                    .expect("find parent")
+                    .tree_id()
+                    .expect("find parent tree")
+                    .detach()
+            })
+            .unwrap_or_else(|| gix::ObjectId::empty_tree(repo.object_hash()));
+        let mut editor = repo.edit_tree(base).expect("edit tree");
+        for (path, mode, bytes) in files {
+            let blob = repo.write_blob(bytes).expect("write blob").detach();
+            editor.upsert(*path, *mode, blob).expect("upsert");
+        }
+        let tree = editor.write().expect("write tree").detach();
+        repo.commit("HEAD", message, tree, parent)
+            .expect("commit")
+            .detach()
+    }
+
+    fn commit(repo: &gix::Repository, files: &[(&str, &[u8])], message: &str) -> gix::ObjectId {
+        let files = files
+            .iter()
+            .map(|(path, bytes)| (*path, EntryKind::Blob, *bytes))
+            .collect::<Vec<_>>();
+        commit_entries(repo, &files, message)
+    }
+
+    fn write_index(repo: &gix::Repository, files: &[(&str, &[u8])]) {
+        let mut state = gix::index::State::new(repo.object_hash());
+        for (path, bytes) in files {
+            let id = repo.write_blob(bytes).expect("write staged blob").detach();
+            state.dangerously_push_entry(
+                Default::default(),
+                id,
+                gix::index::entry::Flags::empty(),
+                gix::index::entry::Mode::FILE,
+                path.as_bytes().as_bstr(),
+            );
+        }
+        state.sort_entries();
+        let mut index = gix::index::File::from_state(state, repo.index_path());
+        index.write(Default::default()).expect("write index");
+    }
+
+    fn patch(outcome: DiffOutcome) -> String {
+        let DiffOutcome::Patch(patch) = outcome else {
+            panic!("expected patch, got {outcome:?}");
+        };
+        patch
+    }
+
+    fn assert_change(patch: &str, old: &str, new: &str) {
+        assert!(patch.contains(&format!("\n-{old}\n")), "{patch}");
+        assert!(patch.contains(&format!("\n+{new}\n")), "{patch}");
     }
 
     #[test]
@@ -363,10 +721,6 @@ mod tests {
             DiffSpec::parse("HEAD..:worktree"),
             Some(spec(rev("HEAD"), DiffTarget::Worktree))
         );
-        assert_eq!(
-            DiffSpec::parse(":index..:worktree"),
-            Some(spec(DiffTarget::Index, DiffTarget::Worktree))
-        );
         for raw in ["HEAD", "a..", "..b", "a...b", "a..b..c"] {
             assert_eq!(DiffSpec::parse(raw), None, "{raw:?}");
         }
@@ -380,142 +734,7 @@ mod tests {
     }
 
     #[test]
-    fn selector_args_map_fixed_forms() {
-        let cases = [
-            (spec(rev("a"), rev("b")), vec!["a", "b"]),
-            (spec(rev("a"), DiffTarget::Worktree), vec!["a"]),
-            (spec(rev("a"), DiffTarget::Index), vec!["--cached", "a"]),
-            (spec(DiffTarget::Index, DiffTarget::Worktree), vec![]),
-            (spec(DiffTarget::Worktree, rev("a")), vec!["-R", "a"]),
-            (
-                spec(DiffTarget::Index, rev("a")),
-                vec!["--cached", "-R", "a"],
-            ),
-            (spec(DiffTarget::Worktree, DiffTarget::Index), vec!["-R"]),
-        ];
-        for (spec, expected) in cases {
-            assert_eq!(
-                selector_args(&spec),
-                Some(expected.iter().map(|arg| arg.to_string()).collect()),
-                "{spec:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn selector_args_skip_equal_sides() {
-        for spec in [
-            spec(DiffTarget::Worktree, DiffTarget::Worktree),
-            spec(DiffTarget::Index, DiffTarget::Index),
-            spec(rev("HEAD"), rev("HEAD")),
-        ] {
-            assert_eq!(selector_args(&spec), None, "{spec:?}");
-        }
-    }
-
-    #[test]
-    fn diff_argv_disables_external_diff_programs() {
-        let spec = spec(rev("HEAD"), DiffTarget::Worktree);
-        let argv = diff_argv(&spec, "src/main.rs").unwrap();
-
-        assert_eq!(argv[0], "diff");
-        assert!(argv.contains(&"--no-ext-diff".to_string()));
-        assert!(argv.contains(&"--no-textconv".to_string()));
-        assert!(argv.contains(&"--no-color".to_string()));
-
-        let sep = argv.iter().position(|arg| arg == "--").unwrap();
-        assert_eq!(argv[sep + 1], "src/main.rs");
-    }
-
-    #[test]
-    fn untracked_argv_synthesizes_against_dev_null() {
-        let forward = untracked_argv("notes.md", false);
-        assert_eq!(forward[0], "diff");
-        assert!(forward.contains(&"--no-ext-diff".to_string()));
-        assert!(forward.contains(&"--no-index".to_string()));
-        assert!(!forward.contains(&"-R".to_string()));
-        let sep = forward.iter().position(|arg| arg == "--").unwrap();
-        assert_eq!(forward[sep + 1], "/dev/null");
-        assert_eq!(forward[sep + 2], "notes.md");
-
-        let reversed = untracked_argv("notes.md", true);
-        assert!(reversed.contains(&"-R".to_string()));
-    }
-
-    #[test]
-    fn tracked_argv_probes_one_literal_pathspec() {
-        assert_eq!(
-            tracked_argv("notes.md"),
-            vec!["ls-files", "--error-unmatch", "--", "notes.md"]
-        );
-    }
-
-    #[test]
-    fn worktree_direction_identifies_single_worktree_side() {
-        assert_eq!(
-            worktree_direction(&spec(rev("HEAD"), DiffTarget::Worktree)),
-            Some(false)
-        );
-        assert_eq!(
-            worktree_direction(&spec(DiffTarget::Index, DiffTarget::Worktree)),
-            Some(false)
-        );
-        assert_eq!(
-            worktree_direction(&spec(DiffTarget::Worktree, rev("HEAD"))),
-            Some(true)
-        );
-        assert_eq!(
-            worktree_direction(&spec(DiffTarget::Worktree, DiffTarget::Index)),
-            Some(true)
-        );
-        assert_eq!(worktree_direction(&spec(rev("a"), rev("b"))), None);
-        assert_eq!(
-            worktree_direction(&spec(rev("HEAD"), DiffTarget::Index)),
-            None
-        );
-        assert_eq!(
-            worktree_direction(&spec(DiffTarget::Worktree, DiffTarget::Worktree)),
-            None
-        );
-    }
-
-    #[test]
-    fn read_capped_reports_truncation_and_errors() {
-        struct FailingReader;
-        impl Read for FailingReader {
-            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
-                Err(std::io::Error::other("broken pipe"))
-            }
-        }
-
-        let (raw, truncated) = read_capped(&b"short"[..], 16).unwrap();
-        assert_eq!(raw, b"short");
-        assert!(!truncated);
-
-        let (raw, truncated) = read_capped(&b"0123456789"[..], 4).unwrap();
-        assert_eq!(raw, b"0123");
-        assert!(truncated);
-
-        assert!(read_capped(FailingReader, 4).is_err());
-    }
-
-    #[test]
-    fn shape_truncated_patch_drops_torn_lines_and_bytes() {
-        let complete = shape_truncated_patch(b"line one\nline two\n");
-        assert!(complete.starts_with("line one\nline two"));
-        assert!(complete.ends_with("[patch truncated at 1 MiB]\n"));
-
-        let torn = shape_truncated_patch(b"line one\npartial li");
-        assert!(torn.starts_with("line one\n["));
-        assert!(!torn.contains("partial"));
-
-        let invalid = shape_truncated_patch(b"line one\ntail\xff\xfe");
-        assert!(!invalid.contains('\u{fffd}'));
-        assert!(invalid.starts_with("line one\n["));
-    }
-
-    #[test]
-    fn unified_diff_is_clean_for_equal_sides_without_spawning() {
+    fn equal_targets_are_clean_without_opening_a_repo() {
         let outcome = unified_diff(
             Path::new("/nonexistent"),
             &spec(DiffTarget::Worktree, DiffTarget::Worktree),
@@ -525,17 +744,374 @@ mod tests {
     }
 
     #[test]
-    fn failure_line_reports_first_meaningful_line() {
-        assert_eq!(
-            failure_line(
-                b"\nfatal: ambiguous argument 'nope'\nhint: more\n",
-                "git diff failed",
+    fn modifies_a_tracked_file() {
+        let td = TempDir::new("ghrm-diff-modify");
+        let repo = init_repo(td.path());
+        commit(&repo, &[("a.txt", b"a\nb\nc\n")], "add a");
+        fs::write(td.path().join("a.txt"), b"a\nB\nc\n").unwrap();
+
+        let patch = patch(unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "a.txt",
+        ));
+
+        assert!(patch.starts_with("diff --git a/a.txt b/a.txt\n"), "{patch}");
+        assert!(patch.contains("--- a/a.txt\n+++ b/a.txt\n"), "{patch}");
+        assert!(patch.contains("@@"), "{patch}");
+        assert_change(&patch, "b", "B");
+    }
+
+    #[test]
+    fn adds_an_untracked_file() {
+        let td = TempDir::new("ghrm-diff-add");
+        let repo = init_repo(td.path());
+        commit(&repo, &[("keep.txt", b"keep\n")], "keep");
+        fs::write(td.path().join("new.txt"), b"one\ntwo\n").unwrap();
+
+        let patch = patch(unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "new.txt",
+        ));
+
+        assert!(patch.contains("new file mode 100644"), "{patch}");
+        assert!(patch.contains("--- /dev/null\n+++ b/new.txt\n"), "{patch}");
+        assert!(patch.contains("+one"), "{patch}");
+        assert!(patch.contains("+two"), "{patch}");
+    }
+
+    #[test]
+    fn deletes_a_removed_file() {
+        let td = TempDir::new("ghrm-diff-delete");
+        let repo = init_repo(td.path());
+        commit(&repo, &[("gone.txt", b"one\ntwo\n")], "add gone");
+        // no worktree file, so the worktree side is absent
+
+        let patch = patch(unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "gone.txt",
+        ));
+
+        assert!(patch.contains("deleted file mode 100644"), "{patch}");
+        assert!(patch.contains("--- a/gone.txt\n+++ /dev/null\n"), "{patch}");
+        assert!(patch.contains("-one"), "{patch}");
+        assert!(patch.contains("-two"), "{patch}");
+    }
+
+    #[test]
+    fn clean_when_the_worktree_matches_the_revision() {
+        let td = TempDir::new("ghrm-diff-clean");
+        let repo = init_repo(td.path());
+        commit(&repo, &[("a.txt", b"same\n")], "add a");
+        fs::write(td.path().join("a.txt"), b"same\n").unwrap();
+
+        let outcome = unified_diff(td.path(), &spec(rev("HEAD"), DiffTarget::Worktree), "a.txt");
+
+        assert_eq!(outcome, DiffOutcome::Clean);
+    }
+
+    #[test]
+    fn binary_content_reports_a_notice() {
+        let td = TempDir::new("ghrm-diff-binary");
+        let repo = init_repo(td.path());
+        commit(&repo, &[("blob.bin", b"\x00\x01\x02old")], "add blob");
+        fs::write(td.path().join("blob.bin"), b"\x00\x01\x02new").unwrap();
+
+        let patch = patch(unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "blob.bin",
+        ));
+
+        assert!(patch.contains("Binary files"), "{patch}");
+    }
+
+    #[test]
+    fn unchanged_binary_content_is_clean() {
+        let td = TempDir::new("ghrm-diff-binary-clean");
+        let repo = init_repo(td.path());
+        let content = b"\x00\x01\x02same";
+        commit(&repo, &[("blob.bin", content)], "add blob");
+        fs::write(td.path().join("blob.bin"), content).unwrap();
+
+        let outcome = unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "blob.bin",
+        );
+
+        assert_eq!(outcome, DiffOutcome::Clean);
+    }
+
+    #[test]
+    fn compares_every_distinct_target_pair() {
+        let td = TempDir::new("ghrm-diff-matrix");
+        let repo = init_repo(td.path());
+        let old = commit(&repo, &[("a.txt", b"old\n")], "old");
+        let head = commit(&repo, &[("a.txt", b"head\n")], "head");
+        write_index(&repo, &[("a.txt", b"staged\n")]);
+        fs::write(td.path().join("a.txt"), b"worktree\n").unwrap();
+
+        let old = rev(&old.to_string());
+        let head = rev(&head.to_string());
+        let cases = [
+            (spec(old.clone(), head.clone()), "old", "head"),
+            (spec(head.clone(), DiffTarget::Index), "head", "staged"),
+            (spec(head.clone(), DiffTarget::Worktree), "head", "worktree"),
+            (
+                spec(DiffTarget::Index, DiffTarget::Worktree),
+                "staged",
+                "worktree",
             ),
-            "ambiguous argument 'nope'"
+            (spec(DiffTarget::Index, head.clone()), "staged", "head"),
+            (spec(DiffTarget::Worktree, head), "worktree", "head"),
+            (
+                spec(DiffTarget::Worktree, DiffTarget::Index),
+                "worktree",
+                "staged",
+            ),
+        ];
+        for (spec, old, new) in cases {
+            let patch = patch(unified_diff(td.path(), &spec, "a.txt"));
+            assert_change(&patch, old, new);
+        }
+    }
+
+    #[test]
+    fn normalizes_worktree_line_endings_from_attributes() {
+        let td = TempDir::new("ghrm-diff-eol");
+        let repo = init_repo(td.path());
+        commit(
+            &repo,
+            &[
+                (".gitattributes", b"a.txt text eol=lf\n"),
+                ("a.txt", b"one\ntwo\n"),
+            ],
+            "add text",
         );
-        assert_eq!(
-            failure_line(b"", "git ls-files failed"),
-            "git ls-files failed"
+        fs::write(td.path().join(".gitattributes"), b"a.txt text eol=lf\n").unwrap();
+        fs::write(td.path().join("a.txt"), b"one\r\ntwo\r\n").unwrap();
+
+        let outcome = unified_diff(td.path(), &spec(rev("HEAD"), DiffTarget::Worktree), "a.txt");
+
+        assert_eq!(outcome, DiffOutcome::Clean);
+    }
+
+    #[test]
+    fn honors_the_binary_diff_attribute() {
+        let td = TempDir::new("ghrm-diff-attribute-binary");
+        let repo = init_repo(td.path());
+        commit(
+            &repo,
+            &[(".gitattributes", b"a.txt -diff\n"), ("a.txt", b"old\n")],
+            "add binary attribute",
         );
+        fs::write(td.path().join(".gitattributes"), b"a.txt -diff\n").unwrap();
+        fs::write(td.path().join("a.txt"), b"new\n").unwrap();
+
+        let patch = patch(unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "a.txt",
+        ));
+
+        assert!(patch.contains("Binary files"), "{patch}");
+        assert!(!patch.contains("-old"), "{patch}");
+    }
+
+    #[test]
+    fn binary_attributes_still_normalize_clean_line_endings() {
+        let td = TempDir::new("ghrm-diff-attribute-binary-clean");
+        let repo = init_repo(td.path());
+        let attrs = b"a.txt -diff text eol=lf\n";
+        commit(
+            &repo,
+            &[(".gitattributes", attrs), ("a.txt", b"one\ntwo\n")],
+            "add binary text attribute",
+        );
+        fs::write(td.path().join(".gitattributes"), attrs).unwrap();
+        fs::write(td.path().join("a.txt"), b"one\r\ntwo\r\n").unwrap();
+
+        let outcome = unified_diff(td.path(), &spec(rev("HEAD"), DiffTarget::Worktree), "a.txt");
+
+        assert_eq!(outcome, DiffOutcome::Clean);
+    }
+
+    #[test]
+    fn repository_filters_are_not_executed() {
+        let td = TempDir::new("ghrm-diff-no-filter-process");
+        let repo = init_repo(td.path());
+        let config = td.path().join(".git/config");
+        let mut text = fs::read_to_string(&config).unwrap();
+        text.push_str(
+            "[filter \"explode\"]\n\tclean = /ghrm-filter-must-not-run\n\trequired = true\n[diff \"explode\"]\n\ttextconv = /ghrm-textconv-must-not-run\n",
+        );
+        fs::write(config, text).unwrap();
+        commit(
+            &repo,
+            &[
+                (".gitattributes", b"a.txt filter=explode diff=explode\n"),
+                ("a.txt", b"old\n"),
+            ],
+            "add filters",
+        );
+        fs::write(
+            td.path().join(".gitattributes"),
+            b"a.txt filter=explode diff=explode\n",
+        )
+        .unwrap();
+        fs::write(td.path().join("a.txt"), b"new\n").unwrap();
+
+        let patch = patch(unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "a.txt",
+        ));
+
+        assert_change(&patch, "old", "new");
+    }
+
+    #[test]
+    fn empty_file_addition_and_deletion_keep_direction() {
+        let add = TempDir::new("ghrm-diff-empty-add");
+        let add_repo = init_repo(add.path());
+        commit(&add_repo, &[("keep.txt", b"keep\n")], "keep");
+        fs::write(add.path().join("empty.txt"), b"").unwrap();
+        let addition = patch(unified_diff(
+            add.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "empty.txt",
+        ));
+        assert!(addition.contains("new file mode 100644"), "{addition}");
+        assert!(
+            addition.contains("--- /dev/null\n+++ b/empty.txt\n"),
+            "{addition}"
+        );
+
+        let delete = TempDir::new("ghrm-diff-empty-delete");
+        let delete_repo = init_repo(delete.path());
+        commit(&delete_repo, &[("empty.txt", b"")], "empty");
+        let deletion = patch(unified_diff(
+            delete.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "empty.txt",
+        ));
+        assert!(deletion.contains("deleted file mode 100644"), "{deletion}");
+        assert!(
+            deletion.contains("--- a/empty.txt\n+++ /dev/null\n"),
+            "{deletion}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn worktree_symlink_uses_the_link_target() {
+        use std::os::unix::fs::symlink;
+
+        let td = TempDir::new("ghrm-diff-symlink");
+        let repo = init_repo(td.path());
+        commit_entries(
+            &repo,
+            &[("link.txt", EntryKind::Link, b"target.txt")],
+            "add link",
+        );
+        fs::write(td.path().join("target.txt"), b"external content\n").unwrap();
+        symlink("target.txt", td.path().join("link.txt")).unwrap();
+
+        let outcome = unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "link.txt",
+        );
+
+        assert_eq!(outcome, DiffOutcome::Clean);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reports_executable_mode_changes() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let td = TempDir::new("ghrm-diff-mode");
+        let repo = init_repo(td.path());
+        commit(&repo, &[("run.sh", b"exit 0\n")], "add script");
+        fs::write(td.path().join("run.sh"), b"exit 0\n").unwrap();
+        let mut permissions = fs::metadata(td.path().join("run.sh"))
+            .unwrap()
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(td.path().join("run.sh"), permissions).unwrap();
+
+        let patch = patch(unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "run.sh",
+        ));
+
+        assert!(patch.contains("old mode 100644"), "{patch}");
+        assert!(patch.contains("new mode 100755"), "{patch}");
+        assert!(!patch.contains("@@"), "{patch}");
+    }
+
+    #[test]
+    fn worktree_read_failures_are_not_deletions() {
+        let td = TempDir::new("ghrm-diff-read-failure");
+        let repo = init_repo(td.path());
+        commit(&repo, &[("a.txt", b"file\n")], "add file");
+        fs::create_dir(td.path().join("a.txt")).unwrap();
+
+        let outcome = unified_diff(td.path(), &spec(rev("HEAD"), DiffTarget::Worktree), "a.txt");
+
+        assert!(matches!(outcome, DiffOutcome::Failed(_)), "{outcome:?}");
+    }
+
+    #[test]
+    fn patch_paths_are_quoted_when_ambiguous() {
+        assert_eq!(patch_path("a", "odd name.txt"), "\"a/odd name.txt\"");
+        assert_eq!(patch_path("b", "tab\tname.txt"), "\"b/tab\\tname.txt\"");
+    }
+
+    #[test]
+    fn reports_missing_final_newlines() {
+        let td = TempDir::new("ghrm-diff-no-newline");
+        let repo = init_repo(td.path());
+        commit(&repo, &[("a.txt", b"old")], "old");
+        fs::write(td.path().join("a.txt"), b"new").unwrap();
+
+        let patch = patch(unified_diff(
+            td.path(),
+            &spec(rev("HEAD"), DiffTarget::Worktree),
+            "a.txt",
+        ));
+
+        assert_eq!(patch.matches("\\ No newline at end of file").count(), 2);
+    }
+
+    #[test]
+    fn unknown_revision_fails() {
+        let td = TempDir::new("ghrm-diff-badrev");
+        let repo = init_repo(td.path());
+        commit(&repo, &[("a.txt", b"a\n")], "add a");
+
+        let outcome = unified_diff(
+            td.path(),
+            &spec(rev("does-not-exist"), DiffTarget::Worktree),
+            "a.txt",
+        );
+
+        assert!(matches!(outcome, DiffOutcome::Failed(_)), "{outcome:?}");
+    }
+
+    #[test]
+    fn hunk_writer_caps_complete_output_lines() {
+        let mut writer = HunkWriter::new("header\n".to_string(), 0, 0, true, true);
+        writer.push(&vec![b'x'; MAX_PATCH_BYTES]);
+        let patch = gix::diff::blob::unified_diff::ConsumeHunk::finish(writer);
+
+        assert!(patch.starts_with("header\n"));
+        assert!(patch.ends_with(TRUNCATION_MARKER));
+        assert!(patch.len() <= MAX_PATCH_BYTES);
     }
 }
