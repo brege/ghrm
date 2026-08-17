@@ -1,13 +1,12 @@
 use super::diff::DiffTarget;
 
+use gix::bstr::ByteSlice;
 use std::io::Read;
 use std::path::Path;
 use std::process::Stdio;
 
 const MAX_OUTPUT_BYTES: usize = 256 * 1024;
-// Annotated tags use the peeled commit date; branches and lightweight tags
-// use the direct commit date.
-const REF_FORMAT: &str = "--format=%(refname)%1f%(refname:short)%1f%(if)%(*committerdate)%(then)%(*committerdate:unix)%(else)%(committerdate:unix)%(end)";
+const MAX_REFS: usize = 100;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct RefList {
@@ -41,29 +40,20 @@ enum GitOut {
     Bytes(Vec<u8>),
 }
 
-// Entry counts are bounded at the git command (--count and -n) and bytes
-// are bounded at the read. for-each-ref hex escapes are %xx while log
-// escapes are %x..; both emit the 0x1f unit separator the parsers split
-// on. Only a failed spawn or a nonzero git status degrades to an empty
-// list; a broken pipe, a read failure, a wait failure, or malformed
-// successful output fails the whole listing.
+// Branches, tags, and the HEAD commit time come from the reference
+// store, bounded to MAX_REFS per class; peel_to_commit resolves both
+// lightweight and annotated tags to their commit timestamp. Recent
+// commits come from git log. A reference-store read failure fails the
+// listing; for commits a broken pipe fails while a failed spawn or
+// nonzero status yields an empty list.
 pub(crate) fn refs_for(root: &Path, rel: &str) -> Option<RefList> {
-    let branches = match run_git(
-        root,
-        &["for-each-ref", "--count=100", REF_FORMAT, "refs/heads"],
-    ) {
-        GitOut::Unavailable => Vec::new(),
-        GitOut::Broken => return None,
-        GitOut::Bytes(raw) => parse_ref_output(&raw, "refs/heads/")?,
-    };
-    let tags = match run_git(
-        root,
-        &["for-each-ref", "--count=100", REF_FORMAT, "refs/tags"],
-    ) {
-        GitOut::Unavailable => Vec::new(),
-        GitOut::Broken => return None,
-        GitOut::Bytes(raw) => parse_ref_output(&raw, "refs/tags/")?,
-    };
+    let repo = gix::open(root).ok()?;
+    let branches = collect_refs(&repo, RefKind::Branches)?;
+    let tags = collect_refs(&repo, RefKind::Tags)?;
+    let head_timestamp = repo
+        .head_commit()
+        .ok()
+        .and_then(|commit| commit_time(&commit));
     let commits = match run_git(
         root,
         &[
@@ -79,17 +69,71 @@ pub(crate) fn refs_for(root: &Path, rel: &str) -> Option<RefList> {
         GitOut::Broken => return None,
         GitOut::Bytes(raw) => parse_commit_output(&raw)?,
     };
-    let head_timestamp = match run_git(root, &["show", "--no-patch", "--format=%ct", "HEAD"]) {
-        GitOut::Unavailable => None,
-        GitOut::Broken => return None,
-        GitOut::Bytes(raw) => Some(parse_timestamp_output(&raw)?),
-    };
     Some(RefList {
         branches,
         tags,
         commits,
         head_timestamp,
     })
+}
+
+enum RefKind {
+    Branches,
+    Tags,
+}
+
+impl RefKind {
+    fn prefix(&self) -> &'static str {
+        match self {
+            RefKind::Branches => "refs/heads/",
+            RefKind::Tags => "refs/tags/",
+        }
+    }
+}
+
+// Enumerate one ref class, bounded to MAX_REFS. A reference whose full
+// name is not a submittable revision or lacks a short label is dropped so
+// every emitted value round-trips through the compare entry point. A
+// reference-store read error propagates as None rather than a short list.
+fn collect_refs(repo: &gix::Repository, kind: RefKind) -> Option<Vec<RefEntry>> {
+    let prefix = kind.prefix();
+    let platform = repo.references().ok()?;
+    let iter = match kind {
+        RefKind::Branches => platform.local_branches(),
+        RefKind::Tags => platform.tags(),
+    }
+    .ok()?;
+    let mut refs = Vec::new();
+    for reference in iter.take(MAX_REFS) {
+        if let Some(entry) = ref_entry(reference.ok()?, prefix) {
+            refs.push(entry);
+        }
+    }
+    Some(refs)
+}
+
+fn ref_entry(mut reference: gix::Reference<'_>, prefix: &str) -> Option<RefEntry> {
+    let full = reference.name().as_bstr().to_str().ok()?.to_string();
+    let label = full.strip_prefix(prefix)?.to_string();
+    if label.is_empty() {
+        return None;
+    }
+    let DiffTarget::Rev(value) = DiffTarget::parse(&full)? else {
+        return None;
+    };
+    let timestamp = reference
+        .peel_to_commit()
+        .ok()
+        .and_then(|commit| commit_time(&commit));
+    Some(RefEntry {
+        value,
+        label,
+        timestamp,
+    })
+}
+
+fn commit_time(commit: &gix::Commit<'_>) -> Option<u64> {
+    u64::try_from(commit.time().ok()?.seconds).ok()
 }
 
 fn run_git(root: &Path, args: &[&str]) -> GitOut {
@@ -123,7 +167,7 @@ fn run_git(root: &Path, args: &[&str]) -> GitOut {
     }
     if capped {
         // A capped read can end mid-record; the torn tail is dropped so
-        // the parsers only see complete lines.
+        // the parser only sees complete lines.
         match raw.iter().rposition(|byte| *byte == b'\n') {
             Some(idx) => raw.truncate(idx + 1),
             None => raw.clear(),
@@ -132,44 +176,8 @@ fn run_git(root: &Path, args: &[&str]) -> GitOut {
     GitOut::Bytes(raw)
 }
 
-fn parse_ref_output(raw: &[u8], prefix: &str) -> Option<Vec<RefEntry>> {
-    parse_ref_lines(std::str::from_utf8(raw).ok()?, prefix)
-}
-
 fn parse_commit_output(raw: &[u8]) -> Option<Vec<CommitEntry>> {
     parse_commit_lines(&String::from_utf8_lossy(raw))
-}
-
-fn parse_timestamp_output(raw: &[u8]) -> Option<u64> {
-    let text = std::str::from_utf8(raw).ok()?;
-    let mut lines = text.lines();
-    let timestamp = lines.next()?.parse().ok()?;
-    (lines.next().is_none()).then_some(timestamp)
-}
-
-fn parse_ref_lines(text: &str, prefix: &str) -> Option<Vec<RefEntry>> {
-    text.lines()
-        .map(|line| {
-            let (full, rest) = line.split_once('\x1f')?;
-            let (short, timestamp) = rest.split_once('\x1f')?;
-            if !full.starts_with(prefix) || short.is_empty() {
-                return None;
-            }
-            let DiffTarget::Rev(value) = DiffTarget::parse(full)? else {
-                return None;
-            };
-            let timestamp = if timestamp.is_empty() {
-                None
-            } else {
-                Some(timestamp.parse().ok()?)
-            };
-            Some(RefEntry {
-                value,
-                label: short.to_string(),
-                timestamp,
-            })
-        })
-        .collect()
 }
 
 fn parse_commit_lines(text: &str) -> Option<Vec<CommitEntry>> {
@@ -199,52 +207,141 @@ fn parse_commit_lines(text: &str) -> Option<Vec<CommitEntry>> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn parse_ref_lines_keeps_full_value_and_short_label() {
-        let text = "refs/heads/main\x1fmain\x1f1723600000\nrefs/heads/feature/x\x1ffeature/x\x1f\n";
+    use crate::testutil::TempDir;
+    use gix::refs::transaction::PreviousValue;
+    use std::fs;
 
-        let branches = parse_ref_lines(text, "refs/heads/").unwrap();
+    fn init_repo(dir: &Path) -> gix::Repository {
+        gix::init(dir).expect("init repository");
+        let config = dir.join(".git/config");
+        let mut text = fs::read_to_string(&config).expect("read repository config");
+        text.push_str("[user]\n\tname = Test\n\temail = test@example.com\n");
+        fs::write(&config, text).unwrap();
+        gix::open(dir).expect("open repository")
+    }
 
-        assert_eq!(
-            branches,
-            vec![
-                RefEntry {
-                    value: "refs/heads/main".to_string(),
-                    label: "main".to_string(),
-                    timestamp: Some(1723600000),
-                },
-                RefEntry {
-                    value: "refs/heads/feature/x".to_string(),
-                    label: "feature/x".to_string(),
-                    timestamp: None,
-                },
-            ]
-        );
+    fn empty_commit(
+        repo: &gix::Repository,
+        parents: &[gix::ObjectId],
+        message: &str,
+    ) -> gix::ObjectId {
+        let tree = gix::ObjectId::empty_tree(repo.object_hash());
+        repo.commit("HEAD", message, tree, parents.iter().copied())
+            .expect("commit")
+            .detach()
     }
 
     #[test]
-    fn parse_ref_lines_rejects_malformed_output() {
-        assert!(parse_ref_lines("no separator line\n", "refs/heads/").is_none());
-        assert!(parse_ref_lines("refs/heads/empty\x1f\x1f1\n", "refs/heads/").is_none());
-        assert!(
-            parse_ref_lines("refs/remotes/origin/main\x1fmain\x1f1\n", "refs/heads/").is_none()
-        );
-        assert!(parse_ref_lines("refs/heads/main\x1fmain\x1fbad\n", "refs/heads/").is_none());
+    fn collects_branches_with_full_ref_values() {
+        let td = TempDir::new("ghrm-refs-branches");
+        let repo = init_repo(td.path());
+        let c1 = empty_commit(&repo, &[], "c1");
+        empty_commit(&repo, &[c1], "c2");
+        repo.reference(
+            "refs/heads/feature",
+            c1,
+            PreviousValue::MustNotExist,
+            "create",
+        )
+        .expect("create branch");
 
-        let long = format!("refs/heads/{}\x1flong\x1f1\n", "a".repeat(256));
-        assert!(parse_ref_lines(&long, "refs/heads/").is_none());
+        let branches = collect_refs(&repo, RefKind::Branches).expect("branch listing");
+        let feature = branches
+            .iter()
+            .find(|entry| entry.label == "feature")
+            .expect("feature branch present");
+
+        assert_eq!(feature.value, "refs/heads/feature");
+        assert!(feature.timestamp.is_some());
     }
 
     #[test]
-    fn parse_ref_output_rejects_non_utf8_identity() {
-        assert!(parse_ref_output(b"refs/heads/bad\xff\x1fbad\x1f1\n", "refs/heads/").is_none());
+    fn collects_tags_with_full_ref_values_and_short_labels() {
+        let td = TempDir::new("ghrm-refs-tags");
+        let repo = init_repo(td.path());
+        let c1 = empty_commit(&repo, &[], "c1");
+        repo.tag_reference("v1", c1, PreviousValue::MustNotExist)
+            .expect("create tag");
+
+        let tags = collect_refs(&repo, RefKind::Tags).expect("tag listing");
+
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].value, "refs/tags/v1");
+        assert_eq!(tags[0].label, "v1");
+        assert!(tags[0].timestamp.is_some());
     }
 
     #[test]
-    fn parse_timestamp_output_accepts_one_unix_timestamp() {
-        assert_eq!(parse_timestamp_output(b"1723600000\n"), Some(1723600000));
-        assert!(parse_timestamp_output(b"not-a-time\n").is_none());
-        assert!(parse_timestamp_output(b"1\n2\n").is_none());
+    fn collects_annotated_tag_commit_timestamp() {
+        let td = TempDir::new("ghrm-refs-annotated");
+        let repo = init_repo(td.path());
+        let c1 = empty_commit(&repo, &[], "c1");
+        let commit_seconds =
+            commit_time(&repo.find_commit(c1).expect("find commit")).expect("commit time");
+        let tagger = gix::actor::SignatureRef {
+            name: "Tagger".into(),
+            email: "tag@example.com".into(),
+            // A tagger timestamp far from the commit's, so a returned commit
+            // time proves peel_to_commit followed the tag object to the commit.
+            time: "1000000000 +0000",
+        };
+        repo.tag(
+            "release",
+            c1,
+            gix::objs::Kind::Commit,
+            Some(tagger),
+            "annotated",
+            PreviousValue::MustNotExist,
+        )
+        .expect("create annotated tag");
+
+        let tags = collect_refs(&repo, RefKind::Tags).expect("tag listing");
+        let release = tags
+            .iter()
+            .find(|entry| entry.label == "release")
+            .expect("annotated tag present");
+
+        assert_eq!(release.value, "refs/tags/release");
+        assert_eq!(release.timestamp, Some(commit_seconds));
+        assert_ne!(release.timestamp, Some(1_000_000_000));
+    }
+
+    #[test]
+    fn bounds_ref_enumeration_to_the_limit() {
+        let td = TempDir::new("ghrm-refs-limit");
+        let repo = init_repo(td.path());
+        let c1 = empty_commit(&repo, &[], "c1");
+        for index in 0..(MAX_REFS + 20) {
+            repo.tag_reference(format!("t{index:04}"), c1, PreviousValue::MustNotExist)
+                .expect("create tag");
+        }
+
+        let tags = collect_refs(&repo, RefKind::Tags).expect("tag listing");
+
+        assert_eq!(tags.len(), MAX_REFS);
+    }
+
+    #[test]
+    fn head_timestamp_reads_the_head_commit() {
+        let td = TempDir::new("ghrm-refs-head");
+        let repo = init_repo(td.path());
+        empty_commit(&repo, &[], "c1");
+
+        let head_timestamp = repo
+            .head_commit()
+            .ok()
+            .and_then(|commit| commit_time(&commit));
+
+        assert!(head_timestamp.is_some());
+    }
+
+    #[test]
+    fn empty_repository_yields_no_branches_or_tags() {
+        let td = TempDir::new("ghrm-refs-empty");
+        let repo = init_repo(td.path());
+
+        assert!(collect_refs(&repo, RefKind::Branches).unwrap().is_empty());
+        assert!(collect_refs(&repo, RefKind::Tags).unwrap().is_empty());
     }
 
     #[test]
