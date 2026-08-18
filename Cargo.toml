@@ -46,7 +46,8 @@ name = "ghrm"
 path = "src/main.rs"
 
 [features]
-default = ["repo", "stats"]
+default = ["gist", "repo", "stats"]
+gist = ["dep:filetime"]
 repo = ["dep:gix"]
 stats = ["repo", "dep:askalono", "dep:onefetch-manifest", "dep:tokei"]
 
@@ -55,7 +56,7 @@ comrak = { version = "0.54", default-features = false, features = ["shortcodes"]
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
-filetime = "0.2"
+filetime = { version = "0.2", optional = true }
 html-escape = "0.2"
 lol_html = "3"
 content_inspector = "0.2"

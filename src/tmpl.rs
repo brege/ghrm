@@ -220,6 +220,7 @@ pub struct ExplorerReadme<'a> {
     pub html: &'a str,
 }
 
+#[cfg(feature = "gist")]
 #[derive(Template)]
 #[template(path = "gist.html")]
 pub struct GistCtx<'a> {
@@ -232,12 +233,14 @@ pub struct GistCtx<'a> {
     pub raw_html: &'a str,
 }
 
+#[cfg(feature = "gist")]
 #[derive(Template)]
 #[template(path = "gist_stash.html")]
 pub struct GistStashCtx<'a> {
     pub entries: &'a [GistStashEntry],
 }
 
+#[cfg(feature = "gist")]
 pub struct GistStashEntry {
     pub id: String,
     pub name: String,
@@ -316,10 +319,12 @@ pub fn explorer(ctx: ExplorerCtx) -> Result<String> {
     Ok(ctx.render()?)
 }
 
+#[cfg(feature = "gist")]
 pub fn gist(ctx: GistCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
 
+#[cfg(feature = "gist")]
 pub fn gist_stash(ctx: GistStashCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
@@ -426,6 +431,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "gist")]
     fn minimal_gist_ctx() -> GistCtx<'static> {
         GistCtx {
             has_paste: true,
@@ -438,6 +444,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "gist")]
     fn minimal_gist_stash_ctx() -> GistStashCtx<'static> {
         static ENTRIES: &[GistStashEntry] = &[];
         GistStashCtx { entries: ENTRIES }
@@ -1054,6 +1061,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "gist")]
     mod gist_contracts {
         use super::*;
 

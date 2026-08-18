@@ -25,6 +25,7 @@ pub struct Resolved {
     pub max_rows: usize,
     #[cfg(feature = "stats")]
     pub stats: crate::stat::Config,
+    #[cfg(feature = "gist")]
     pub gist: bool,
 }
 
@@ -40,6 +41,7 @@ pub struct Input<'a> {
     pub no_excludes: bool,
     pub dangerously_traverse_excludes: bool,
     pub max_rows: Option<usize>,
+    #[cfg(feature = "gist")]
     pub gist: bool,
     pub ghrm_open: Option<String>,
 }
@@ -115,7 +117,12 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
             .clone()
             .unwrap_or_else(crate::config::default_watch_silent),
     )?;
+    #[cfg(feature = "gist")]
     let gist = cli.gist || cfg.gist.enabled.unwrap_or(false);
+    #[cfg(not(feature = "gist"))]
+    if cfg.gist.enabled.is_some() {
+        bail!("the shared paste space requires building ghrm with the gist feature");
+    }
 
     Ok(Resolved {
         target,
@@ -136,6 +143,7 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
         max_rows,
         #[cfg(feature = "stats")]
         stats: cfg.stats.clone().resolve(),
+        #[cfg(feature = "gist")]
         gist,
     })
 }
@@ -245,6 +253,7 @@ pub fn dump(resolved: &Resolved) -> String {
     writeln!(out, "max_rows = {}", resolved.max_rows).unwrap();
     #[cfg(feature = "stats")]
     writeln!(out, "stats.enabled = {}", resolved.stats.enabled).unwrap();
+    #[cfg(feature = "gist")]
     writeln!(out, "gist.enabled = {}", resolved.gist).unwrap();
 
     out
@@ -268,6 +277,7 @@ mod tests {
             no_excludes: false,
             dangerously_traverse_excludes: false,
             max_rows: None,
+            #[cfg(feature = "gist")]
             gist: false,
             ghrm_open: None,
         }
@@ -449,6 +459,20 @@ mod tests {
         assert!(err.contains("statistics require"));
     }
 
+    #[cfg(not(feature = "gist"))]
+    #[test]
+    fn rejects_gist_config_without_gist() {
+        let cfg: Config = toml::from_str(
+            r#"
+            [gist]
+            enabled = true
+            "#,
+        )
+        .unwrap();
+        let err = resolve_err(default_input(), &cfg);
+        assert!(err.contains("shared paste space"));
+    }
+
     #[test]
     fn localhost_bind_does_not_require_auth() {
         let input = Input {
@@ -512,9 +536,11 @@ mod tests {
         assert!(output.contains("watch.silent = .git"));
         #[cfg(feature = "stats")]
         assert!(output.contains("stats.enabled = true"));
+        #[cfg(feature = "gist")]
         assert!(output.contains("gist.enabled = false"));
     }
 
+    #[cfg(feature = "gist")]
     #[test]
     fn gist_disabled_by_default() {
         let resolved = resolve(default_input(), &Config::default()).unwrap();
@@ -522,6 +548,7 @@ mod tests {
         assert!(!resolved.gist);
     }
 
+    #[cfg(feature = "gist")]
     #[test]
     fn cli_gist_enables_gist() {
         let input = Input {
@@ -533,6 +560,7 @@ mod tests {
         assert!(resolved.gist);
     }
 
+    #[cfg(feature = "gist")]
     #[test]
     fn config_gist_enables_gist() {
         let cfg: Config = toml::from_str(

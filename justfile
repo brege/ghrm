@@ -65,6 +65,12 @@ rust:
     cargo check --locked --no-default-features --features repo
     cargo clippy --locked --no-default-features --features repo --all-targets -- --deny warnings
     cargo test --locked --no-default-features --features repo
+    cargo check --locked --no-default-features --features stats
+    cargo clippy --locked --no-default-features --features stats --all-targets -- --deny warnings
+    cargo test --locked --no-default-features --features stats
+    cargo check --locked --no-default-features --features gist
+    cargo clippy --locked --no-default-features --features gist --all-targets -- --deny warnings
+    cargo test --locked --no-default-features --features gist
     cargo check --workspace --locked
     cargo clippy --workspace --all-targets --locked -- --deny warnings
     cargo test --workspace --locked

@@ -33,7 +33,7 @@ pub(crate) fn full_page(
         None => ("", String::new()),
     };
     let source = source_html(&source);
-    let gist_nav = gist_nav_html(runtime_paths.has_gist(), gist_active, false);
+    let gist_nav = gist_nav(runtime_paths, gist_active, false);
     let assets = vendor::plan(r);
     let shell = PageShell {
         title,
@@ -69,7 +69,7 @@ pub(crate) fn fragment(
     gist_active: bool,
 ) -> Response {
     let source_oob = source_oob_html(&source);
-    let gist_oob = gist_nav_html(runtime_paths.has_gist(), gist_active, true);
+    let gist_oob = gist_nav(runtime_paths, gist_active, true);
     let sidebar_oob = match explorer_path {
         Some(path) => explorer_sidebar_html(path, true),
         None => hidden_sidebar_html(true),
@@ -105,6 +105,17 @@ pub(crate) fn source_oob_html(source: &SourceState) -> String {
     source_html_inner(source, true)
 }
 
+#[cfg(feature = "gist")]
+fn gist_nav(runtime_paths: &runtime::Paths, gist_active: bool, oob: bool) -> String {
+    gist_nav_html(runtime_paths.has_gist(), gist_active, oob)
+}
+
+#[cfg(not(feature = "gist"))]
+fn gist_nav(_runtime_paths: &runtime::Paths, _gist_active: bool, _oob: bool) -> String {
+    String::new()
+}
+
+#[cfg(feature = "gist")]
 fn gist_nav_html(show_gist: bool, active: bool, oob: bool) -> String {
     let oob_attr = if oob {
         " hx-swap-oob=\"outerHTML\""
@@ -254,6 +265,7 @@ mod tests {
     use super::*;
     use crate::testutil::TempDir;
 
+    #[cfg(feature = "gist")]
     fn runtime_paths(show_gist: bool) -> runtime::Paths {
         let td = TempDir::new("ghrm-shell-runtime");
         let paths = runtime::Paths::new(td.path(), None).unwrap();
@@ -262,6 +274,12 @@ mod tests {
         } else {
             paths
         }
+    }
+
+    #[cfg(not(feature = "gist"))]
+    fn runtime_paths(_show_gist: bool) -> runtime::Paths {
+        let td = TempDir::new("ghrm-shell-runtime");
+        runtime::Paths::new(td.path(), None).unwrap()
     }
 
     #[cfg(feature = "repo")]
@@ -352,6 +370,7 @@ mod tests {
         assert!(!html.contains("hx-get="));
     }
 
+    #[cfg(feature = "gist")]
     #[test]
     fn gist_nav_uses_home_link_on_gist_pages() {
         let html = gist_nav_html(true, true, false);
@@ -363,6 +382,7 @@ mod tests {
         assert!(!html.contains("id=\"ghrm-gist-link\""));
     }
 
+    #[cfg(feature = "gist")]
     #[test]
     fn gist_nav_uses_gist_link_on_content_pages() {
         let html = gist_nav_html(true, false, false);
@@ -374,6 +394,7 @@ mod tests {
         assert!(!html.contains("id=\"ghrm-home-link\""));
     }
 
+    #[cfg(feature = "gist")]
     #[test]
     fn gist_nav_oob_keeps_stable_slot() {
         let html = gist_nav_html(true, true, true);

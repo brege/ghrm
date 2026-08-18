@@ -38,6 +38,7 @@ impl Paths {
         self
     }
 
+    #[cfg(feature = "gist")]
     pub(crate) fn with_gist(mut self, gist: Option<&Path>) -> Self {
         if let Some(gist) = gist {
             self.rows.push(row("gist", gist));
@@ -49,6 +50,7 @@ impl Paths {
         &self.rows
     }
 
+    #[cfg(feature = "gist")]
     pub(crate) fn has_gist(&self) -> bool {
         self.rows.iter().any(|row| row.label == "gist")
     }
@@ -81,6 +83,7 @@ mod tests {
         assert_eq!(labels, vec!["root", "config", "assets", "vendor"]);
     }
 
+    #[cfg(feature = "gist")]
     #[test]
     fn rows_include_gist_when_enabled() {
         let td = TempDir::new("ghrm-runtime-gist");

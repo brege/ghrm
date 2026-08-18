@@ -577,6 +577,7 @@ mod tests {
             #[cfg(feature = "stats")]
             stats: crate::stat::Config::default(),
             auth: None,
+            #[cfg(feature = "gist")]
             gist: None,
         }
     }

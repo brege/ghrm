@@ -5,6 +5,7 @@ pub(crate) mod assets;
 pub(crate) mod auth;
 pub(crate) mod delivery;
 pub(crate) mod diff;
+#[cfg(feature = "gist")]
 pub(crate) mod gist;
 pub(crate) mod server;
 pub(crate) mod shell;

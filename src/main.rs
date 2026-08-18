@@ -2,6 +2,7 @@ mod config;
 mod dirs;
 mod explorer;
 mod filesystem;
+#[cfg(feature = "gist")]
 mod gist;
 mod http;
 mod options;
@@ -85,6 +86,7 @@ struct Cli {
     #[arg(long, help = "Print resolved configuration and exit")]
     dump_config: bool,
 
+    #[cfg(feature = "gist")]
     #[arg(short = 'g', long, help = "Enable the shared paste space")]
     gist: bool,
 }
@@ -121,6 +123,7 @@ fn main() -> Result<()> {
             no_excludes: cli.no_excludes,
             dangerously_traverse_excludes: cli.dangerously_traverse_excludes,
             max_rows: cli.max_rows,
+            #[cfg(feature = "gist")]
             gist: cli.gist,
             ghrm_open: std::env::var("GHRM_OPEN").ok(),
         },
@@ -162,6 +165,7 @@ fn main() -> Result<()> {
         #[cfg(feature = "stats")]
         stats: resolved.stats,
         auth: resolved.auth,
+        #[cfg(feature = "gist")]
         gist: resolved.gist,
     }))
 }

@@ -2,10 +2,11 @@ use crate::explorer;
 use crate::explorer::view::{ViewConfig, ViewQuery, ViewState};
 use crate::explorer::walk::{NavSet, ViewOpts};
 use crate::explorer::{column, crumbs, filter, view, walk, watch};
+#[cfg(feature = "gist")]
 use crate::gist;
-use crate::http::{
-    about, api, archive, assets, auth, delivery, diff, gist as http_gist, shell, vendor,
-};
+#[cfg(feature = "gist")]
+use crate::http::gist as http_gist;
+use crate::http::{about, api, archive, assets, auth, delivery, diff, shell, vendor};
 use crate::paths;
 use crate::render::{self, Rendered};
 use crate::repo::RepoSet;
@@ -51,6 +52,7 @@ pub struct AppState {
     #[cfg(feature = "stats")]
     pub stats: crate::stat::Config,
     pub auth: Option<Arc<auth::AuthState>>,
+    #[cfg(feature = "gist")]
     pub gist: Option<gist::Store>,
 }
 
@@ -119,6 +121,7 @@ pub struct Options {
     #[cfg(feature = "stats")]
     pub stats: crate::stat::Config,
     pub auth: Option<auth::AuthConfig>,
+    #[cfg(feature = "gist")]
     pub gist: bool,
 }
 
@@ -143,6 +146,7 @@ pub async fn run(options: Options) -> Result<()> {
         #[cfg(feature = "stats")]
         stats,
         auth,
+        #[cfg(feature = "gist")]
         gist,
     } = options;
 
@@ -160,6 +164,7 @@ pub async fn run(options: Options) -> Result<()> {
         .transpose()?
         .map(Arc::new);
     let auth_enabled = auth.is_some();
+    #[cfg(feature = "gist")]
     let gist_store = if gist {
         Some(gist::Store::new()?)
     } else {
@@ -245,9 +250,10 @@ pub async fn run(options: Options) -> Result<()> {
         }
     };
 
-    let runtime_paths = runtime::Paths::new(&target, config_path.as_deref())?
-        .with_gist(gist_store.as_ref().map(|store| store.root()))
-        .with_server(actual, url.clone(), network.clone());
+    let runtime_paths = runtime::Paths::new(&target, config_path.as_deref())?;
+    #[cfg(feature = "gist")]
+    let runtime_paths = runtime_paths.with_gist(gist_store.as_ref().map(|store| store.root()));
+    let runtime_paths = runtime_paths.with_server(actual, url.clone(), network.clone());
 
     let state = AppState {
         target: target.clone(),
@@ -269,13 +275,30 @@ pub async fn run(options: Options) -> Result<()> {
         #[cfg(feature = "stats")]
         stats,
         auth,
+        #[cfg(feature = "gist")]
         gist: gist_store,
     };
+    #[cfg(feature = "gist")]
     if let Some(gist) = &state.gist {
         info!("gist: {}", gist.root().display());
     }
 
-    let protected = protected_routes(state.gist.is_some());
+    let protected = protected_routes();
+    #[cfg(feature = "gist")]
+    let protected = if state.gist.is_some() {
+        protected
+            .route("/_ghrm/gist", get(http_gist::show).post(http_gist::create))
+            .route("/_ghrm/gist/raw", get(http_gist::raw))
+            .route("/_ghrm/gist/raw/{id}", get(http_gist::raw_id))
+            .route("/_ghrm/gist/rename/{id}", post(http_gist::rename))
+            .route("/_ghrm/gist/stash", get(http_gist::stash))
+            .route(
+                "/_ghrm/gist/p/{id}",
+                get(http_gist::show_id).delete(http_gist::delete_id),
+            )
+    } else {
+        protected
+    };
 
     let app = if auth_enabled {
         Router::new()
@@ -316,7 +339,7 @@ pub async fn run(options: Options) -> Result<()> {
     Ok(())
 }
 
-fn protected_routes(gist_enabled: bool) -> Router<AppState> {
+fn protected_routes() -> Router<AppState> {
     let router = Router::new()
         .route("/", get(root))
         .route("/_ghrm/ws", get(ws_handler))
@@ -337,20 +360,7 @@ fn protected_routes(gist_enabled: bool) -> Router<AppState> {
     #[cfg(feature = "repo")]
     let router = router.route("/_ghrm/compare", get(diff::compare));
 
-    if gist_enabled {
-        router
-            .route("/_ghrm/gist", get(http_gist::show).post(http_gist::create))
-            .route("/_ghrm/gist/raw", get(http_gist::raw))
-            .route("/_ghrm/gist/raw/{id}", get(http_gist::raw_id))
-            .route("/_ghrm/gist/rename/{id}", post(http_gist::rename))
-            .route("/_ghrm/gist/stash", get(http_gist::stash))
-            .route(
-                "/_ghrm/gist/p/{id}",
-                get(http_gist::show_id).delete(http_gist::delete_id),
-            )
-    } else {
-        router
-    }
+    router
 }
 
 impl AppState {
