@@ -1,5 +1,5 @@
-use crate::tools::history::time_row;
-use crate::{Context, Row, history};
+use crate::stat::tools::history::time_row;
+use crate::stat::{Context, Row, history};
 use anyhow::Result;
 
 pub fn run(ctx: &Context) -> Result<Vec<Row>> {

@@ -52,15 +52,6 @@ pre-commit run cargo-test --all-files
 pre-commit run cargo-clippy --all-files
 ```
 
-After `ghrm-stat/` changes, run the configured `ghrm-stat` hooks:
-
-```bash
-pre-commit run ghrm-stat-check --all-files
-pre-commit run ghrm-stat-fmt --all-files
-pre-commit run ghrm-stat-test --all-files
-pre-commit run ghrm-stat-clippy --all-files
-```
-
 For repo-wide Rust changes, run `just rust` or `just precommit` depending on whether UI, benchmark, or generated-hook coverage is also needed.
 
 Keep `src/` organized by feature boundary. Do not turn root modules into
@@ -184,7 +175,7 @@ Three projects have shaped ghrm's search, file, and content retrieval:
 [@refs/ripgrep/README.md]: refs/ripgrep/README.md
 [@refs/tokei/README.md]: refs/tokei/README.md
 
-Onefetch has been inspirational for the `ghrm-stat` crate:
+Onefetch has been inspirational for the repository statistics under `src/stat/`:
 
 - onefetch: @refs/onefetch/README.md
 

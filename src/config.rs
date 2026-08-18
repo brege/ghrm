@@ -123,7 +123,7 @@ pub struct WatchConfig {
 #[serde(deny_unknown_fields)]
 pub struct StatsConfig {
     pub enabled: Option<bool>,
-    pub tools: Option<Vec<ghrm_stat::Tool>>,
+    pub tools: Option<Vec<crate::stat::Tool>>,
     pub max_languages: Option<usize>,
     pub max_authors: Option<usize>,
     pub max_churn: Option<usize>,
@@ -132,10 +132,10 @@ pub struct StatsConfig {
 }
 
 impl StatsConfig {
-    pub(crate) fn resolve(self) -> ghrm_stat::Config {
-        let mut stats = ghrm_stat::Config {
+    pub(crate) fn resolve(self) -> crate::stat::Config {
+        let mut stats = crate::stat::Config {
             tools: default_stats_tools(),
-            ..ghrm_stat::Config::default()
+            ..crate::stat::Config::default()
         };
         if let Some(enabled) = self.enabled {
             stats.enabled = enabled;
@@ -162,21 +162,21 @@ impl StatsConfig {
     }
 }
 
-fn default_stats_tools() -> Vec<ghrm_stat::Tool> {
+fn default_stats_tools() -> Vec<crate::stat::Tool> {
     vec![
-        ghrm_stat::Tool::Project,
-        ghrm_stat::Tool::Version,
-        ghrm_stat::Tool::License,
-        ghrm_stat::Tool::Url,
-        ghrm_stat::Tool::Head,
-        ghrm_stat::Tool::Created,
-        ghrm_stat::Tool::LastChange,
-        ghrm_stat::Tool::Authors,
-        ghrm_stat::Tool::Commits,
-        ghrm_stat::Tool::Churn,
-        ghrm_stat::Tool::Size,
-        ghrm_stat::Tool::Loc,
-        ghrm_stat::Tool::Languages,
+        crate::stat::Tool::Project,
+        crate::stat::Tool::Version,
+        crate::stat::Tool::License,
+        crate::stat::Tool::Url,
+        crate::stat::Tool::Head,
+        crate::stat::Tool::Created,
+        crate::stat::Tool::LastChange,
+        crate::stat::Tool::Authors,
+        crate::stat::Tool::Commits,
+        crate::stat::Tool::Churn,
+        crate::stat::Tool::Size,
+        crate::stat::Tool::Loc,
+        crate::stat::Tool::Languages,
     ]
 }
 
@@ -375,9 +375,9 @@ mod tests {
         assert_eq!(
             stats.tools,
             vec![
-                ghrm_stat::Tool::Project,
-                ghrm_stat::Tool::Languages,
-                ghrm_stat::Tool::Size
+                crate::stat::Tool::Project,
+                crate::stat::Tool::Languages,
+                crate::stat::Tool::Size
             ]
         );
         assert_eq!(stats.max_languages, 4);
@@ -392,8 +392,8 @@ mod tests {
         let stats = StatsConfig::default().resolve();
 
         assert_eq!(stats.tools, default_stats_tools());
-        assert!(!stats.tools.contains(&ghrm_stat::Tool::Title));
-        assert!(!stats.tools.contains(&ghrm_stat::Tool::Description));
+        assert!(!stats.tools.contains(&crate::stat::Tool::Title));
+        assert!(!stats.tools.contains(&crate::stat::Tool::Description));
     }
 
     #[test]

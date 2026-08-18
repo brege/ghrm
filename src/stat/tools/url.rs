@@ -1,4 +1,4 @@
-use crate::{Context, Row, repo};
+use crate::stat::{Context, Row, repo};
 use anyhow::Result;
 
 pub fn run(ctx: &Context) -> Result<Vec<Row>> {
@@ -20,7 +20,7 @@ mod tests {
     use std::fs;
 
     fn repo_with_config(name: &str, body: &str) -> (std::path::PathBuf, gix::Repository) {
-        let dir = std::env::temp_dir().join(format!("ghrm-stat-url-{name}"));
+        let dir = std::env::temp_dir().join(format!("ghrm-url-stat-{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         gix::init(&dir).expect("init repository");

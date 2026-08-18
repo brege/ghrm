@@ -53,7 +53,7 @@ The UI workspace owns maintained browser source, icon declarations, and the vali
 | src/islands/gist/editor.ts | gist editor island |
 | src/islands/gist/stash.ts | gist stash island |
 
-The global `ghrm-menus` island controls elements that declare `data-ghrm-menu-toggle`, `data-ghrm-menu-panel`, and optional nested `data-ghrm-menu-disclosure` attributes. It owns open state, dismissal, focus restoration, and floating-panel positioning. About and ghrm-stat expansions retain their dedicated behavior.
+The global `ghrm-menus` island controls elements that declare `data-ghrm-menu-toggle`, `data-ghrm-menu-panel`, and optional nested `data-ghrm-menu-disclosure` attributes. It owns open state, dismissal, focus restoration, and floating-panel positioning. About and statistics expansions retain their dedicated behavior.
 
 ## Tests
 

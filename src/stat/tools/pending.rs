@@ -1,4 +1,4 @@
-use crate::{Context, Row, repo};
+use crate::stat::{Context, Row, repo};
 use anyhow::Result;
 
 pub fn run(ctx: &Context) -> Result<Vec<Row>> {

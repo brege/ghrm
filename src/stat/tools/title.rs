@@ -1,4 +1,4 @@
-use crate::{Context, Row, repo};
+use crate::stat::{Context, Row, repo};
 use anyhow::Result;
 
 pub fn run(ctx: &Context) -> Result<Vec<Row>> {
@@ -22,7 +22,7 @@ mod tests {
     // A repository with user.name set only in local config, so the read is
     // independent of the machine's global git configuration.
     fn repo_with_user(name: &str, body: &str) -> (std::path::PathBuf, gix::Repository) {
-        let dir = std::env::temp_dir().join(format!("ghrm-stat-title-{name}"));
+        let dir = std::env::temp_dir().join(format!("ghrm-title-stat-{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         gix::init(&dir).expect("init repository");

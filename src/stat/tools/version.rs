@@ -1,4 +1,4 @@
-use crate::{Context, Row, metadata, repo};
+use crate::stat::{Context, Row, metadata, repo};
 use anyhow::Result;
 use gix::Repository;
 

@@ -1,4 +1,3 @@
-pub mod filesystem;
 pub mod tools;
 
 use anyhow::{Context as AnyhowContext, Result, anyhow};
@@ -153,16 +152,6 @@ impl RowMetric {
             value: value.into(),
         }
     }
-}
-
-pub fn resolve(input: &Path, tools: &[Tool]) -> Result<Report> {
-    resolve_with_config(
-        input,
-        Config {
-            tools: tools.to_vec(),
-            ..Config::default()
-        },
-    )
 }
 
 pub fn resolve_with_config(input: &Path, config: Config) -> Result<Report> {

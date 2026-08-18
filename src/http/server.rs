@@ -48,7 +48,7 @@ pub struct AppState {
     pub search_max_rows: usize,
     pub home: Option<PathBuf>,
     pub runtime_paths: runtime::Paths,
-    pub stats: ghrm_stat::Config,
+    pub stats: crate::stat::Config,
     pub auth: Option<Arc<auth::AuthState>>,
     pub gist: Option<gist::Store>,
 }
@@ -115,7 +115,7 @@ pub struct Options {
     pub show_excludes: bool,
     pub search_max_rows: usize,
     pub config_path: Option<PathBuf>,
-    pub stats: ghrm_stat::Config,
+    pub stats: crate::stat::Config,
     pub auth: Option<auth::AuthConfig>,
     pub gist: bool,
 }

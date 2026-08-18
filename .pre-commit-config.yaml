@@ -15,56 +15,28 @@ repos:
         entry: cargo check --locked
         language: system
         pass_filenames: false
-        files: ^(src/|lua/|build\.rs|assets/config\.json|Cargo\.toml|Cargo\.lock|clippy\.toml|rustfmt\.toml)
+        files: ^(src/|resources/|lua/|build\.rs|assets/config\.json|Cargo\.toml|Cargo\.lock|clippy\.toml|rustfmt\.toml)
 
       - id: cargo-fmt
         name: cargo fmt
         entry: cargo fmt --all --check
         language: system
         pass_filenames: false
-        files: ^(src/|lua/|build\.rs|assets/config\.json|Cargo\.toml|Cargo\.lock|clippy\.toml|rustfmt\.toml)
+        files: ^(src/|resources/|lua/|build\.rs|assets/config\.json|Cargo\.toml|Cargo\.lock|clippy\.toml|rustfmt\.toml)
 
       - id: cargo-test
         name: cargo test
         entry: cargo test --locked
         language: system
         pass_filenames: false
-        files: ^(src/|lua/|build\.rs|assets/config\.json|Cargo\.toml|Cargo\.lock|clippy\.toml|rustfmt\.toml)
+        files: ^(src/|resources/|lua/|build\.rs|assets/config\.json|Cargo\.toml|Cargo\.lock|clippy\.toml|rustfmt\.toml)
 
       - id: cargo-clippy
         name: cargo clippy
         entry: cargo clippy --all-targets --locked -- -D warnings
         language: system
         pass_filenames: false
-        files: ^(src/|lua/|build\.rs|assets/config\.json|Cargo\.toml|Cargo\.lock|clippy\.toml|rustfmt\.toml)
-
-      - id: ghrm-stat-check
-        name: ghrm-stat check
-        entry: cargo check --manifest-path ghrm-stat/Cargo.toml --locked
-        language: system
-        pass_filenames: false
-        files: ^ghrm-stat/(src/|Cargo\.toml|Cargo\.lock)
-
-      - id: ghrm-stat-fmt
-        name: ghrm-stat fmt
-        entry: cargo fmt --manifest-path ghrm-stat/Cargo.toml --check
-        language: system
-        pass_filenames: false
-        files: ^ghrm-stat/(src/|Cargo\.toml|Cargo\.lock)
-
-      - id: ghrm-stat-test
-        name: ghrm-stat test
-        entry: cargo test --manifest-path ghrm-stat/Cargo.toml --locked
-        language: system
-        pass_filenames: false
-        files: ^ghrm-stat/(src/|Cargo\.toml|Cargo\.lock)
-
-      - id: ghrm-stat-clippy
-        name: ghrm-stat clippy
-        entry: cargo clippy --manifest-path ghrm-stat/Cargo.toml --all-targets --locked -- -D warnings
-        language: system
-        pass_filenames: false
-        files: ^ghrm-stat/(src/|Cargo\.toml|Cargo\.lock)
+        files: ^(src/|resources/|lua/|build\.rs|assets/config\.json|Cargo\.toml|Cargo\.lock|clippy\.toml|rustfmt\.toml)
 
       - id: ruff-check
         name: ruff check

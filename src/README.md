@@ -80,7 +80,18 @@ Git repository code sits behind the repo namespace.
 | --- | --- |
 | repo.rs | repo namespace |
 | repo/diff.rs | unified diff engine |
-| repo/history.rs | commit history walk |
+| repo/history.rs | commit walk and file history |
 | repo/refs.rs | refs and commit metadata |
 | repo/remote.rs | remote URL and forge detection |
 | repo/root.rs | repository discovery and source metadata |
+
+## Stat
+
+Repository statistics code sits behind the stat namespace. Filesystem scanning is a root module because the about panel uses it without a repository.
+
+| Path | Purpose |
+| --- | --- |
+| stat.rs | statistics report types, config, and resolver |
+| stat/tools.rs | statistics tool registry |
+| stat/tools/ | per-tool collectors for history, languages, license, and metadata |
+| filesystem.rs | filesystem scan totals, sizes, and filter summaries |

@@ -23,7 +23,7 @@ pub struct Resolved {
     pub exclude_names: Vec<String>,
     pub watch_silent: Vec<String>,
     pub max_rows: usize,
-    pub stats: ghrm_stat::Config,
+    pub stats: crate::stat::Config,
     pub gist: bool,
 }
 

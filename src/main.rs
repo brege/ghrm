@@ -1,6 +1,7 @@
 mod config;
 mod dirs;
 mod explorer;
+mod filesystem;
 mod gist;
 mod http;
 mod options;
@@ -10,6 +11,7 @@ mod render;
 mod repo;
 mod runtime;
 mod search;
+mod stat;
 #[cfg(test)]
 mod testutil;
 mod tmpl;

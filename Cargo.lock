@@ -1130,6 +1130,7 @@ name = "ghrm"
 version = "0.5.4"
 dependencies = [
  "anyhow",
+ "askalono",
  "askama",
  "axum",
  "base64 0.23.1",
@@ -1142,8 +1143,6 @@ dependencies = [
  "filetime",
  "form_urlencoded",
  "futures-util",
- "ghrm-git",
- "ghrm-stat",
  "gix",
  "grep-matcher",
  "grep-regex",
@@ -1156,11 +1155,14 @@ dependencies = [
  "lol_html",
  "notify",
  "notify-debouncer-full",
+ "onefetch-manifest",
  "percent-encoding",
  "serde",
  "serde_json",
  "sha2",
+ "sysinfo",
  "tar",
+ "tokei",
  "tokio",
  "tokio-util",
  "toml 1.1.4+spec-1.1.0",
@@ -1171,31 +1173,6 @@ dependencies = [
  "webbrowser",
  "zip",
  "zstd",
-]
-
-[[package]]
-name = "ghrm-git"
-version = "0.5.4"
-dependencies = [
- "anyhow",
- "gix",
-]
-
-[[package]]
-name = "ghrm-stat"
-version = "0.5.4"
-dependencies = [
- "anyhow",
- "askalono",
- "clap",
- "ghrm-git",
- "gix",
- "ignore",
- "onefetch-manifest",
- "serde",
- "serde_json",
- "sysinfo",
- "tokei",
 ]
 
 [[package]]

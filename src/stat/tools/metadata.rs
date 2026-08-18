@@ -61,7 +61,7 @@ mod tests {
 
     #[test]
     fn load_reads_package_json_metadata() {
-        let td = TempDir::new("ghrm-stat-metadata-package");
+        let td = TempDir::new("ghrm-metadata-package");
         fs::write(
             td.path().join("package.json"),
             r#"{"name":"app","description":"test app","version":"1.2.3","license":"MIT"}"#,
@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn load_ignores_unparsed_manifests() {
-        let td = TempDir::new("ghrm-stat-metadata-invalid");
+        let td = TempDir::new("ghrm-metadata-invalid");
         fs::write(td.path().join("Cargo.toml"), "[package]\n").unwrap();
 
         let metadata = load(td.path()).unwrap();

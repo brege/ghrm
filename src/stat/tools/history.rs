@@ -1,4 +1,4 @@
-use crate::{Row, RowMetric};
+use crate::stat::{Row, RowMetric};
 use anyhow::{Context, Result};
 use gix::bstr::ByteSlice;
 use std::collections::HashMap;
@@ -11,7 +11,6 @@ pub struct History {
     pub commits: usize,
     pub authors: Vec<Author>,
     pub churn: Vec<Churn>,
-    pub churn_limit: usize,
     pub first_commit: Option<u64>,
     pub last_commit: Option<u64>,
 }
@@ -19,7 +18,6 @@ pub struct History {
 #[derive(Clone, Debug)]
 pub struct Author {
     pub name: String,
-    pub email: String,
     pub commits: usize,
     pub contribution: usize,
 }
@@ -47,7 +45,7 @@ pub fn load(root: &Path, churn_limit: usize) -> Result<History> {
     let mut first_commit = None;
     let mut last_commit = None;
 
-    ghrm_git::walk(&repo, |commit| {
+    crate::repo::history::walk(&repo, |commit| {
         commits += 1;
         last_commit.get_or_insert(commit.time);
         first_commit = Some(commit.time);
@@ -70,11 +68,6 @@ pub fn load(root: &Path, churn_limit: usize) -> Result<History> {
         commits,
         authors: authors_vec(authors, commits),
         churn: churn_vec(churn),
-        churn_limit: if churn_limit == 0 {
-            churn_commits
-        } else {
-            churn_limit.min(commits)
-        },
         first_commit,
         last_commit,
     })
@@ -114,7 +107,6 @@ fn authors_vec(authors: HashMap<Signature, usize>, total: usize) -> Vec<Author> 
         .into_iter()
         .map(|(signature, commits)| Author {
             name: signature.name,
-            email: signature.email,
             commits,
             contribution: percent(commits, total),
         })
@@ -193,7 +185,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
-        let base = std::env::temp_dir().join(format!("ghrm-stat-history-{name}"));
+        let base = std::env::temp_dir().join(format!("ghrm-history-stat-{name}"));
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base).unwrap();
         base
@@ -267,7 +259,6 @@ mod tests {
         let history = load(&dir, 1).expect("history");
 
         assert_eq!(history.commits, 2);
-        assert_eq!(history.churn_limit, 1);
         assert_eq!(history.churn.len(), 1);
         assert_eq!(history.churn[0].path, "README.md");
 

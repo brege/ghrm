@@ -1,5 +1,5 @@
 pub(crate) mod diff;
-mod history;
+pub(crate) mod history;
 pub(crate) mod refs;
 mod remote;
 mod root;

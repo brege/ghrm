@@ -1,4 +1,4 @@
-use crate::{Context, Row, config, language_summary};
+use crate::stat::{Context, Row, config, language_summary};
 use anyhow::Result;
 
 pub struct Summary {

@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn filesystem_scan_counts_visible_files_and_filters() {
-        let td = TempDir::new("ghrm-stat-fs");
+        let td = TempDir::new("ghrm-filesystem");
         std::fs::create_dir_all(td.path.join("docs")).unwrap();
         std::fs::create_dir_all(td.path.join("target")).unwrap();
         std::fs::write(td.path.join("docs/guide.md"), "guide").unwrap();

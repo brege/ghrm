@@ -527,7 +527,7 @@ mod tests {
             search_max_rows: 10,
             home: None,
             runtime_paths: runtime::Paths::new(target, None).unwrap(),
-            stats: ghrm_stat::Config::default(),
+            stats: crate::stat::Config::default(),
             auth: None,
             gist: None,
         }

@@ -33,9 +33,9 @@ struct StatDisplay {
     has_timestamp: bool,
 }
 
-const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
+const STAT_DISPLAYS: &[(crate::stat::Tool, StatDisplay)] = &[
     (
-        ghrm_stat::Tool::Title,
+        crate::stat::Tool::Title,
         StatDisplay {
             label: "Title",
             icon: "",
@@ -44,7 +44,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Project,
+        crate::stat::Tool::Project,
         StatDisplay {
             label: "Project",
             icon: "ghrm-icon-table",
@@ -53,7 +53,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Description,
+        crate::stat::Tool::Description,
         StatDisplay {
             label: "Description",
             icon: "",
@@ -62,7 +62,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Head,
+        crate::stat::Tool::Head,
         StatDisplay {
             label: "Head",
             icon: "ghrm-icon-location",
@@ -71,7 +71,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Pending,
+        crate::stat::Tool::Pending,
         StatDisplay {
             label: "Pending",
             icon: "",
@@ -80,7 +80,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Version,
+        crate::stat::Tool::Version,
         StatDisplay {
             label: "Version",
             icon: "ghrm-icon-version",
@@ -89,7 +89,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Created,
+        crate::stat::Tool::Created,
         StatDisplay {
             label: "Created",
             icon: "ghrm-icon-created",
@@ -98,7 +98,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Languages,
+        crate::stat::Tool::Languages,
         StatDisplay {
             label: "Languages",
             icon: "",
@@ -107,7 +107,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Authors,
+        crate::stat::Tool::Authors,
         StatDisplay {
             label: "Authors",
             icon: "ghrm-icon-people",
@@ -116,7 +116,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::LastChange,
+        crate::stat::Tool::LastChange,
         StatDisplay {
             label: "Updated",
             icon: "ghrm-icon-update",
@@ -125,7 +125,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Url,
+        crate::stat::Tool::Url,
         StatDisplay {
             label: "URL",
             icon: "",
@@ -134,7 +134,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Commits,
+        crate::stat::Tool::Commits,
         StatDisplay {
             label: "Commits",
             icon: "ghrm-icon-commit",
@@ -143,7 +143,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Churn,
+        crate::stat::Tool::Churn,
         StatDisplay {
             label: "Churn",
             icon: "ghrm-icon-repeat",
@@ -152,7 +152,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Loc,
+        crate::stat::Tool::Loc,
         StatDisplay {
             label: "LOC",
             icon: "ghrm-icon-loc",
@@ -161,7 +161,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::Size,
+        crate::stat::Tool::Size,
         StatDisplay {
             label: "Size",
             icon: "ghrm-icon-data",
@@ -170,7 +170,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
         },
     ),
     (
-        ghrm_stat::Tool::License,
+        crate::stat::Tool::License,
         StatDisplay {
             label: "License",
             icon: "ghrm-icon-scale",
@@ -180,7 +180,7 @@ const STAT_DISPLAYS: &[(ghrm_stat::Tool, StatDisplay)] = &[
     ),
 ];
 
-fn stat_display(tool: ghrm_stat::Tool) -> &'static StatDisplay {
+fn stat_display(tool: crate::stat::Tool) -> &'static StatDisplay {
     STAT_DISPLAYS
         .iter()
         .find(|(t, _)| *t == tool)
@@ -219,7 +219,7 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     let stats_input_for_repo = stats_input.clone();
     let stats = if stats_cfg.enabled && source != SourceState::NoRepo {
         match tokio::task::spawn_blocking(move || {
-            ghrm_stat::resolve_with_config(&stats_input_for_repo, stats_cfg)
+            crate::stat::resolve_with_config(&stats_input_for_repo, stats_cfg)
                 .map(|report| stats_model(report, &stats_source, &served_root))
         })
         .await
@@ -269,11 +269,10 @@ async fn details_model(
     let fs_config = fs_config(s, view);
     let path = path.to_path_buf();
     let display_path = path.display().to_string();
-    let fs_report =
-        tokio::task::spawn_blocking(move || ghrm_stat::filesystem::scan(&path, &fs_config))
-            .await
-            .context("join filesystem stats task")?
-            .with_context(|| format!("scan filesystem stats for {display_path}"))?;
+    let fs_report = tokio::task::spawn_blocking(move || crate::filesystem::scan(&path, &fs_config))
+        .await
+        .context("join filesystem stats task")?
+        .with_context(|| format!("scan filesystem stats for {display_path}"))?;
 
     details.scope = scope_rows(s, &fs_report);
     details.directory = directory_rows(&fs_report);
@@ -281,8 +280,8 @@ async fn details_model(
     Ok(details)
 }
 
-fn fs_config(s: &AppState, view: &view::ViewState) -> ghrm_stat::filesystem::FsConfig {
-    ghrm_stat::filesystem::FsConfig {
+fn fs_config(s: &AppState, view: &view::ViewState) -> crate::filesystem::FsConfig {
+    crate::filesystem::FsConfig {
         hidden: view.opts.show_hidden,
         use_ignore: view.use_ignore,
         show_excludes: view.opts.show_excludes,
@@ -293,14 +292,14 @@ fn fs_config(s: &AppState, view: &view::ViewState) -> ghrm_stat::filesystem::FsC
             .groups()
             .iter()
             .filter_map(|group| {
-                s.filters.group_globs(&group.name).map(|globs| {
-                    ghrm_stat::filesystem::FsFilterGroup {
+                s.filters
+                    .group_globs(&group.name)
+                    .map(|globs| crate::filesystem::FsFilterGroup {
                         name: group.name.clone(),
                         label: group.label.clone(),
                         globs: globs.to_vec(),
                         default_enabled: s.view_cfg.default_groups.contains(&group.name),
-                    }
-                })
+                    })
             })
             .collect(),
     }
@@ -384,21 +383,21 @@ fn source_row(source: &SourceState) -> Option<AboutDetailRow> {
     }
 }
 
-fn scope_rows(s: &AppState, report: &ghrm_stat::filesystem::FsReport) -> Vec<AboutDetailRow> {
+fn scope_rows(s: &AppState, report: &crate::filesystem::FsReport) -> Vec<AboutDetailRow> {
     vec![
         detail_row("served root", served_root(s).display().to_string()),
         detail_row("scan root", display_fs_path(s, &report.root)),
     ]
 }
 
-fn directory_rows(report: &ghrm_stat::filesystem::FsReport) -> Vec<AboutDetailRow> {
+fn directory_rows(report: &crate::filesystem::FsReport) -> Vec<AboutDetailRow> {
     vec![
         detail_row("Visible files", report.totals.files.to_string()),
         detail_row("Directories", report.totals.dirs.to_string()),
         detail_row("Symlinks", report.totals.symlinks.to_string()),
         detail_row(
             "Visible size",
-            ghrm_stat::filesystem::format_bytes(report.totals.bytes),
+            crate::filesystem::format_bytes(report.totals.bytes),
         ),
         detail_row("Depth", level_value(report.max_depth)),
         detail_row(
@@ -411,7 +410,7 @@ fn directory_rows(report: &ghrm_stat::filesystem::FsReport) -> Vec<AboutDetailRo
     ]
 }
 
-fn filter_rows(report: &ghrm_stat::filesystem::FsReport) -> Vec<AboutFilterRow> {
+fn filter_rows(report: &crate::filesystem::FsReport) -> Vec<AboutFilterRow> {
     let mut rows = vec![filter_row("All", false, &report.totals)];
     rows.extend(
         report
@@ -449,13 +448,13 @@ fn detail_link(
 fn filter_row(
     label: impl Into<String>,
     default_enabled: bool,
-    totals: &ghrm_stat::filesystem::FsTotals,
+    totals: &crate::filesystem::FsTotals,
 ) -> AboutFilterRow {
     AboutFilterRow {
         label: label.into(),
         files: totals.files.to_string(),
         dirs: totals.dirs.to_string(),
-        size: ghrm_stat::filesystem::format_bytes(totals.bytes),
+        size: crate::filesystem::format_bytes(totals.bytes),
         default_enabled,
     }
 }
@@ -522,33 +521,37 @@ fn server_error() -> Response {
         .unwrap()
 }
 
-fn stats_model(report: ghrm_stat::Report, source: &SourceState, served_root: &Path) -> AboutStats {
+fn stats_model(
+    report: crate::stat::Report,
+    source: &SourceState,
+    served_root: &Path,
+) -> AboutStats {
     let mut about = AboutStats::default();
     let repo_root = report.root.clone();
     let has_languages = report
         .sections
         .iter()
-        .any(|section| section.tool == ghrm_stat::Tool::Languages && !section.rows.is_empty());
+        .any(|section| section.tool == crate::stat::Tool::Languages && !section.rows.is_empty());
     for section in report.sections {
         match section.tool {
-            ghrm_stat::Tool::Languages => {
+            crate::stat::Tool::Languages => {
                 let (languages, total) = language_rows(&section.rows);
                 about.languages = languages;
                 about.language_total = total;
             }
-            ghrm_stat::Tool::Loc if has_languages => {}
-            ghrm_stat::Tool::Project => about.metadata.extend(project_rows(&section.rows)),
-            ghrm_stat::Tool::Version
-            | ghrm_stat::Tool::License
-            | ghrm_stat::Tool::Url
-            | ghrm_stat::Tool::Title
-            | ghrm_stat::Tool::Description => {
+            crate::stat::Tool::Loc if has_languages => {}
+            crate::stat::Tool::Project => about.metadata.extend(project_rows(&section.rows)),
+            crate::stat::Tool::Version
+            | crate::stat::Tool::License
+            | crate::stat::Tool::Url
+            | crate::stat::Tool::Title
+            | crate::stat::Tool::Description => {
                 if let Some(row) = stat_row(section, source, &repo_root, served_root) {
                     about.metadata.push(row);
                 }
             }
-            ghrm_stat::Tool::Head => about.history.extend(head_rows(&section.rows)),
-            ghrm_stat::Tool::Created | ghrm_stat::Tool::LastChange => {
+            crate::stat::Tool::Head => about.history.extend(head_rows(&section.rows)),
+            crate::stat::Tool::Created | crate::stat::Tool::LastChange => {
                 if let Some(row) = stat_row(section, source, &repo_root, served_root) {
                     about.history.push(row);
                 }
@@ -563,7 +566,7 @@ fn stats_model(report: ghrm_stat::Report, source: &SourceState, served_root: &Pa
     about
 }
 
-fn language_rows(rows: &[ghrm_stat::Row]) -> (Vec<AboutLanguage>, String) {
+fn language_rows(rows: &[crate::stat::Row]) -> (Vec<AboutLanguage>, String) {
     let counts = rows
         .iter()
         .filter(|row| row.key != "total")
@@ -598,7 +601,7 @@ fn language_rows(rows: &[ghrm_stat::Row]) -> (Vec<AboutLanguage>, String) {
 }
 
 fn stat_row(
-    section: ghrm_stat::Section,
+    section: crate::stat::Section,
     source: &SourceState,
     repo_root: &Path,
     served_root: &Path,
@@ -624,30 +627,32 @@ fn stat_row(
     })
 }
 
-fn stat_value(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Option<String> {
+fn stat_value(tool: crate::stat::Tool, rows: &[crate::stat::Row]) -> Option<String> {
     match tool {
-        ghrm_stat::Tool::Pending => pending_value(rows),
-        ghrm_stat::Tool::Languages | ghrm_stat::Tool::Authors | ghrm_stat::Tool::Churn => None,
-        ghrm_stat::Tool::Size => size_value(rows),
-        ghrm_stat::Tool::Loc => row_value(rows, "linesOfCode").map(str::to_string),
-        ghrm_stat::Tool::LastChange => row_value(rows, "lastChange").map(str::to_string),
+        crate::stat::Tool::Pending => pending_value(rows),
+        crate::stat::Tool::Languages | crate::stat::Tool::Authors | crate::stat::Tool::Churn => {
+            None
+        }
+        crate::stat::Tool::Size => size_value(rows),
+        crate::stat::Tool::Loc => row_value(rows, "linesOfCode").map(str::to_string),
+        crate::stat::Tool::LastChange => row_value(rows, "lastChange").map(str::to_string),
         _ => compact_value(rows),
     }
 }
 
-fn stat_title_attr(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> String {
+fn stat_title_attr(tool: crate::stat::Tool, rows: &[crate::stat::Row]) -> String {
     match tool {
-        ghrm_stat::Tool::Commits => row_value(rows, "commits")
+        crate::stat::Tool::Commits => row_value(rows, "commits")
             .map(|commits| format!("{commits} commits"))
             .unwrap_or_default(),
-        ghrm_stat::Tool::Loc => row_value(rows, "linesOfCode")
+        crate::stat::Tool::Loc => row_value(rows, "linesOfCode")
             .map(|lines| format!("{lines} lines of code"))
             .unwrap_or_default(),
         _ => String::new(),
     }
 }
 
-fn stat_title_ts(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Option<u64> {
+fn stat_title_ts(tool: crate::stat::Tool, rows: &[crate::stat::Row]) -> Option<u64> {
     if !stat_display(tool).has_timestamp {
         return None;
     }
@@ -656,7 +661,7 @@ fn stat_title_ts(tool: ghrm_stat::Tool, rows: &[ghrm_stat::Row]) -> Option<u64> 
         .and_then(|value| value.parse().ok())
 }
 
-fn project_rows(rows: &[ghrm_stat::Row]) -> Vec<AboutStatRow> {
+fn project_rows(rows: &[crate::stat::Row]) -> Vec<AboutStatRow> {
     let Some(name) = row_value(rows, "name") else {
         return Vec::new();
     };
@@ -669,7 +674,7 @@ fn project_rows(rows: &[ghrm_stat::Row]) -> Vec<AboutStatRow> {
     ]
 }
 
-fn head_rows(rows: &[ghrm_stat::Row]) -> Vec<AboutStatRow> {
+fn head_rows(rows: &[crate::stat::Row]) -> Vec<AboutStatRow> {
     let Some(commit) = row_value(rows, "commit") else {
         return Vec::new();
     };
@@ -692,7 +697,7 @@ fn meta_row(label: &str, value: &str, icon: &'static str) -> AboutStatRow {
     }
 }
 
-fn pending_value(rows: &[ghrm_stat::Row]) -> Option<String> {
+fn pending_value(rows: &[crate::stat::Row]) -> Option<String> {
     let added = row_value(rows, "added").unwrap_or("0");
     let deleted = row_value(rows, "deleted").unwrap_or("0");
     let modified = row_value(rows, "modified").unwrap_or("0");
@@ -704,7 +709,7 @@ fn pending_value(rows: &[ghrm_stat::Row]) -> Option<String> {
     ))
 }
 
-fn size_value(rows: &[ghrm_stat::Row]) -> Option<String> {
+fn size_value(rows: &[crate::stat::Row]) -> Option<String> {
     let size = row_value(rows, "size")?;
     match row_value(rows, "files") {
         Some(files) => Some(format!("{size} ({files} files)")),
@@ -713,8 +718,8 @@ fn size_value(rows: &[ghrm_stat::Row]) -> Option<String> {
 }
 
 fn stat_items(
-    tool: ghrm_stat::Tool,
-    rows: &[ghrm_stat::Row],
+    tool: crate::stat::Tool,
+    rows: &[crate::stat::Row],
     repo_root: &Path,
     served_root: &Path,
 ) -> Vec<AboutStatItem> {
@@ -731,10 +736,10 @@ fn stat_items(
         .collect()
 }
 
-fn stat_item_metrics(tool: ghrm_stat::Tool, row: &ghrm_stat::Row) -> Vec<AboutStatMetric> {
+fn stat_item_metrics(tool: crate::stat::Tool, row: &crate::stat::Row) -> Vec<AboutStatMetric> {
     match tool {
-        ghrm_stat::Tool::Authors => author_metrics(row),
-        ghrm_stat::Tool::Churn => vec![AboutStatMetric {
+        crate::stat::Tool::Authors => author_metrics(row),
+        crate::stat::Tool::Churn => vec![AboutStatMetric {
             value: row.value.clone(),
             label: String::new(),
             title: format!("{} commits", row.value),
@@ -743,7 +748,7 @@ fn stat_item_metrics(tool: ghrm_stat::Tool, row: &ghrm_stat::Row) -> Vec<AboutSt
     }
 }
 
-fn author_metrics(row: &ghrm_stat::Row) -> Vec<AboutStatMetric> {
+fn author_metrics(row: &crate::stat::Row) -> Vec<AboutStatMetric> {
     let contribution = row_metric(row, "contribution");
     let commits = row_metric(row, "commits");
     let mut out = Vec::new();
@@ -765,12 +770,12 @@ fn author_metrics(row: &ghrm_stat::Row) -> Vec<AboutStatMetric> {
 }
 
 fn stat_item_href(
-    tool: ghrm_stat::Tool,
-    row: &ghrm_stat::Row,
+    tool: crate::stat::Tool,
+    row: &crate::stat::Row,
     repo_root: &Path,
     served_root: &Path,
 ) -> String {
-    if !matches!(tool, ghrm_stat::Tool::Churn) {
+    if !matches!(tool, crate::stat::Tool::Churn) {
         return String::new();
     }
     let path = repo_root.join(&row.key);
@@ -784,39 +789,39 @@ fn stat_item_href(
         .unwrap_or_default()
 }
 
-fn compact_value(rows: &[ghrm_stat::Row]) -> Option<String> {
+fn compact_value(rows: &[crate::stat::Row]) -> Option<String> {
     match rows {
         [row] => Some(row.value.clone()),
         _ => None,
     }
 }
 
-fn row_value<'a>(rows: &'a [ghrm_stat::Row], key: &str) -> Option<&'a str> {
+fn row_value<'a>(rows: &'a [crate::stat::Row], key: &str) -> Option<&'a str> {
     rows.iter()
         .find(|row| row.key == key)
         .map(|row| row.value.as_str())
 }
 
-fn row_metric<'a>(row: &'a ghrm_stat::Row, key: &str) -> Option<&'a str> {
+fn row_metric<'a>(row: &'a crate::stat::Row, key: &str) -> Option<&'a str> {
     row.metrics
         .iter()
         .find(|metric| metric.key == key)
         .map(|metric| metric.value.as_str())
 }
 
-fn stat_title(tool: ghrm_stat::Tool) -> &'static str {
+fn stat_title(tool: crate::stat::Tool) -> &'static str {
     stat_display(tool).label
 }
 
-fn stat_icon(tool: ghrm_stat::Tool, value: &str) -> &'static str {
-    if tool == ghrm_stat::Tool::Url {
+fn stat_icon(tool: crate::stat::Tool, value: &str) -> &'static str {
+    if tool == crate::stat::Tool::Url {
         return forge_icon(value);
     }
     stat_display(tool).icon
 }
 
-fn stat_href(tool: ghrm_stat::Tool, value: &str, source: &SourceState) -> String {
-    if !matches!(tool, ghrm_stat::Tool::Url) {
+fn stat_href(tool: crate::stat::Tool, value: &str, source: &SourceState) -> String {
+    if !matches!(tool, crate::stat::Tool::Url) {
         return String::new();
     }
     match source {
@@ -877,7 +882,7 @@ mod tests {
     #[test]
     fn display_table_covers_all_tools() {
         use clap::ValueEnum;
-        for tool in ghrm_stat::Tool::value_variants() {
+        for tool in crate::stat::Tool::value_variants() {
             let display = stat_display(*tool);
             assert!(
                 !display.label.is_empty(),
@@ -998,39 +1003,39 @@ mod tests {
 
     #[test]
     fn stats_model_structures_scalar_rows() {
-        let mut created = ghrm_stat::Row::new("created", "3 years ago");
+        let mut created = crate::stat::Row::new("created", "3 years ago");
         created
             .metrics
-            .push(ghrm_stat::RowMetric::new("timestamp", "10"));
-        let mut last_change = ghrm_stat::Row::new("lastChange", "2 days ago");
+            .push(crate::stat::RowMetric::new("timestamp", "10"));
+        let mut last_change = crate::stat::Row::new("lastChange", "2 days ago");
         last_change
             .metrics
-            .push(ghrm_stat::RowMetric::new("timestamp", "1700000000"));
-        let report = ghrm_stat::Report {
+            .push(crate::stat::RowMetric::new("timestamp", "1700000000"));
+        let report = crate::stat::Report {
             root: PathBuf::from("/tmp/repo"),
             sections: vec![
-                ghrm_stat::Section::new(
-                    ghrm_stat::Tool::Project,
+                crate::stat::Section::new(
+                    crate::stat::Tool::Project,
                     vec![
-                        ghrm_stat::Row::new("name", "ghrm"),
-                        ghrm_stat::Row::new("branches", "1"),
-                        ghrm_stat::Row::new("tags", "7"),
+                        crate::stat::Row::new("name", "ghrm"),
+                        crate::stat::Row::new("branches", "1"),
+                        crate::stat::Row::new("tags", "7"),
                     ],
                 ),
-                ghrm_stat::Section::new(
-                    ghrm_stat::Tool::Head,
+                crate::stat::Section::new(
+                    crate::stat::Tool::Head,
                     vec![
-                        ghrm_stat::Row::new("commit", "10314cff"),
-                        ghrm_stat::Row::new("refs", "main, origin/main"),
+                        crate::stat::Row::new("commit", "10314cff"),
+                        crate::stat::Row::new("refs", "main, origin/main"),
                     ],
                 ),
-                ghrm_stat::Section::new(ghrm_stat::Tool::Created, vec![created]),
-                ghrm_stat::Section::new(ghrm_stat::Tool::LastChange, vec![last_change]),
-                ghrm_stat::Section::new(
-                    ghrm_stat::Tool::Languages,
+                crate::stat::Section::new(crate::stat::Tool::Created, vec![created]),
+                crate::stat::Section::new(crate::stat::Tool::LastChange, vec![last_change]),
+                crate::stat::Section::new(
+                    crate::stat::Tool::Languages,
                     vec![
-                        ghrm_stat::Row::new("Rust", "6"),
-                        ghrm_stat::Row::new("CSS", "4"),
+                        crate::stat::Row::new("Rust", "6"),
+                        crate::stat::Row::new("CSS", "4"),
                     ],
                 ),
             ],
@@ -1061,28 +1066,28 @@ mod tests {
 
     #[test]
     fn stats_model_preserves_unspecified_about_and_activity_rows() {
-        let report = ghrm_stat::Report {
+        let report = crate::stat::Report {
             root: PathBuf::from("/tmp/repo"),
             sections: vec![
-                ghrm_stat::Section::new(
-                    ghrm_stat::Tool::Title,
-                    vec![ghrm_stat::Row::new("title", "Readable title")],
+                crate::stat::Section::new(
+                    crate::stat::Tool::Title,
+                    vec![crate::stat::Row::new("title", "Readable title")],
                 ),
-                ghrm_stat::Section::new(
-                    ghrm_stat::Tool::Description,
-                    vec![ghrm_stat::Row::new("description", "Short description")],
+                crate::stat::Section::new(
+                    crate::stat::Tool::Description,
+                    vec![crate::stat::Row::new("description", "Short description")],
                 ),
-                ghrm_stat::Section::new(
-                    ghrm_stat::Tool::Pending,
+                crate::stat::Section::new(
+                    crate::stat::Tool::Pending,
                     vec![
-                        ghrm_stat::Row::new("added", "1"),
-                        ghrm_stat::Row::new("deleted", "0"),
-                        ghrm_stat::Row::new("modified", "2"),
+                        crate::stat::Row::new("added", "1"),
+                        crate::stat::Row::new("deleted", "0"),
+                        crate::stat::Row::new("modified", "2"),
                     ],
                 ),
-                ghrm_stat::Section::new(
-                    ghrm_stat::Tool::Loc,
-                    vec![ghrm_stat::Row::new("linesOfCode", "42")],
+                crate::stat::Section::new(
+                    crate::stat::Tool::Loc,
+                    vec![crate::stat::Row::new("linesOfCode", "42")],
                 ),
             ],
         };
@@ -1106,22 +1111,22 @@ mod tests {
         let file = td.path().join("src/main.rs");
         fs::create_dir_all(file.parent().unwrap()).unwrap();
         fs::write(&file, "fn main() {}\n").unwrap();
-        let report = ghrm_stat::Report {
+        let report = crate::stat::Report {
             root: td.path().to_path_buf(),
             sections: vec![
-                ghrm_stat::Section::new(
-                    ghrm_stat::Tool::Authors,
-                    vec![ghrm_stat::Row::with_metrics(
+                crate::stat::Section::new(
+                    crate::stat::Tool::Authors,
+                    vec![crate::stat::Row::with_metrics(
                         "Wyatt Brege",
                         vec![
-                            ghrm_stat::RowMetric::new("contribution", "100"),
-                            ghrm_stat::RowMetric::new("commits", "147"),
+                            crate::stat::RowMetric::new("contribution", "100"),
+                            crate::stat::RowMetric::new("commits", "147"),
                         ],
                     )],
                 ),
-                ghrm_stat::Section::new(
-                    ghrm_stat::Tool::Churn,
-                    vec![ghrm_stat::Row::new("src/main.rs", "7")],
+                crate::stat::Section::new(
+                    crate::stat::Tool::Churn,
+                    vec![crate::stat::Row::new("src/main.rs", "7")],
                 ),
             ],
         };
@@ -1150,11 +1155,11 @@ mod tests {
         let file = repo.path().join("src/main.rs");
         fs::create_dir_all(file.parent().unwrap()).unwrap();
         fs::write(&file, "fn main() {}\n").unwrap();
-        let report = ghrm_stat::Report {
+        let report = crate::stat::Report {
             root: repo.path().to_path_buf(),
-            sections: vec![ghrm_stat::Section::new(
-                ghrm_stat::Tool::Churn,
-                vec![ghrm_stat::Row::new("src/main.rs", "7")],
+            sections: vec![crate::stat::Section::new(
+                crate::stat::Tool::Churn,
+                vec![crate::stat::Row::new("src/main.rs", "7")],
             )],
         };
         let stats = stats_model(report, &SourceState::NoRepo, served.path());
@@ -1164,11 +1169,11 @@ mod tests {
 
     #[test]
     fn url_stats_use_forge_icon() {
-        let report = ghrm_stat::Report {
+        let report = crate::stat::Report {
             root: PathBuf::from("/tmp/repo"),
-            sections: vec![ghrm_stat::Section::new(
-                ghrm_stat::Tool::Url,
-                vec![ghrm_stat::Row::new("url", "git@gitlab.com:team/repo.git")],
+            sections: vec![crate::stat::Section::new(
+                crate::stat::Tool::Url,
+                vec![crate::stat::Row::new("url", "git@gitlab.com:team/repo.git")],
             )],
         };
         let stats = stats_model(report, &SourceState::NoRepo, Path::new("/tmp/repo"));
@@ -1178,11 +1183,14 @@ mod tests {
 
     #[test]
     fn url_stats_link_to_source_web_url() {
-        let report = ghrm_stat::Report {
+        let report = crate::stat::Report {
             root: PathBuf::from("/tmp/repo"),
-            sections: vec![ghrm_stat::Section::new(
-                ghrm_stat::Tool::Url,
-                vec![ghrm_stat::Row::new("url", "git@github.com:brege/ghrm.git")],
+            sections: vec![crate::stat::Section::new(
+                crate::stat::Tool::Url,
+                vec![crate::stat::Row::new(
+                    "url",
+                    "git@github.com:brege/ghrm.git",
+                )],
             )],
         };
         let source = SourceState::Web {
