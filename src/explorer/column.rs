@@ -36,90 +36,115 @@ pub(crate) struct Def {
     render: fn(&RowMeta<'_>) -> CellValue,
 }
 
+#[cfg(feature = "repo")]
+const COMMIT_DEF: Def = Def {
+    key: "commit",
+    config_key: "commit_message",
+    label: "Commit message",
+    title: "Show commit messages",
+    cell_class: "ghrm-nav-meta ghrm-nav-meta-text ghrm-nav-middle-meta",
+    text_class: Some("ghrm-nav-meta-text-value"),
+    edge: false,
+    default_visible: false,
+    requires: MetaReq::COMMIT,
+    render: render_commit_subject,
+};
+
+#[cfg(feature = "repo")]
+const COMMIT_AUTHOR_DEF: Def = Def {
+    key: "commit_author",
+    config_key: "commit_author",
+    label: "Commit author",
+    title: "Show commit authors",
+    cell_class: "ghrm-nav-meta ghrm-nav-meta-text ghrm-nav-middle-meta",
+    text_class: Some("ghrm-nav-meta-text-value"),
+    edge: false,
+    default_visible: false,
+    requires: MetaReq::COMMIT,
+    render: render_commit_author,
+};
+
+#[cfg(feature = "repo")]
+const COMMIT_DATE_DEF: Def = Def {
+    key: "commit_date",
+    config_key: "commit_date",
+    label: "Commit date",
+    title: "Show commit dates",
+    cell_class: "ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta",
+    text_class: None,
+    edge: true,
+    default_visible: false,
+    requires: MetaReq::COMMIT,
+    render: render_commit_timestamp,
+};
+
+const SIZE_DEF: Def = Def {
+    key: "size",
+    config_key: "size",
+    label: "Size",
+    title: "Show file sizes",
+    cell_class: "ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta",
+    text_class: None,
+    edge: true,
+    default_visible: false,
+    requires: MetaReq::NONE,
+    render: render_size,
+};
+
+const LINES_DEF: Def = Def {
+    key: "lines",
+    config_key: "lines",
+    label: "Lines",
+    title: "Show line counts",
+    cell_class: "ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta",
+    text_class: None,
+    edge: true,
+    default_visible: false,
+    requires: MetaReq::LINES,
+    render: render_lines,
+};
+
+const DATE_DEF: Def = Def {
+    key: "date",
+    config_key: "date",
+    label: "Modified date",
+    title: "Show file dates",
+    cell_class: "ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta",
+    text_class: None,
+    edge: true,
+    default_visible: true,
+    requires: MetaReq::NONE,
+    render: render_modified,
+};
+
+#[cfg(feature = "repo")]
 pub(crate) const DEFS: &[Def] = &[
-    Def {
-        key: "commit",
-        config_key: "commit_message",
-        label: "Commit message",
-        title: "Show commit messages",
-        cell_class: "ghrm-nav-meta ghrm-nav-meta-text ghrm-nav-middle-meta",
-        text_class: Some("ghrm-nav-meta-text-value"),
-        edge: false,
-        default_visible: false,
-        requires: MetaReq::COMMIT,
-        render: render_commit_subject,
-    },
-    Def {
-        key: "commit_author",
-        config_key: "commit_author",
-        label: "Commit author",
-        title: "Show commit authors",
-        cell_class: "ghrm-nav-meta ghrm-nav-meta-text ghrm-nav-middle-meta",
-        text_class: Some("ghrm-nav-meta-text-value"),
-        edge: false,
-        default_visible: false,
-        requires: MetaReq::COMMIT,
-        render: render_commit_author,
-    },
-    Def {
-        key: "commit_date",
-        config_key: "commit_date",
-        label: "Commit date",
-        title: "Show commit dates",
-        cell_class: "ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta",
-        text_class: None,
-        edge: true,
-        default_visible: false,
-        requires: MetaReq::COMMIT,
-        render: render_commit_timestamp,
-    },
-    Def {
-        key: "size",
-        config_key: "size",
-        label: "Size",
-        title: "Show file sizes",
-        cell_class: "ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta",
-        text_class: None,
-        edge: true,
-        default_visible: false,
-        requires: MetaReq::NONE,
-        render: render_size,
-    },
-    Def {
-        key: "lines",
-        config_key: "lines",
-        label: "Lines",
-        title: "Show line counts",
-        cell_class: "ghrm-nav-meta ghrm-nav-meta-number ghrm-nav-edge-meta",
-        text_class: None,
-        edge: true,
-        default_visible: false,
-        requires: MetaReq::LINES,
-        render: render_lines,
-    },
-    Def {
-        key: "date",
-        config_key: "date",
-        label: "Modified date",
-        title: "Show file dates",
-        cell_class: "ghrm-nav-meta ghrm-nav-meta-time ghrm-nav-edge-meta",
-        text_class: None,
-        edge: true,
-        default_visible: true,
-        requires: MetaReq::NONE,
-        render: render_modified,
-    },
+    COMMIT_DEF,
+    COMMIT_AUTHOR_DEF,
+    COMMIT_DATE_DEF,
+    SIZE_DEF,
+    LINES_DEF,
+    DATE_DEF,
 ];
+
+#[cfg(not(feature = "repo"))]
+pub(crate) const DEFS: &[Def] = &[SIZE_DEF, LINES_DEF, DATE_DEF];
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct RowMeta<'a> {
     pub(crate) modified: Option<u64>,
     pub(crate) size: Option<u64>,
     pub(crate) lines: Option<u64>,
+    #[cfg(feature = "repo")]
     pub(crate) commit_subject: Option<&'a str>,
+    #[cfg(feature = "repo")]
     pub(crate) commit_author: Option<&'a str>,
+    #[cfg(feature = "repo")]
     pub(crate) commit_email: Option<&'a str>,
+    #[cfg(feature = "repo")]
     pub(crate) commit_timestamp: Option<u64>,
+    #[cfg(not(feature = "repo"))]
+    pub(crate) lifetime: std::marker::PhantomData<&'a ()>,
 }
 
 impl RowMeta<'_> {
@@ -152,21 +177,25 @@ impl CellValue {
         }
     }
 
+    #[cfg(feature = "repo")]
     fn with_title(mut self, title: Option<String>) -> Self {
         self.title = title;
         self
     }
 }
 
+#[cfg(feature = "repo")]
 fn render_commit_subject(meta: &RowMeta<'_>) -> CellValue {
     CellValue::text(meta.commit_subject.map(str::to_string))
 }
 
+#[cfg(feature = "repo")]
 fn render_commit_author(meta: &RowMeta<'_>) -> CellValue {
     CellValue::text(meta.commit_author.map(str::to_string))
         .with_title(meta.commit_email.map(str::to_string))
 }
 
+#[cfg(feature = "repo")]
 fn render_commit_timestamp(meta: &RowMeta<'_>) -> CellValue {
     CellValue::timestamp(meta.commit_timestamp)
 }

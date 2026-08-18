@@ -504,12 +504,15 @@ mod tests {
         assert_eq!(line_cell.text.as_deref(), Some("3"));
         assert!(line_cell.hidden);
 
-        let commit_cell = resp.results[0]
-            .cells
-            .iter()
-            .find(|cell| cell.key == "commit")
-            .unwrap();
-        assert!(commit_cell.hidden);
+        #[cfg(feature = "repo")]
+        {
+            let commit_cell = resp.results[0]
+                .cells
+                .iter()
+                .find(|cell| cell.key == "commit")
+                .unwrap();
+            assert!(commit_cell.hidden);
+        }
 
         let names: Vec<_> = resp.results.into_iter().map(|row| row.display).collect();
         assert_eq!(names, vec!["newer.md", "older.md"]);

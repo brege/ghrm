@@ -132,6 +132,18 @@ pub struct StatsConfig {
 }
 
 impl StatsConfig {
+    #[cfg(not(feature = "stats"))]
+    pub(crate) fn is_explicit(&self) -> bool {
+        self.enabled.is_some()
+            || self.tools.is_some()
+            || self.max_languages.is_some()
+            || self.max_authors.is_some()
+            || self.max_churn.is_some()
+            || self.churn_limit.is_some()
+            || self.include_hidden.is_some()
+    }
+
+    #[cfg(feature = "stats")]
     pub(crate) fn resolve(self) -> crate::stat::Config {
         let mut stats = crate::stat::Config {
             tools: default_stats_tools(),
@@ -162,6 +174,7 @@ impl StatsConfig {
     }
 }
 
+#[cfg(feature = "stats")]
 fn default_stats_tools() -> Vec<crate::stat::Tool> {
     vec![
         crate::stat::Tool::Project,
@@ -284,6 +297,7 @@ mod tests {
         assert!(err.contains("unknown field `extensions`"));
     }
 
+    #[cfg(feature = "repo")]
     #[test]
     fn parses_explorer_columns() {
         let config: Config = toml::from_str(
@@ -354,6 +368,22 @@ mod tests {
         assert!(err.contains("unknown explorer column `bogus`"));
     }
 
+    #[cfg(not(feature = "repo"))]
+    #[test]
+    fn rejects_commit_columns_without_repo() {
+        let err = toml::from_str::<Config>(
+            r#"
+                [explorer.columns]
+                commit_message = true
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(err.contains("unknown explorer column `commit_message`"));
+    }
+
+    #[cfg(feature = "stats")]
     #[test]
     fn parses_stats_config() {
         let config: Config = toml::from_str(
@@ -387,6 +417,7 @@ mod tests {
         assert!(stats.include_hidden);
     }
 
+    #[cfg(feature = "stats")]
     #[test]
     fn default_stats_config_uses_about_pane_tools() {
         let stats = StatsConfig::default().resolve();

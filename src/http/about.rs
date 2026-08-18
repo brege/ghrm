@@ -1,14 +1,17 @@
+use crate::explorer::view;
 use crate::explorer::view::ViewQuery;
-use crate::explorer::{view, walk};
+#[cfg(feature = "stats")]
+use crate::explorer::walk;
 use crate::http::server::{AppState, Mode};
 use crate::http::shell;
 use crate::paths;
 use crate::repo::SourceState;
 use crate::runtime;
-use crate::tmpl::{
-    self, AboutDetailRow, AboutDetails, AboutFilterRow, AboutLanguage, AboutPeek, AboutStatItem,
-    AboutStatMetric, AboutStatRow, AboutStats,
-};
+#[cfg(any(feature = "stats", test))]
+use crate::tmpl::AboutStatRow;
+use crate::tmpl::{self, AboutDetailRow, AboutDetails, AboutFilterRow, AboutPeek, AboutStats};
+#[cfg(feature = "stats")]
+use crate::tmpl::{AboutLanguage, AboutStatItem, AboutStatMetric};
 
 use anyhow::{Context, Result};
 use axum::{
@@ -22,10 +25,12 @@ use std::path::{Path, PathBuf};
 use tracing::warn;
 
 const PROJECT_URL: &str = "https://github.com/brege/ghrm";
+#[cfg(feature = "stats")]
 const LANGUAGE_COLORS: &[&str] = &[
     "#d19a66", "#8b5cf6", "#f1e05a", "#e34c26", "#3572a5", "#000080",
 ];
 
+#[cfg(feature = "stats")]
 struct StatDisplay {
     label: &'static str,
     icon: &'static str,
@@ -33,6 +38,7 @@ struct StatDisplay {
     has_timestamp: bool,
 }
 
+#[cfg(feature = "stats")]
 const STAT_DISPLAYS: &[(crate::stat::Tool, StatDisplay)] = &[
     (
         crate::stat::Tool::Title,
@@ -180,6 +186,7 @@ const STAT_DISPLAYS: &[(crate::stat::Tool, StatDisplay)] = &[
     ),
 ];
 
+#[cfg(feature = "stats")]
 fn stat_display(tool: crate::stat::Tool) -> &'static StatDisplay {
     STAT_DISPLAYS
         .iter()
@@ -213,36 +220,41 @@ async fn show_inner(s: AppState, raw_query: Option<String>, q: AboutQuery) -> Re
     let view = view::from_query(&q.view, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let source = s.repos.source_for(&stats_path);
     let stats_input = stats_input_path(&stats_path);
-    let served_root = served_root(&s);
-    let stats_cfg = s.stats.clone();
-    let stats_source = source.clone();
-    let stats_input_for_repo = stats_input.clone();
-    let stats = if stats_cfg.enabled && source != SourceState::NoRepo {
-        match tokio::task::spawn_blocking(move || {
-            crate::stat::resolve_with_config(&stats_input_for_repo, stats_cfg)
-                .map(|report| stats_model(report, &stats_source, &served_root))
-        })
-        .await
-        {
-            Ok(Ok(stats)) => stats,
-            Ok(Err(e)) => {
-                warn!(
-                    "repository stats failed for {}: {e:#}",
-                    stats_input.display()
-                );
-                AboutStats::default()
+    #[cfg(feature = "stats")]
+    let stats = {
+        let served_root = served_root(&s);
+        let stats_cfg = s.stats.clone();
+        let stats_source = source.clone();
+        let stats_input_for_repo = stats_input.clone();
+        if stats_cfg.enabled && source != SourceState::NoRepo {
+            match tokio::task::spawn_blocking(move || {
+                crate::stat::resolve_with_config(&stats_input_for_repo, stats_cfg)
+                    .map(|report| stats_model(report, &stats_source, &served_root))
+            })
+            .await
+            {
+                Ok(Ok(stats)) => stats,
+                Ok(Err(e)) => {
+                    warn!(
+                        "repository stats failed for {}: {e:#}",
+                        stats_input.display()
+                    );
+                    AboutStats::default()
+                }
+                Err(e) => {
+                    warn!(
+                        "repository stats task failed for {}: {e}",
+                        stats_input.display()
+                    );
+                    AboutStats::default()
+                }
             }
-            Err(e) => {
-                warn!(
-                    "repository stats task failed for {}: {e}",
-                    stats_input.display()
-                );
-                AboutStats::default()
-            }
+        } else {
+            AboutStats::default()
         }
-    } else {
-        AboutStats::default()
     };
+    #[cfg(not(feature = "stats"))]
+    let stats = AboutStats::default();
     if q.sidebar {
         return Ok(html_response(&shell::sidebar_html(&stats, false)));
     }
@@ -376,8 +388,11 @@ fn runtime_details(
 
 fn source_row(source: &SourceState) -> Option<AboutDetailRow> {
     match source {
+        #[cfg(feature = "repo")]
         SourceState::Web { url, .. } => Some(detail_link("source", url.clone(), url.clone())),
+        #[cfg(feature = "repo")]
         SourceState::Transport { raw } => Some(detail_row("source", raw.clone())),
+        #[cfg(feature = "repo")]
         SourceState::NoRemote => Some(detail_row("source", "git repo / no remote")),
         SourceState::NoRepo => None,
     }
@@ -521,6 +536,7 @@ fn server_error() -> Response {
         .unwrap()
 }
 
+#[cfg(feature = "stats")]
 fn stats_model(
     report: crate::stat::Report,
     source: &SourceState,
@@ -566,6 +582,7 @@ fn stats_model(
     about
 }
 
+#[cfg(feature = "stats")]
 fn language_rows(rows: &[crate::stat::Row]) -> (Vec<AboutLanguage>, String) {
     let counts = rows
         .iter()
@@ -600,6 +617,7 @@ fn language_rows(rows: &[crate::stat::Row]) -> (Vec<AboutLanguage>, String) {
     (languages, total.to_string())
 }
 
+#[cfg(feature = "stats")]
 fn stat_row(
     section: crate::stat::Section,
     source: &SourceState,
@@ -627,6 +645,7 @@ fn stat_row(
     })
 }
 
+#[cfg(feature = "stats")]
 fn stat_value(tool: crate::stat::Tool, rows: &[crate::stat::Row]) -> Option<String> {
     match tool {
         crate::stat::Tool::Pending => pending_value(rows),
@@ -640,6 +659,7 @@ fn stat_value(tool: crate::stat::Tool, rows: &[crate::stat::Row]) -> Option<Stri
     }
 }
 
+#[cfg(feature = "stats")]
 fn stat_title_attr(tool: crate::stat::Tool, rows: &[crate::stat::Row]) -> String {
     match tool {
         crate::stat::Tool::Commits => row_value(rows, "commits")
@@ -652,6 +672,7 @@ fn stat_title_attr(tool: crate::stat::Tool, rows: &[crate::stat::Row]) -> String
     }
 }
 
+#[cfg(feature = "stats")]
 fn stat_title_ts(tool: crate::stat::Tool, rows: &[crate::stat::Row]) -> Option<u64> {
     if !stat_display(tool).has_timestamp {
         return None;
@@ -661,6 +682,7 @@ fn stat_title_ts(tool: crate::stat::Tool, rows: &[crate::stat::Row]) -> Option<u
         .and_then(|value| value.parse().ok())
 }
 
+#[cfg(feature = "stats")]
 fn project_rows(rows: &[crate::stat::Row]) -> Vec<AboutStatRow> {
     let Some(name) = row_value(rows, "name") else {
         return Vec::new();
@@ -674,6 +696,7 @@ fn project_rows(rows: &[crate::stat::Row]) -> Vec<AboutStatRow> {
     ]
 }
 
+#[cfg(feature = "stats")]
 fn head_rows(rows: &[crate::stat::Row]) -> Vec<AboutStatRow> {
     let Some(commit) = row_value(rows, "commit") else {
         return Vec::new();
@@ -685,6 +708,7 @@ fn head_rows(rows: &[crate::stat::Row]) -> Vec<AboutStatRow> {
     out
 }
 
+#[cfg(feature = "stats")]
 fn meta_row(label: &str, value: &str, icon: &'static str) -> AboutStatRow {
     AboutStatRow {
         label: label.to_string(),
@@ -697,6 +721,7 @@ fn meta_row(label: &str, value: &str, icon: &'static str) -> AboutStatRow {
     }
 }
 
+#[cfg(feature = "stats")]
 fn pending_value(rows: &[crate::stat::Row]) -> Option<String> {
     let added = row_value(rows, "added").unwrap_or("0");
     let deleted = row_value(rows, "deleted").unwrap_or("0");
@@ -709,6 +734,7 @@ fn pending_value(rows: &[crate::stat::Row]) -> Option<String> {
     ))
 }
 
+#[cfg(feature = "stats")]
 fn size_value(rows: &[crate::stat::Row]) -> Option<String> {
     let size = row_value(rows, "size")?;
     match row_value(rows, "files") {
@@ -717,6 +743,7 @@ fn size_value(rows: &[crate::stat::Row]) -> Option<String> {
     }
 }
 
+#[cfg(feature = "stats")]
 fn stat_items(
     tool: crate::stat::Tool,
     rows: &[crate::stat::Row],
@@ -736,6 +763,7 @@ fn stat_items(
         .collect()
 }
 
+#[cfg(feature = "stats")]
 fn stat_item_metrics(tool: crate::stat::Tool, row: &crate::stat::Row) -> Vec<AboutStatMetric> {
     match tool {
         crate::stat::Tool::Authors => author_metrics(row),
@@ -748,6 +776,7 @@ fn stat_item_metrics(tool: crate::stat::Tool, row: &crate::stat::Row) -> Vec<Abo
     }
 }
 
+#[cfg(feature = "stats")]
 fn author_metrics(row: &crate::stat::Row) -> Vec<AboutStatMetric> {
     let contribution = row_metric(row, "contribution");
     let commits = row_metric(row, "commits");
@@ -769,6 +798,7 @@ fn author_metrics(row: &crate::stat::Row) -> Vec<AboutStatMetric> {
     out
 }
 
+#[cfg(feature = "stats")]
 fn stat_item_href(
     tool: crate::stat::Tool,
     row: &crate::stat::Row,
@@ -789,6 +819,7 @@ fn stat_item_href(
         .unwrap_or_default()
 }
 
+#[cfg(feature = "stats")]
 fn compact_value(rows: &[crate::stat::Row]) -> Option<String> {
     match rows {
         [row] => Some(row.value.clone()),
@@ -796,12 +827,14 @@ fn compact_value(rows: &[crate::stat::Row]) -> Option<String> {
     }
 }
 
+#[cfg(feature = "stats")]
 fn row_value<'a>(rows: &'a [crate::stat::Row], key: &str) -> Option<&'a str> {
     rows.iter()
         .find(|row| row.key == key)
         .map(|row| row.value.as_str())
 }
 
+#[cfg(feature = "stats")]
 fn row_metric<'a>(row: &'a crate::stat::Row, key: &str) -> Option<&'a str> {
     row.metrics
         .iter()
@@ -809,10 +842,12 @@ fn row_metric<'a>(row: &'a crate::stat::Row, key: &str) -> Option<&'a str> {
         .map(|metric| metric.value.as_str())
 }
 
+#[cfg(feature = "stats")]
 fn stat_title(tool: crate::stat::Tool) -> &'static str {
     stat_display(tool).label
 }
 
+#[cfg(feature = "stats")]
 fn stat_icon(tool: crate::stat::Tool, value: &str) -> &'static str {
     if tool == crate::stat::Tool::Url {
         return forge_icon(value);
@@ -820,6 +855,7 @@ fn stat_icon(tool: crate::stat::Tool, value: &str) -> &'static str {
     stat_display(tool).icon
 }
 
+#[cfg(feature = "stats")]
 fn stat_href(tool: crate::stat::Tool, value: &str, source: &SourceState) -> String {
     if !matches!(tool, crate::stat::Tool::Url) {
         return String::new();
@@ -831,6 +867,7 @@ fn stat_href(tool: crate::stat::Tool, value: &str, source: &SourceState) -> Stri
     }
 }
 
+#[cfg(feature = "stats")]
 fn forge_icon(value: &str) -> &'static str {
     if value.contains("github.com") {
         return "ghrm-icon-github";
@@ -861,10 +898,12 @@ mod tests {
         runtime::Paths::new(td.path(), None).unwrap()
     }
 
+    #[cfg(feature = "stats")]
     fn about_row<'a>(rows: &'a [AboutStatRow], label: &str) -> &'a AboutStatRow {
         rows.iter().find(|row| row.label == label).unwrap()
     }
 
+    #[cfg(feature = "stats")]
     fn metric_values(item: &AboutStatItem) -> Vec<&str> {
         item.metrics
             .iter()
@@ -872,6 +911,7 @@ mod tests {
             .collect()
     }
 
+    #[cfg(feature = "stats")]
     fn metric_titles(item: &AboutStatItem) -> Vec<&str> {
         item.metrics
             .iter()
@@ -879,6 +919,7 @@ mod tests {
             .collect()
     }
 
+    #[cfg(feature = "stats")]
     #[test]
     fn display_table_covers_all_tools() {
         use clap::ValueEnum;
@@ -1001,6 +1042,7 @@ mod tests {
         assert_eq!(stats_input_path(&file), td.path());
     }
 
+    #[cfg(feature = "stats")]
     #[test]
     fn stats_model_structures_scalar_rows() {
         let mut created = crate::stat::Row::new("created", "3 years ago");
@@ -1064,6 +1106,7 @@ mod tests {
         assert_eq!(stats.language_total, "10");
     }
 
+    #[cfg(feature = "stats")]
     #[test]
     fn stats_model_preserves_unspecified_about_and_activity_rows() {
         let report = crate::stat::Report {
@@ -1105,6 +1148,7 @@ mod tests {
         assert_eq!(about_row(&stats.activity, "LOC").value, "42");
     }
 
+    #[cfg(feature = "stats")]
     #[test]
     fn stats_model_structures_list_rows() {
         let td = TempDir::new("ghrm-about-list-stats");
@@ -1148,6 +1192,7 @@ mod tests {
         assert_eq!(metric_titles(churn), vec!["7 commits"]);
     }
 
+    #[cfg(feature = "stats")]
     #[test]
     fn stats_model_omits_churn_links_outside_served_root() {
         let repo = TempDir::new("ghrm-about-churn-repo");
@@ -1167,6 +1212,7 @@ mod tests {
         assert!(stats.activity[0].items[0].href.is_empty());
     }
 
+    #[cfg(feature = "stats")]
     #[test]
     fn url_stats_use_forge_icon() {
         let report = crate::stat::Report {
@@ -1181,6 +1227,7 @@ mod tests {
         assert_eq!(stats.metadata[0].icon, "ghrm-icon-gitlab");
     }
 
+    #[cfg(feature = "stats")]
     #[test]
     fn url_stats_link_to_source_web_url() {
         let report = crate::stat::Report {

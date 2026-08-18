@@ -159,6 +159,7 @@ fn main() -> Result<()> {
         show_excludes: resolved.show_excludes,
         search_max_rows: resolved.max_rows,
         config_path: resolved.config_path,
+        #[cfg(feature = "stats")]
         stats: resolved.stats,
         auth: resolved.auth,
         gist: resolved.gist,

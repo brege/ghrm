@@ -139,13 +139,16 @@ fn gist_nav_html(show_gist: bool, active: bool, oob: bool) -> String {
 fn source_html_inner(source: &SourceState, oob: bool) -> String {
     let oob_attr = if oob { " hx-swap-oob=\"true\"" } else { "" };
     match source {
+        #[cfg(feature = "repo")]
         SourceState::Web { url, raw, .. } => linked_source_html(url, raw, oob_attr),
+        #[cfg(feature = "repo")]
         SourceState::Transport { raw } => plain_source_html(
             "Transport-only remote",
             raw,
             &format!("Transport-only remote: {raw}"),
             oob_attr,
         ),
+        #[cfg(feature = "repo")]
         SourceState::NoRemote => plain_source_html(
             "Git repository has no remote",
             "git repo / no remote",
@@ -172,6 +175,7 @@ fn plain_source_html(aria: &str, text: &str, title: &str, oob_attr: &str) -> Str
     )
 }
 
+#[cfg(feature = "repo")]
 fn linked_source_html(url: &str, raw: &str, oob_attr: &str) -> String {
     let href = html_escape::encode_double_quoted_attribute(url);
     let title_attr = html_escape::encode_double_quoted_attribute(url);
@@ -260,6 +264,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "repo")]
     #[test]
     fn web_source_displays_configured_remote() {
         let html = source_html(&SourceState::Web {
@@ -272,6 +277,7 @@ mod tests {
         assert!(!html.contains("github.com/brege/ghrm</a>"));
     }
 
+    #[cfg(feature = "repo")]
     #[test]
     fn no_remote_source_is_descriptive() {
         let html = source_html(&SourceState::NoRemote);

@@ -1,26 +1,43 @@
-use crate::explorer::view::{self, ViewConfig, ViewQuery, ViewState};
-use crate::http::server::{AppState, HtmxContext, page_crumbs};
-use crate::http::{delivery, shell, vendor};
+use crate::explorer::view::ViewState;
+use crate::http::delivery;
+use crate::http::server::AppState;
+use std::path::Path;
+
+#[cfg(feature = "repo")]
+use crate::explorer::view::{self, ViewConfig, ViewQuery};
+#[cfg(feature = "repo")]
+use crate::http::server::{HtmxContext, page_crumbs};
+#[cfg(feature = "repo")]
+use crate::http::{shell, vendor};
+#[cfg(feature = "repo")]
 use crate::query;
+#[cfg(feature = "repo")]
 use crate::render::Rendered;
+#[cfg(feature = "repo")]
 use crate::repo::diff::{
     DiffOutcome, DiffSpec, DiffTarget, INDEX, Row, RowKind, WORKTREE, unified_diff,
 };
+#[cfg(feature = "repo")]
 use crate::repo::refs::{RefList, refs_for};
+#[cfg(feature = "repo")]
 use crate::tmpl;
-
+#[cfg(feature = "repo")]
 use anyhow::Result;
+#[cfg(feature = "repo")]
 use axum::{
     body::Body,
     extract::{Query, RawQuery, State},
     http::{StatusCode, header},
     response::Response,
 };
+#[cfg(feature = "repo")]
 use percent_encoding::{AsciiSet, CONTROLS, NON_ALPHANUMERIC, utf8_percent_encode};
+#[cfg(feature = "repo")]
 use serde::Deserialize;
-use std::path::Path;
+#[cfg(feature = "repo")]
 use tracing::warn;
 
+#[cfg(feature = "repo")]
 pub(crate) fn spec_from_query(raw_query: Option<&str>) -> Option<DiffSpec> {
     query::parse_pairs(raw_query.unwrap_or(""))
         .iter()
@@ -31,6 +48,7 @@ pub(crate) fn spec_from_query(raw_query: Option<&str>) -> Option<DiffSpec> {
 // The compare form submits base and head; the server canonicalizes that
 // spelling into the single rendered URL grammar with a redirect, so
 // diff=<base>..<head> stays the only public state.
+#[cfg(feature = "repo")]
 pub(crate) fn canonical_query(raw_query: Option<&str>) -> Option<String> {
     let mut pairs = query::parse_pairs(raw_query.unwrap_or(""));
     if pairs.iter().any(|(name, _)| name.as_str() == "diff") {
@@ -53,12 +71,14 @@ pub(crate) fn canonical_query(raw_query: Option<&str>) -> Option<String> {
 // A native GET submission replaces the query string with the form fields,
 // so the form must re-submit the current explorer view state; the pairs
 // come from the same contract that builds view-preserving links.
+#[cfg(feature = "repo")]
 pub(crate) fn view_pairs(view: &ViewState, cfg: &ViewConfig) -> Vec<(String, String)> {
     let href = view::with_view("/", view, cfg);
     let query = href.split_once('?').map(|(_, query)| query).unwrap_or("");
     query::parse_pairs(query)
 }
 
+#[cfg(feature = "repo")]
 pub(crate) fn file_view_attrs(
     s: &AppState,
     path: &Path,
@@ -72,6 +92,18 @@ pub(crate) fn file_view_attrs(
     compare_view_attrs(rel, file_view, None, &view_pairs(view, &s.view_cfg))
 }
 
+#[cfg(not(feature = "repo"))]
+pub(crate) fn file_view_attrs(
+    _: &AppState,
+    _: &Path,
+    rel: &str,
+    file_view: delivery::FileView,
+    _: &ViewState,
+) -> String {
+    delivery::file_view_attrs(rel, file_view)
+}
+
+#[cfg(feature = "repo")]
 fn compare_view_attrs(
     rel: &str,
     view: delivery::FileView,
@@ -101,6 +133,7 @@ fn compare_view_attrs(
 
 // The HTTP path keeps slash separators while each decoded filesystem
 // segment is encoded with the WHATWG special-path segment set.
+#[cfg(feature = "repo")]
 const FILE_SEGMENT: &AsciiSet = &CONTROLS
     .add(b' ')
     .add(b'"')
@@ -115,6 +148,7 @@ const FILE_SEGMENT: &AsciiSet = &CONTROLS
     .add(b'\\')
     .add(b'}');
 
+#[cfg(feature = "repo")]
 fn file_action(rel: &str) -> String {
     let encoded = rel
         .trim_matches('/')
@@ -125,6 +159,7 @@ fn file_action(rel: &str) -> String {
     format!("/{encoded}")
 }
 
+#[cfg(feature = "repo")]
 pub(crate) async fn try_render(
     s: &AppState,
     path: &Path,
@@ -171,6 +206,7 @@ pub(crate) async fn try_render(
     }))
 }
 
+#[cfg(feature = "repo")]
 struct Page<'a> {
     s: &'a AppState,
     path: &'a Path,
@@ -183,6 +219,7 @@ struct Page<'a> {
     hx: HtmxContext,
 }
 
+#[cfg(feature = "repo")]
 fn render_page(page: Page<'_>) -> Response {
     let filename = page
         .path
@@ -256,6 +293,7 @@ fn render_page(page: Page<'_>) -> Response {
     )
 }
 
+#[cfg(feature = "repo")]
 #[derive(Deserialize)]
 pub(crate) struct CompareQuery {
     path: Option<String>,
@@ -264,6 +302,7 @@ pub(crate) struct CompareQuery {
     view: ViewQuery,
 }
 
+#[cfg(feature = "repo")]
 pub(crate) async fn compare(
     State(s): State<AppState>,
     RawQuery(raw_query): RawQuery,
@@ -309,6 +348,7 @@ pub(crate) async fn compare(
     }
 }
 
+#[cfg(feature = "repo")]
 fn compare_fragment(
     action: &str,
     base: &str,
@@ -356,6 +396,7 @@ fn compare_fragment(
     })
 }
 
+#[cfg(feature = "repo")]
 fn ref_label(token: &str, refs: &RefList) -> String {
     match token {
         WORKTREE => return "Working tree".to_string(),
@@ -379,6 +420,7 @@ fn ref_label(token: &str, refs: &RefList) -> String {
 
 // A hand-typed revision like HEAD~2 is valid but absent from the listing;
 // a synthetic first option keeps the picker displaying the URL state.
+#[cfg(feature = "repo")]
 fn unlisted<'a>(token: &'a str, refs: &RefList) -> Option<&'a str> {
     let listed = token == WORKTREE
         || token == INDEX
@@ -389,6 +431,7 @@ fn unlisted<'a>(token: &'a str, refs: &RefList) -> Option<&'a str> {
     (!listed).then_some(token)
 }
 
+#[cfg(feature = "repo")]
 fn raw_html(outcome: &DiffOutcome, spec: &DiffSpec) -> String {
     match outcome {
         DiffOutcome::Patch(patch) => delivery::raw_blob_html(
@@ -412,6 +455,7 @@ fn raw_html(outcome: &DiffOutcome, spec: &DiffSpec) -> String {
 // Serializes the producer's typed gutter rows into `old,new,kind` cells
 // joined by ';'; the browser deserializes them to render the diff gutter
 // without re-parsing the patch. Meta and context lines carry no tint.
+#[cfg(feature = "repo")]
 fn diff_rows_attr(rows: &[Row]) -> String {
     rows.iter()
         .map(|row| {
@@ -429,6 +473,7 @@ fn diff_rows_attr(rows: &[Row]) -> String {
         .join(";")
 }
 
+#[cfg(feature = "repo")]
 fn html_response(html: String) -> Response {
     Response::builder()
         .status(StatusCode::OK)
@@ -437,6 +482,7 @@ fn html_response(html: String) -> Response {
         .unwrap()
 }
 
+#[cfg(feature = "repo")]
 fn not_found() -> Response {
     Response::builder()
         .status(StatusCode::NOT_FOUND)
@@ -445,6 +491,7 @@ fn not_found() -> Response {
         .unwrap()
 }
 
+#[cfg(feature = "repo")]
 fn internal_error() -> Response {
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -453,7 +500,7 @@ fn internal_error() -> Response {
         .unwrap()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "repo"))]
 mod tests {
     use super::*;
     use crate::explorer::column;
@@ -527,6 +574,7 @@ mod tests {
             search_max_rows: 10,
             home: None,
             runtime_paths: runtime::Paths::new(target, None).unwrap(),
+            #[cfg(feature = "stats")]
             stats: crate::stat::Config::default(),
             auth: None,
             gist: None,

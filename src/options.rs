@@ -23,6 +23,7 @@ pub struct Resolved {
     pub exclude_names: Vec<String>,
     pub watch_silent: Vec<String>,
     pub max_rows: usize,
+    #[cfg(feature = "stats")]
     pub stats: crate::stat::Config,
     pub gist: bool,
 }
@@ -46,6 +47,11 @@ pub struct Input<'a> {
 pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
     let target = cli.target.unwrap_or(std::env::current_dir()?);
     let target = target.canonicalize()?;
+
+    #[cfg(not(feature = "stats"))]
+    if cfg.stats.is_explicit() {
+        bail!("statistics require building ghrm with the stats feature");
+    }
 
     let config_path = crate::config::path(cli.config_path)?;
     let exact_port = cli.port.is_some();
@@ -128,6 +134,7 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
         exclude_names,
         watch_silent,
         max_rows,
+        #[cfg(feature = "stats")]
         stats: cfg.stats.clone().resolve(),
         gist,
     })
@@ -236,6 +243,7 @@ pub fn dump(resolved: &Resolved) -> String {
     writeln!(out, "exclude_names = {}", resolved.exclude_names.join(", ")).unwrap();
     writeln!(out, "watch.silent = {}", resolved.watch_silent.join(", ")).unwrap();
     writeln!(out, "max_rows = {}", resolved.max_rows).unwrap();
+    #[cfg(feature = "stats")]
     writeln!(out, "stats.enabled = {}", resolved.stats.enabled).unwrap();
     writeln!(out, "gist.enabled = {}", resolved.gist).unwrap();
 
@@ -427,6 +435,20 @@ mod tests {
         assert!(err.contains("non-loopback bind requires auth.password"));
     }
 
+    #[cfg(not(feature = "stats"))]
+    #[test]
+    fn rejects_stats_config_without_stats() {
+        let cfg: Config = toml::from_str(
+            r#"
+            [stats]
+            enabled = true
+            "#,
+        )
+        .unwrap();
+        let err = resolve_err(default_input(), &cfg);
+        assert!(err.contains("statistics require"));
+    }
+
     #[test]
     fn localhost_bind_does_not_require_auth() {
         let input = Input {
@@ -488,6 +510,7 @@ mod tests {
         assert!(output.contains("dangerously_traverse_excludes = false"));
         assert!(output.contains("extensions = md"));
         assert!(output.contains("watch.silent = .git"));
+        #[cfg(feature = "stats")]
         assert!(output.contains("stats.enabled = true"));
         assert!(output.contains("gist.enabled = false"));
     }

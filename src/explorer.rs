@@ -115,16 +115,27 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
 
     let entries: Vec<ExplorerEntry> = entry_order
         .into_iter()
-        .map(|(idx, e)| {
+        .map(|entry| {
+            #[cfg(feature = "repo")]
+            let (idx, e) = entry;
+            #[cfg(not(feature = "repo"))]
+            let (_, e) = entry;
+            #[cfg(feature = "repo")]
             let commit = entry_paths.get(idx).and_then(|path| commits.get(path));
             let meta = column::RowMeta {
                 modified: e.modified,
                 size: e.size,
                 lines: e.lines,
+                #[cfg(feature = "repo")]
                 commit_subject: commit.map(|commit| commit.subject.as_str()),
+                #[cfg(feature = "repo")]
                 commit_author: commit.map(|commit| commit.author.as_str()),
+                #[cfg(feature = "repo")]
                 commit_email: commit.map(|commit| commit.email.as_str()),
+                #[cfg(feature = "repo")]
                 commit_timestamp: commit.map(|commit| commit.timestamp),
+                #[cfg(not(feature = "repo"))]
+                lifetime: std::marker::PhantomData,
             };
             ExplorerEntry {
                 name: e.name.clone(),

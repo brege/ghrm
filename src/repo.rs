@@ -1,7 +1,12 @@
+#[cfg(feature = "repo")]
 pub(crate) mod diff;
+#[cfg(feature = "repo")]
 pub(crate) mod history;
+#[cfg(feature = "repo")]
 pub(crate) mod refs;
+#[cfg(feature = "repo")]
 mod remote;
+#[cfg(feature = "repo")]
 mod root;
 
 use std::collections::BTreeMap;
@@ -28,18 +33,22 @@ struct RepoEntry {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SourceState {
+    #[cfg(feature = "repo")]
     Web {
         url: String,
         raw: String,
         forge: Forge,
     },
+    #[cfg(feature = "repo")]
     Transport {
         raw: String,
     },
+    #[cfg(feature = "repo")]
     NoRemote,
     NoRepo,
 }
 
+#[cfg(feature = "repo")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Forge {
     GitHub,
@@ -51,9 +60,17 @@ pub enum Forge {
 }
 
 impl RepoSet {
+    #[cfg(feature = "repo")]
     pub fn discover(root: &Path, exclude_names: &[String]) -> Self {
         Self {
             entries: root::discover(root, exclude_names),
+        }
+    }
+
+    #[cfg(not(feature = "repo"))]
+    pub fn discover(_: &Path, _: &[String]) -> Self {
+        Self {
+            entries: Vec::new(),
         }
     }
 
@@ -65,6 +82,7 @@ impl RepoSet {
             .unwrap_or(SourceState::NoRepo)
     }
 
+    #[cfg(feature = "repo")]
     pub fn repo_for(&self, path: &Path) -> Option<(&Path, String)> {
         let entry = self
             .entries
@@ -77,6 +95,7 @@ impl RepoSet {
         Some((entry.root.as_path(), path_key(rel)))
     }
 
+    #[cfg(feature = "repo")]
     pub fn commit_info(&self, paths: &[PathBuf]) -> BTreeMap<PathBuf, CommitInfo> {
         let mut out = BTreeMap::new();
         for entry in &self.entries {
@@ -89,17 +108,24 @@ impl RepoSet {
         }
         out
     }
+
+    #[cfg(not(feature = "repo"))]
+    pub fn commit_info(&self, _: &[PathBuf]) -> BTreeMap<PathBuf, CommitInfo> {
+        BTreeMap::new()
+    }
 }
 
+#[cfg(feature = "repo")]
 fn path_key(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+#[cfg(feature = "repo")]
 fn commit_time(commit: &gix::Commit<'_>) -> Option<u64> {
     u64::try_from(commit.time().ok()?.seconds).ok()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "repo"))]
 mod tests {
     use super::*;
     use crate::testutil::TempDir;

@@ -109,6 +109,7 @@ pub struct PageCtx<'a> {
     pub raw_hidden: bool,
 }
 
+#[cfg(feature = "repo")]
 #[derive(Template)]
 #[template(path = "fragments/compare.html")]
 pub struct CompareCtx<'a> {
@@ -126,12 +127,14 @@ pub struct CompareCtx<'a> {
     pub head_timestamp: Option<u64>,
 }
 
+#[cfg(feature = "repo")]
 pub struct CompareRef {
     pub value: String,
     pub label: String,
     pub timestamp: Option<u64>,
 }
 
+#[cfg(feature = "repo")]
 pub struct CompareCommit {
     pub value: String,
     pub label: String,
@@ -302,6 +305,7 @@ pub fn page(ctx: PageCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
 
+#[cfg(feature = "repo")]
 pub fn compare(ctx: CompareCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
@@ -437,6 +441,7 @@ mod tests {
         GistStashCtx { entries: ENTRIES }
     }
 
+    #[cfg(feature = "repo")]
     mod compare_contracts {
         use super::*;
 

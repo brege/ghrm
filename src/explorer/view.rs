@@ -424,6 +424,7 @@ mod tests {
         assert_eq!(with_view("/", &view, &cfg), "/");
     }
 
+    #[cfg(feature = "repo")]
     #[test]
     fn with_view_preserves_non_default_flags() {
         let cfg = ViewConfig {

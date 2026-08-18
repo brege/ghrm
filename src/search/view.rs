@@ -48,10 +48,16 @@ pub(crate) fn path_response(rows: super::path::Rows, columns: &column::Set) -> P
                 modified: row.modified,
                 size: row.size,
                 lines: row.lines,
+                #[cfg(feature = "repo")]
                 commit_subject: row.commit_subject.as_deref(),
+                #[cfg(feature = "repo")]
                 commit_author: row.commit_author.as_deref(),
+                #[cfg(feature = "repo")]
                 commit_email: row.commit_email.as_deref(),
+                #[cfg(feature = "repo")]
                 commit_timestamp: row.commit_timestamp,
+                #[cfg(not(feature = "repo"))]
+                lifetime: std::marker::PhantomData,
             }
             .cells(columns);
             PathResult {

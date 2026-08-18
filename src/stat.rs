@@ -1,12 +1,19 @@
+#[cfg(feature = "stats")]
 pub mod tools;
 
-use anyhow::{Context as AnyhowContext, Result, anyhow};
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "stats")]
+use anyhow::{Context as AnyhowContext, Result, anyhow};
+#[cfg(feature = "stats")]
 use std::fs;
+#[cfg(feature = "stats")]
 use std::path::{Path, PathBuf};
+#[cfg(feature = "stats")]
 use std::sync::OnceLock;
 
+#[cfg(feature = "stats")]
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Report {
@@ -14,6 +21,7 @@ pub struct Report {
     pub sections: Vec<Section>,
 }
 
+#[cfg(feature = "stats")]
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Section {
@@ -21,6 +29,7 @@ pub struct Section {
     pub rows: Vec<Row>,
 }
 
+#[cfg(feature = "stats")]
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Row {
@@ -31,6 +40,7 @@ pub struct Row {
     pub metrics: Vec<RowMetric>,
 }
 
+#[cfg(feature = "stats")]
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RowMetric {
@@ -59,6 +69,7 @@ pub enum Tool {
     License,
 }
 
+#[cfg(feature = "stats")]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "snake_case")]
 pub struct Config {
@@ -71,6 +82,7 @@ pub struct Config {
     pub include_hidden: bool,
 }
 
+#[cfg(feature = "stats")]
 pub struct Context {
     pub root: PathBuf,
     config: Config,
@@ -80,6 +92,7 @@ pub struct Context {
     metadata: OnceLock<Result<tools::metadata::Metadata, String>>,
 }
 
+#[cfg(feature = "stats")]
 impl Tool {
     pub fn default_set() -> &'static [Self] {
         &[
@@ -103,6 +116,7 @@ impl Tool {
     }
 }
 
+#[cfg(feature = "stats")]
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -117,12 +131,14 @@ impl Default for Config {
     }
 }
 
+#[cfg(feature = "stats")]
 impl Section {
     pub fn new(tool: Tool, rows: Vec<Row>) -> Self {
         Self { tool, rows }
     }
 }
 
+#[cfg(feature = "stats")]
 impl Row {
     pub fn new(key: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
@@ -145,6 +161,7 @@ impl Row {
     }
 }
 
+#[cfg(feature = "stats")]
 impl RowMetric {
     pub fn new(key: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
@@ -154,6 +171,7 @@ impl RowMetric {
     }
 }
 
+#[cfg(feature = "stats")]
 pub fn resolve_with_config(input: &Path, config: Config) -> Result<Report> {
     let repo = gix::discover(input).context("failed to discover git repository")?;
     let workdir = repo
@@ -213,14 +231,17 @@ pub fn resolve_with_config(input: &Path, config: Config) -> Result<Report> {
     })
 }
 
+#[cfg(feature = "stats")]
 pub fn repo(ctx: &Context) -> &gix::Repository {
     &ctx.repo
 }
 
+#[cfg(feature = "stats")]
 pub fn config(ctx: &Context) -> &Config {
     &ctx.config
 }
 
+#[cfg(feature = "stats")]
 pub fn history(ctx: &Context) -> Result<&tools::history::History> {
     let result = ctx.history.get_or_init(|| {
         tools::history::load(&ctx.root, ctx.config.churn_limit).map_err(|err| err.to_string())
@@ -228,6 +249,7 @@ pub fn history(ctx: &Context) -> Result<&tools::history::History> {
     result.as_ref().map_err(|message| anyhow!(message.clone()))
 }
 
+#[cfg(feature = "stats")]
 pub fn language_summary(ctx: &Context) -> Result<&tools::languages::Summary> {
     let result = ctx
         .language_summary
@@ -235,6 +257,7 @@ pub fn language_summary(ctx: &Context) -> Result<&tools::languages::Summary> {
     result.as_ref().map_err(|message| anyhow!(message.clone()))
 }
 
+#[cfg(feature = "stats")]
 pub fn metadata(ctx: &Context) -> Result<&tools::metadata::Metadata> {
     let result = ctx
         .metadata
@@ -242,7 +265,7 @@ pub fn metadata(ctx: &Context) -> Result<&tools::metadata::Metadata> {
     result.as_ref().map_err(|message| anyhow!(message.clone()))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "stats"))]
 mod tests {
     use super::*;
 

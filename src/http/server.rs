@@ -8,7 +8,7 @@ use crate::http::{
 };
 use crate::paths;
 use crate::render::{self, Rendered};
-use crate::repo::{self, RepoSet};
+use crate::repo::RepoSet;
 use crate::runtime;
 use crate::tmpl;
 
@@ -48,6 +48,7 @@ pub struct AppState {
     pub search_max_rows: usize,
     pub home: Option<PathBuf>,
     pub runtime_paths: runtime::Paths,
+    #[cfg(feature = "stats")]
     pub stats: crate::stat::Config,
     pub auth: Option<Arc<auth::AuthState>>,
     pub gist: Option<gist::Store>,
@@ -115,6 +116,7 @@ pub struct Options {
     pub show_excludes: bool,
     pub search_max_rows: usize,
     pub config_path: Option<PathBuf>,
+    #[cfg(feature = "stats")]
     pub stats: crate::stat::Config,
     pub auth: Option<auth::AuthConfig>,
     pub gist: bool,
@@ -138,6 +140,7 @@ pub async fn run(options: Options) -> Result<()> {
         show_excludes,
         search_max_rows,
         config_path,
+        #[cfg(feature = "stats")]
         stats,
         auth,
         gist,
@@ -263,6 +266,7 @@ pub async fn run(options: Options) -> Result<()> {
         search_max_rows,
         home: std::env::var_os("HOME").map(PathBuf::from),
         runtime_paths,
+        #[cfg(feature = "stats")]
         stats,
         auth,
         gist: gist_store,
@@ -321,7 +325,6 @@ fn protected_routes(gist_enabled: bool) -> Router<AppState> {
         .route("/_ghrm/search", get(api::search))
         .route("/_ghrm/render", get(api::render))
         .route("/_ghrm/about", get(about::show))
-        .route("/_ghrm/compare", get(diff::compare))
         .route("/_ghrm/archive/{format}", post(archive::start))
         .route("/_ghrm/archive/{format}/{*path}", post(archive::start))
         .route("/_ghrm/archive-jobs/{id}", get(archive::status))
@@ -330,6 +333,9 @@ fn protected_routes(gist_enabled: bool) -> Router<AppState> {
         .route("/_ghrm/html/{*path}", get(delivery::html_file))
         .route("/_ghrm/download/{*path}", get(delivery::download_file))
         .route("/{*path}", get(any_path));
+
+    #[cfg(feature = "repo")]
+    let router = router.route("/_ghrm/compare", get(diff::compare));
 
     if gist_enabled {
         router
@@ -489,7 +495,8 @@ fn open_browser(url: &str) {
 async fn root(
     State(s): State<AppState>,
     headers: HeaderMap,
-    uri: Uri,
+    #[cfg(feature = "repo")] uri: Uri,
+    #[cfg(not(feature = "repo"))] _: Uri,
     RawQuery(raw_query): RawQuery,
     Query(q): Query<ViewQuery>,
 ) -> Response {
@@ -497,11 +504,17 @@ async fn root(
     let hx = HtmxContext::from_headers(&headers);
     match s.mode {
         Mode::File => {
-            if let Some(canonical) = diff::canonical_query(raw_query.as_deref()) {
-                return canonical_redirect(&uri, &canonical);
+            #[cfg(feature = "repo")]
+            if let Some(res) = canonical_redirect_for(&uri, raw_query.as_deref()) {
+                return res;
             }
-            let diff = diff::spec_from_query(raw_query.as_deref());
-            render_target(&s, &s.target, None, diff, view, hx).await
+            #[cfg(feature = "repo")]
+            if let Some(res) =
+                try_compare(&s, raw_query.as_deref(), &s.target, None, &view, &hx).await
+            {
+                return res;
+            }
+            render_target(&s, &s.target, None, view, hx).await
         }
         Mode::Dir => explorer::render(&s, "", view, hx).await,
     }
@@ -511,19 +524,20 @@ async fn any_path(
     State(s): State<AppState>,
     AxPath(path): AxPath<String>,
     headers: HeaderMap,
-    uri: Uri,
+    #[cfg(feature = "repo")] uri: Uri,
+    #[cfg(not(feature = "repo"))] _: Uri,
     RawQuery(raw_query): RawQuery,
     Query(q): Query<ViewQuery>,
 ) -> Response {
     let view = view::from_query(&q, raw_query.as_deref(), &s.view_cfg, &s.filters);
     let hx = HtmxContext::from_headers(&headers);
     let native = native_file_request(&headers);
-    if let Some(canonical) = diff::canonical_query(raw_query.as_deref()) {
-        return canonical_redirect(&uri, &canonical);
+    #[cfg(feature = "repo")]
+    if let Some(res) = canonical_redirect_for(&uri, raw_query.as_deref()) {
+        return res;
     }
-    let diff = diff::spec_from_query(raw_query.as_deref());
     if s.mode == Mode::File {
-        return serve_file_mode(&s, &path, diff, view, hx, native).await;
+        return serve_file_mode(&s, &path, raw_query.as_deref(), view, hx, native).await;
     }
     let had_trailing = path.ends_with('/');
     let Some((joined, clean)) = dir_target(&s.target, &path) else {
@@ -545,16 +559,16 @@ async fn any_path(
         }
         return explorer::render(&s, &clean, view, hx).await;
     }
-    if let Some(spec) = &diff
-        && let Some(res) = diff::try_render(
-            &s,
-            &joined,
-            Some(s.target.as_path()),
-            spec,
-            &view,
-            hx.clone(),
-        )
-        .await
+    #[cfg(feature = "repo")]
+    if let Some(res) = try_compare(
+        &s,
+        raw_query.as_deref(),
+        &joined,
+        Some(s.target.as_path()),
+        &view,
+        &hx,
+    )
+    .await
     {
         return res;
     }
@@ -579,7 +593,8 @@ fn dir_target(root: &Path, raw: &str) -> Option<(PathBuf, String)> {
 async fn serve_file_mode(
     s: &AppState,
     path: &str,
-    diff: Option<repo::diff::DiffSpec>,
+    #[cfg(feature = "repo")] raw_query: Option<&str>,
+    #[cfg(not(feature = "repo"))] _: Option<&str>,
     view: ViewState,
     hx: HtmxContext,
     native: bool,
@@ -589,7 +604,11 @@ async fn serve_file_mode(
     };
     let clean = path.trim_matches('/');
     if clean.is_empty() {
-        return render_target(s, &s.target, None, diff, view, hx).await;
+        #[cfg(feature = "repo")]
+        if let Some(res) = try_compare(s, raw_query, &s.target, None, &view, &hx).await {
+            return res;
+        }
+        return render_target(s, &s.target, None, view, hx).await;
     }
     let joined = root.join(clean);
     let meta = match tokio::fs::metadata(&joined).await {
@@ -602,22 +621,20 @@ async fn serve_file_mode(
     if native {
         return delivery::stream_file(&joined).await;
     }
-    render_target(s, &joined, None, diff, view, hx).await
+    #[cfg(feature = "repo")]
+    if let Some(res) = try_compare(s, raw_query, &joined, None, &view, &hx).await {
+        return res;
+    }
+    render_target(s, &joined, None, view, hx).await
 }
 
 async fn render_target(
     s: &AppState,
     path: &Path,
     root: Option<&Path>,
-    diff: Option<repo::diff::DiffSpec>,
     view: ViewState,
     hx: HtmxContext,
 ) -> Response {
-    if let Some(spec) = &diff
-        && let Some(res) = diff::try_render(s, path, root, spec, &view, hx.clone()).await
-    {
-        return res;
-    }
     if path.extension().and_then(|s| s.to_str()) == Some("md") {
         render_file(s, path, root, view, hx).await
     } else {
@@ -931,13 +948,33 @@ fn not_found() -> Response {
         .unwrap()
 }
 
+#[cfg(feature = "repo")]
+fn canonical_redirect_for(uri: &Uri, raw_query: Option<&str>) -> Option<Response> {
+    diff::canonical_query(raw_query).map(|canonical| canonical_redirect(uri, &canonical))
+}
+
+#[cfg(feature = "repo")]
+async fn try_compare(
+    s: &AppState,
+    raw_query: Option<&str>,
+    path: &Path,
+    root: Option<&Path>,
+    view: &ViewState,
+    hx: &HtmxContext,
+) -> Option<Response> {
+    let spec = diff::spec_from_query(raw_query)?;
+    diff::try_render(s, path, root, &spec, view, hx.clone()).await
+}
+
 // Location must carry the still-encoded request path: AxPath captures are
 // percent-decoded, and a decoded Unicode or reserved character would be
 // rejected by the header value or change the reconstructed URI meaning.
+#[cfg(feature = "repo")]
 fn canonical_redirect(uri: &Uri, canonical: &str) -> Response {
     see_other(&format!("{}?{}", uri.path(), canonical))
 }
 
+#[cfg(feature = "repo")]
 fn see_other(location: &str) -> Response {
     Response::builder()
         .status(StatusCode::SEE_OTHER)
@@ -974,6 +1011,7 @@ mod tests {
         assert!(!hx.is_htmx);
     }
 
+    #[cfg(feature = "repo")]
     #[test]
     fn canonical_redirect_preserves_encoded_request_paths() {
         for path in [
