@@ -87,7 +87,7 @@ Git repository code sits behind the repo namespace.
 
 ## Stat
 
-Repository statistics code sits behind the stat namespace. Filesystem scanning is a root module because the about panel uses it without a repository.
+Repository statistics code sits behind the stat namespace.
 
 | Path | Purpose |
 | --- | --- |

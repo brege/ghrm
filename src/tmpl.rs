@@ -22,6 +22,8 @@ pub struct PageShell<'a> {
 #[template(path = "fragments/about.html")]
 pub struct AboutPeek<'a> {
     pub details: &'a AboutDetails,
+    pub repo_enabled: bool,
+    pub stats_enabled: bool,
     pub stats_loaded: bool,
     pub stats: &'a AboutStats,
     pub local_path: &'a str,

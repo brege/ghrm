@@ -7,7 +7,7 @@ use crate::http::shell;
 use crate::paths;
 use crate::repo::SourceState;
 use crate::runtime;
-#[cfg(any(feature = "stats", test))]
+#[cfg(feature = "stats")]
 use crate::tmpl::AboutStatRow;
 use crate::tmpl::{self, AboutDetailRow, AboutDetails, AboutFilterRow, AboutPeek, AboutStats};
 #[cfg(feature = "stats")]
@@ -338,6 +338,8 @@ fn html_with_details(
     let project_release_href = format!("{PROJECT_URL}/releases/tag/v{project_version}");
     let about = AboutPeek {
         details,
+        repo_enabled: cfg!(feature = "repo"),
+        stats_enabled: cfg!(feature = "stats"),
         stats_loaded,
         stats,
         local_path,
@@ -943,7 +945,10 @@ mod tests {
         assert!(html.contains(">brege/ghrm</span>"));
         assert!(html.contains("data-stats-loaded=\"false\""));
         assert!(html.contains("id=\"ghrm-about-panel-menu-toggle\""));
-        assert!(html.contains("Git"));
+        assert_eq!(
+            html.contains("data-ghrm-about-menu-group=\"git\""),
+            cfg!(feature = "stats")
+        );
         assert!(html.contains("Runtime"));
         assert!(html.contains("Ghrm"));
         assert!(html.contains("data-ghrm-about-panel-option=\"paths\""));
@@ -963,6 +968,7 @@ mod tests {
         assert!(!html.contains("ghrm-about-stamp-mark"));
     }
 
+    #[cfg(feature = "stats")]
     #[test]
     fn about_html_renders_summary_when_stats_exist() {
         let runtime_paths = test_runtime_paths();
@@ -994,10 +1000,18 @@ mod tests {
         let html = html_with_details(&details, &stats, true, "/tmp/local", false);
 
         let menu = html.find("ghrm-about-panel-menu").unwrap();
-        let path = html.find("/tmp/local").unwrap();
-        assert!(html.contains("not a git repo"));
-        assert!(html.contains("ghrm-about-menu-local"));
-        assert!(menu < path);
+        assert_eq!(
+            html.contains("ghrm-about-menu-local"),
+            cfg!(feature = "repo")
+        );
+        if cfg!(feature = "repo") {
+            let path = html.find("/tmp/local").unwrap();
+            assert!(html.contains("not a git repo"));
+            assert!(menu < path);
+        } else {
+            assert!(!html.contains("/tmp/local"));
+            assert!(!html.contains("not a git repo"));
+        }
         assert!(!html.contains("ghrm-about-stamp-shell"));
     }
 

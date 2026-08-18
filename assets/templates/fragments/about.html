@@ -28,12 +28,13 @@
       aria-label="Choose about panels"
       hidden
     >
-      {% if !local_path.is_empty() %}
+      {% if repo_enabled && !local_path.is_empty() %}
       <div class="ghrm-about-menu-section ghrm-about-menu-local" role="group" aria-label="Local path">
         <span class="ghrm-about-menu-local-label">not a git repo</span>
         <code class="ghrm-about-menu-local-path">{{ local_path }}</code>
       </div>
       {% endif %}
+      {% if stats_enabled %}
       <div
         class="ghrm-about-menu-section"
         role="group"
@@ -46,6 +47,7 @@
         {{- menu::panel_option("languages", "Languages", "Show languages panel") -}}
         {{- menu::panel_option("activity", "Activity", "Show activity panel") -}}
       </div>
+      {% endif %}
 
       <div
         class="ghrm-about-menu-section"
