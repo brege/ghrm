@@ -56,7 +56,7 @@ clean:
 # format Rust and UI files
 fmt: rust-fmt ui-fmt
 
-# run all Rust checks across the minimal, repository, and default feature sets
+# run all Rust checks across the minimal, individual, mixed, and default feature sets
 rust:
     cargo fmt --all --check
     cargo check --locked --no-default-features
@@ -80,6 +80,9 @@ rust:
     cargo check --locked --no-default-features --features archive
     cargo clippy --locked --no-default-features --features archive --all-targets -- --deny warnings
     cargo test --locked --no-default-features --features archive
+    cargo check --locked --no-default-features --features archive,content-search,repo,watch
+    cargo clippy --locked --no-default-features --features archive,content-search,repo,watch --all-targets -- --deny warnings
+    cargo test --locked --no-default-features --features archive,content-search,repo,watch
     cargo check --workspace --locked
     cargo clippy --workspace --all-targets --locked -- --deny warnings
     cargo test --workspace --locked

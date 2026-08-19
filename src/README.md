@@ -95,3 +95,28 @@ Repository statistics code sits behind the stat namespace.
 | stat/tools.rs | statistics tool registry |
 | stat/tools/ | per-tool collectors for history, languages, license, and metadata |
 | filesystem.rs | filesystem scan totals, sizes, and filter summaries |
+
+## Cargo features
+
+The default Cargo build enables every optional feature below.
+
+| Capability | Optional | Cargo feature |
+| --- | :---: | --- |
+| File and directory browsing | | Core |
+| Markdown rendering | | Core |
+| Native file delivery | | Core |
+| Path search | | Core |
+| HTTP server | | Core |
+| Directory archive generation and downloads | ✓ | `archive` |
+| File-content search | ✓ | `content-search` |
+| Local paste and stash support, subject to runtime configuration | ✓ | `gist` |
+| Repository discovery, commit metadata, remotes, and file comparison | ✓ | `repo` |
+| Repository statistics; enables `repo` | ✓ | `stats` |
+| Filesystem watching and automatic browser updates | ✓ | `watch` |
+
+**Example.** The following release build includes repository support, content search, source watching, and archives without statistics or gist support:
+
+```bash
+cargo build --locked --release --no-default-features \
+  --features "archive,content-search,repo,watch"
+```

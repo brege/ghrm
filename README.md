@@ -66,6 +66,8 @@ You can use `--bind 0.0.0.0` to connect to a ghrm instance from other devices in
 cargo install ghrm
 ```
 
+See [src/README.md](src/README.md) for Cargo feature build options.
+
 ### Binary
 
 Download from the [releases page](https://github.com/brege/ghrm/releases/latest), extract, and add to PATH.
