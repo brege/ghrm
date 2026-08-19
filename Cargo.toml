@@ -46,10 +46,13 @@ name = "ghrm"
 path = "src/main.rs"
 
 [features]
-default = ["gist", "repo", "stats"]
+default = ["archive", "content-search", "gist", "repo", "stats", "watch"]
+archive = ["dep:zip"]
+content-search = ["dep:grep-matcher", "dep:grep-regex", "dep:grep-searcher"]
 gist = ["dep:filetime"]
 repo = ["dep:gix"]
 stats = ["repo", "dep:askalono", "dep:onefetch-manifest", "dep:tokei"]
+watch = ["dep:notify", "dep:notify-debouncer-full"]
 
 [dependencies]
 comrak = { version = "0.54", default-features = false, features = ["shortcodes"] }
@@ -72,12 +75,12 @@ tower-http = { version = "0.7", features = ["fs", "trace"] }
 futures-util = "0.3"
 tokio-util = { version = "0.7", features = ["io-util"] }
 
-notify = "8"
-notify-debouncer-full = "0.7"
+notify = { version = "8", optional = true }
+notify-debouncer-full = { version = "0.7", optional = true }
 ignore = "0.4"
-grep-matcher = "0.1"
-grep-regex = "0.1"
-grep-searcher = "0.1"
+grep-matcher = { version = "0.1", optional = true }
+grep-regex = { version = "0.1", optional = true }
+grep-searcher = { version = "0.1", optional = true }
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -88,7 +91,7 @@ toml = "1.1"
 include_dir = "0.7"
 askama = "0.16"
 tar = { version = "0.4", default-features = false }
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "8", default-features = false, features = ["deflate"], optional = true }
 zstd = "0.13"
 hmac = "0.13"
 form_urlencoded = "1"

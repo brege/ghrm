@@ -50,6 +50,7 @@
       {{- source|safe -}}
       <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
         <div class="ghrm-search-field">
+          {% if content_search %}
           <button
             id="ghrm-search-mode"
             type="button"
@@ -64,6 +65,7 @@
               <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-search-content"></use>
             </svg>
           </button>
+          {% endif %}
           <input id="ghrm-path-search-input" class="ghrm-path-search-input" type="search" placeholder="Search paths" aria-label="Search paths">
         </div>
         <button id="ghrm-path-search-toggle" type="button" aria-expanded="false" aria-label="Search paths" title="Search paths">

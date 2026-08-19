@@ -1,6 +1,7 @@
 use crate::explorer::view::ViewQuery;
 use crate::explorer::{column, view, walk};
 use crate::http::server::{AppState, Mode};
+#[cfg(feature = "content-search")]
 use crate::paths;
 use crate::render;
 use crate::repo::RepoSet;
@@ -51,6 +52,7 @@ pub(crate) async fn tree(
     json_response(&resp, "api_tree")
 }
 
+#[cfg(feature = "content-search")]
 #[derive(Default, Deserialize)]
 pub(crate) struct SearchQuery {
     q: Option<String>,
@@ -59,6 +61,7 @@ pub(crate) struct SearchQuery {
     view: ViewQuery,
 }
 
+#[cfg(feature = "content-search")]
 pub(crate) async fn search(
     State(s): State<AppState>,
     headers: HeaderMap,
@@ -315,6 +318,7 @@ fn wants_html(headers: &HeaderMap) -> bool {
             .is_some_and(|value| value.contains("text/html"))
 }
 
+#[cfg(feature = "content-search")]
 fn resolve_search_scope(target: &Path, path: Option<&str>) -> (Option<PathBuf>, Option<String>) {
     let raw = path.unwrap_or("").trim_matches('/');
     if raw.is_empty() {
@@ -563,6 +567,7 @@ mod tests {
         assert_eq!(names, vec!["match-large.md", "match-mid.md"]);
     }
 
+    #[cfg(feature = "content-search")]
     #[test]
     fn resolve_search_scope_rejects_parent_traversal() {
         let td = TempDir::new("ghrm-scope");
@@ -575,6 +580,7 @@ mod tests {
         assert!(scope.is_none());
     }
 
+    #[cfg(feature = "content-search")]
     #[test]
     fn resolve_search_scope_returns_prefix_for_child() {
         let td = TempDir::new("ghrm-scope");
@@ -586,7 +592,7 @@ mod tests {
         assert_eq!(prefix.as_deref(), Some("plans/brege"));
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, feature = "content-search"))]
     #[test]
     fn resolve_search_scope_rejects_symlink_escape() {
         use std::os::unix::fs::symlink;
@@ -604,6 +610,7 @@ mod tests {
         assert!(scope.is_none());
     }
 
+    #[cfg(feature = "content-search")]
     #[test]
     fn resolve_search_scope_returns_none_prefix_for_root() {
         let td = TempDir::new("ghrm-scope");
@@ -617,6 +624,7 @@ mod tests {
         assert!(prefix.is_none());
     }
 
+    #[cfg(feature = "content-search")]
     #[test]
     fn scoped_content_search_returns_session_root_paths() {
         let td = TempDir::new("ghrm-scoped-search");

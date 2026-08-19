@@ -1,12 +1,16 @@
 use crate::explorer;
 use crate::explorer::view::{ViewConfig, ViewQuery, ViewState};
 use crate::explorer::walk::{NavSet, ViewOpts};
-use crate::explorer::{column, crumbs, filter, view, walk, watch};
+#[cfg(feature = "watch")]
+use crate::explorer::watch;
+use crate::explorer::{column, crumbs, filter, view, walk};
 #[cfg(feature = "gist")]
 use crate::gist;
+#[cfg(feature = "archive")]
+use crate::http::archive;
 #[cfg(feature = "gist")]
 use crate::http::gist as http_gist;
-use crate::http::{about, api, archive, assets, auth, delivery, diff, shell, vendor};
+use crate::http::{about, api, assets, auth, delivery, diff, shell, vendor};
 use crate::paths;
 use crate::render::{self, Rendered};
 use crate::repo::RepoSet;
@@ -14,6 +18,8 @@ use crate::runtime;
 use crate::tmpl;
 
 use anyhow::{Context, Result, anyhow};
+#[cfg(any(feature = "archive", feature = "gist"))]
+use axum::routing::post;
 use axum::{
     Router,
     body::Body,
@@ -21,7 +27,7 @@ use axum::{
     http::{HeaderMap, StatusCode, Uri, header},
     middleware,
     response::Response,
-    routing::{get, post},
+    routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
@@ -45,6 +51,7 @@ pub struct AppState {
     pub filter_exts: Vec<String>,
     pub filters: filter::Set,
     pub exclude_names: Vec<String>,
+    #[cfg(feature = "archive")]
     pub archive_jobs: archive::ArchiveJobs,
     pub search_max_rows: usize,
     pub home: Option<PathBuf>,
@@ -114,6 +121,7 @@ pub struct Options {
     pub extensions: Vec<String>,
     pub filters: filter::Set,
     pub exclude_names: Vec<String>,
+    #[cfg(feature = "watch")]
     pub watch_silent: Vec<String>,
     pub show_excludes: bool,
     pub search_max_rows: usize,
@@ -139,6 +147,7 @@ pub async fn run(options: Options) -> Result<()> {
         extensions,
         filters,
         exclude_names,
+        #[cfg(feature = "watch")]
         watch_silent,
         show_excludes,
         search_max_rows,
@@ -220,6 +229,7 @@ pub async fn run(options: Options) -> Result<()> {
             });
 
             // Watcher failure shouldn't kill the server
+            #[cfg(feature = "watch")]
             if let Err(e) = watch::spawn_dir(
                 target.clone(),
                 watch::NavCache {
@@ -241,6 +251,7 @@ pub async fn run(options: Options) -> Result<()> {
             repo_h.await?
         }
         Mode::File => {
+            #[cfg(feature = "watch")]
             if let Err(e) = watch::spawn_file(target.clone(), reload_tx.clone()) {
                 warn!("file watcher disabled: {e}");
             }
@@ -268,6 +279,7 @@ pub async fn run(options: Options) -> Result<()> {
         filter_exts: extensions,
         filters,
         exclude_names,
+        #[cfg(feature = "archive")]
         archive_jobs: archive::ArchiveJobs::new()?,
         search_max_rows,
         home: std::env::var_os("HOME").map(PathBuf::from),
@@ -345,20 +357,25 @@ fn protected_routes() -> Router<AppState> {
         .route("/_ghrm/ws", get(ws_handler))
         .route("/_ghrm/tree", get(api::tree))
         .route("/_ghrm/path-search", get(api::path_search))
-        .route("/_ghrm/search", get(api::search))
         .route("/_ghrm/render", get(api::render))
         .route("/_ghrm/about", get(about::show))
-        .route("/_ghrm/archive/{format}", post(archive::start))
-        .route("/_ghrm/archive/{format}/{*path}", post(archive::start))
-        .route("/_ghrm/archive-jobs/{id}", get(archive::status))
-        .route("/_ghrm/archive-jobs/{id}/download", get(archive::download))
         .route("/_ghrm/raw/{*path}", get(delivery::raw_file))
         .route("/_ghrm/html/{*path}", get(delivery::html_file))
         .route("/_ghrm/download/{*path}", get(delivery::download_file))
         .route("/{*path}", get(any_path));
 
+    #[cfg(feature = "archive")]
+    let router = router
+        .route("/_ghrm/archive/{format}", post(archive::start))
+        .route("/_ghrm/archive/{format}/{*path}", post(archive::start))
+        .route("/_ghrm/archive-jobs/{id}", get(archive::status))
+        .route("/_ghrm/archive-jobs/{id}/download", get(archive::download));
+
     #[cfg(feature = "repo")]
     let router = router.route("/_ghrm/compare", get(diff::compare));
+
+    #[cfg(feature = "content-search")]
+    let router = router.route("/_ghrm/search", get(api::search));
 
     router
 }

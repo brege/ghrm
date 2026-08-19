@@ -1,5 +1,6 @@
 pub(crate) mod about;
 pub(crate) mod api;
+#[cfg(feature = "archive")]
 pub(crate) mod archive;
 pub(crate) mod assets;
 pub(crate) mod auth;

@@ -21,6 +21,7 @@ pub struct Resolved {
     pub filter_ext: bool,
     pub extensions: Vec<String>,
     pub exclude_names: Vec<String>,
+    #[cfg(feature = "watch")]
     pub watch_silent: Vec<String>,
     pub max_rows: usize,
     #[cfg(feature = "stats")]
@@ -111,12 +112,17 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
 
     let show_hidden = cli.hidden || cfg.walk.hidden.unwrap_or(false);
     let filter_ext = has_explicit_ext_filter || cfg.walk.filter.enabled.unwrap_or(false);
+    #[cfg(feature = "watch")]
     let watch_silent = normalize_names(
         cfg.watch
             .silent
             .clone()
             .unwrap_or_else(crate::config::default_watch_silent),
     )?;
+    #[cfg(not(feature = "watch"))]
+    if cfg.watch.silent.is_some() {
+        bail!("source watching requires building ghrm with the watch feature");
+    }
     #[cfg(feature = "gist")]
     let gist = cli.gist || cfg.gist.enabled.unwrap_or(false);
     #[cfg(not(feature = "gist"))]
@@ -139,6 +145,7 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
         filter_ext,
         extensions,
         exclude_names,
+        #[cfg(feature = "watch")]
         watch_silent,
         max_rows,
         #[cfg(feature = "stats")]
@@ -190,6 +197,7 @@ fn normalize_extensions(raw: Vec<String>) -> Result<Vec<String>> {
     Ok(extensions.into_iter().collect())
 }
 
+#[cfg(feature = "watch")]
 fn normalize_names(raw: Vec<String>) -> Result<Vec<String>> {
     let mut names = BTreeSet::new();
     for name in raw {
@@ -249,6 +257,7 @@ pub fn dump(resolved: &Resolved) -> String {
     writeln!(out, "filter_ext = {}", resolved.filter_ext).unwrap();
     writeln!(out, "extensions = {}", resolved.extensions.join(", ")).unwrap();
     writeln!(out, "exclude_names = {}", resolved.exclude_names.join(", ")).unwrap();
+    #[cfg(feature = "watch")]
     writeln!(out, "watch.silent = {}", resolved.watch_silent.join(", ")).unwrap();
     writeln!(out, "max_rows = {}", resolved.max_rows).unwrap();
     #[cfg(feature = "stats")]
@@ -473,6 +482,20 @@ mod tests {
         assert!(err.contains("shared paste space"));
     }
 
+    #[cfg(not(feature = "watch"))]
+    #[test]
+    fn rejects_watch_config_without_watch() {
+        let cfg: Config = toml::from_str(
+            r#"
+            [watch]
+            silent = [".git"]
+            "#,
+        )
+        .unwrap();
+        let err = resolve_err(default_input(), &cfg);
+        assert!(err.contains("source watching"));
+    }
+
     #[test]
     fn localhost_bind_does_not_require_auth() {
         let input = Input {
@@ -533,6 +556,7 @@ mod tests {
         assert!(output.contains("show_hidden = true"));
         assert!(output.contains("dangerously_traverse_excludes = false"));
         assert!(output.contains("extensions = md"));
+        #[cfg(feature = "watch")]
         assert!(output.contains("watch.silent = .git"));
         #[cfg(feature = "stats")]
         assert!(output.contains("stats.enabled = true"));
@@ -575,6 +599,7 @@ mod tests {
         assert!(resolved.gist);
     }
 
+    #[cfg(feature = "watch")]
     #[test]
     fn config_watch_silent_overrides_default() {
         let cfg: Config = toml::from_str(

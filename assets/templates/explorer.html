@@ -8,7 +8,9 @@
 >
   <section class="ghrm-explorer-shell">
     {% include "fragments/explorer/header.html" %}
+    {% if archive %}
     <ghrm-archive-progress></ghrm-archive-progress>
+    {% endif %}
 
     {% if entries.is_empty() && !has_parent %}
     <p class="ghrm-nav-empty">No files found.</p>

@@ -158,6 +158,7 @@ fn main() -> Result<()> {
         extensions: resolved.extensions,
         filters,
         exclude_names: resolved.exclude_names,
+        #[cfg(feature = "watch")]
         watch_silent: resolved.watch_silent,
         show_excludes: resolved.show_excludes,
         search_max_rows: resolved.max_rows,

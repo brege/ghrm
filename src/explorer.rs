@@ -3,6 +3,7 @@ pub(crate) mod crumbs;
 pub(crate) mod filter;
 pub(crate) mod view;
 pub(crate) mod walk;
+#[cfg(feature = "watch")]
 pub(crate) mod watch;
 
 use crate::http::server::{AppState, HtmxContext};
@@ -209,6 +210,7 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
         features: &features,
         crumbs: &crumbs,
         current_path: rel,
+        archive: cfg!(feature = "archive"),
         archive_zip_href: &archive_zip_href,
         archive_tar_zst_href: &archive_tar_zst_href,
         has_parent,

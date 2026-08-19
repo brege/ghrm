@@ -506,6 +506,7 @@ mod tests {
     use crate::explorer::column;
     use crate::explorer::view::ViewConfig;
     use crate::explorer::walk::{NavSet, Sort, ViewOpts};
+    #[cfg(feature = "archive")]
     use crate::http::archive;
     use crate::http::server::Mode;
     use crate::repo::RepoSet;
@@ -570,6 +571,7 @@ mod tests {
             filter_exts: Vec::new(),
             filters: crate::testutil::group_filters(),
             exclude_names: Vec::new(),
+            #[cfg(feature = "archive")]
             archive_jobs: archive::ArchiveJobs::new().unwrap(),
             search_max_rows: 10,
             home: None,

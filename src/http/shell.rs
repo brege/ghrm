@@ -43,6 +43,7 @@ pub(crate) fn full_page(
         about: &about,
         sidebar: &sidebar,
         gist_nav: &gist_nav,
+        content_search: cfg!(feature = "content-search"),
         asset_json: vendor::client_json(),
         vendor_styles: &assets.styles,
         vendor_scripts: &assets.scripts,
@@ -111,7 +112,7 @@ fn gist_nav(runtime_paths: &runtime::Paths, gist_active: bool, oob: bool) -> Str
 }
 
 #[cfg(not(feature = "gist"))]
-fn gist_nav(_runtime_paths: &runtime::Paths, _gist_active: bool, _oob: bool) -> String {
+fn gist_nav(_: &runtime::Paths, _: bool, _: bool) -> String {
     String::new()
 }
 
@@ -277,7 +278,7 @@ mod tests {
     }
 
     #[cfg(not(feature = "gist"))]
-    fn runtime_paths(_show_gist: bool) -> runtime::Paths {
+    fn runtime_paths(_: bool) -> runtime::Paths {
         let td = TempDir::new("ghrm-shell-runtime");
         runtime::Paths::new(td.path(), None).unwrap()
     }
@@ -368,6 +369,13 @@ mod tests {
         assert!(html.contains("id=\"ghrm-sidebar\""));
         assert!(html.contains("hx-swap-oob=\"outerHTML\""));
         assert!(!html.contains("hx-get="));
+    }
+
+    #[cfg(not(feature = "gist"))]
+    #[test]
+    fn gist_nav_is_absent_without_feature() {
+        let html = gist_nav(&runtime_paths(false), false, false);
+        assert!(html.is_empty());
     }
 
     #[cfg(feature = "gist")]

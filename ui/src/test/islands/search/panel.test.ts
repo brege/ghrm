@@ -9,7 +9,7 @@ import {
   setSearchCloseHandler,
 } from '../../../islands/search/panel';
 
-function createSearchFixture(withExplorer = true): void {
+function createSearchFixture(withExplorer = true, withMode = true): void {
   document.body.innerHTML = `
     ${
       withExplorer
@@ -27,7 +27,11 @@ function createSearchFixture(withExplorer = true): void {
     }
     <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
       <div class="ghrm-search-field">
-        <button id="ghrm-search-mode" type="button" title="Switch search mode" aria-label="Switch search mode"></button>
+        ${
+          withMode
+            ? '<button id="ghrm-search-mode" type="button" title="Switch search mode" aria-label="Switch search mode"></button>'
+            : ''
+        }
         <input id="ghrm-path-search-input" type="search" placeholder="Search paths" aria-label="Search paths">
       </div>
       <button id="ghrm-path-search-toggle" type="button" aria-expanded="false" aria-label="Search paths"></button>
@@ -243,6 +247,33 @@ describe('ghrm-search-panel', () => {
       modeBtn.click();
 
       expect(search.dataset.mode).toBe('path');
+    });
+
+    it('uses path search when the mode button is absent', async () => {
+      document.body.innerHTML = '';
+      createSearchFixture(true, false);
+      const newElement =
+        document.querySelector<GhrmSearchPanel>('ghrm-search-panel');
+      await newElement!.updateComplete;
+
+      const toggle = document.getElementById('ghrm-path-search-toggle')!;
+      const input = document.getElementById(
+        'ghrm-path-search-input',
+      ) as HTMLInputElement;
+
+      toggle.click();
+      input.value = 'readme';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+
+      await vi.waitFor(() => {
+        expect(currentFetchMock()).toHaveBeenCalled();
+      });
+      expect(currentFetchMock().mock.calls[0][0]).toContain(
+        '/_ghrm/path-search?',
+      );
+      expect(currentFetchMock().mock.calls[0][0]).not.toContain(
+        '/_ghrm/search?',
+      );
     });
   });
 

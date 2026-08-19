@@ -206,6 +206,7 @@ pub fn default_exclude_names() -> Vec<String> {
     ]
 }
 
+#[cfg(feature = "watch")]
 pub fn default_watch_silent() -> Vec<String> {
     vec![".git".to_string()]
 }

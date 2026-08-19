@@ -13,6 +13,7 @@ pub struct PageShell<'a> {
     pub about: &'a str,
     pub sidebar: &'a str,
     pub gist_nav: &'a str,
+    pub content_search: bool,
     pub asset_json: &'a str,
     pub vendor_styles: &'a [String],
     pub vendor_scripts: &'a [String],
@@ -151,6 +152,7 @@ pub struct ExplorerCtx<'a> {
     pub features: &'a str,
     pub crumbs: &'a str,
     pub current_path: &'a str,
+    pub archive: bool,
     pub archive_zip_href: &'a str,
     pub archive_tar_zst_href: &'a str,
     pub has_parent: bool,
@@ -267,6 +269,7 @@ pub struct PathSearchRow<'a> {
     pub cells: &'a [column::Cell],
 }
 
+#[cfg(feature = "content-search")]
 #[derive(Template)]
 #[template(path = "fragments/search/content.html")]
 pub struct ContentSearchCtx<'a> {
@@ -278,6 +281,7 @@ pub struct ContentSearchCtx<'a> {
     pub summary_colspan: usize,
 }
 
+#[cfg(feature = "content-search")]
 pub struct ContentSearchRow {
     pub href: String,
     pub path: String,
@@ -333,6 +337,7 @@ pub fn path_search(ctx: PathSearchCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
 
+#[cfg(feature = "content-search")]
 pub fn content_search(ctx: ContentSearchCtx<'_>) -> Result<String> {
     Ok(ctx.render()?)
 }
@@ -355,6 +360,7 @@ mod tests {
             about: "",
             sidebar: "",
             gist_nav: "",
+            content_search: true,
             asset_json: "{}",
             vendor_styles: &[],
             vendor_scripts: &[],
@@ -399,6 +405,7 @@ mod tests {
                 features: "",
                 crumbs: "<span>root</span>",
                 current_path: "/test",
+                archive: true,
                 archive_zip_href: "/_ghrm/archive?fmt=zip",
                 archive_tar_zst_href: "/_ghrm/archive?fmt=tar.zst",
                 has_parent: false,
@@ -728,6 +735,17 @@ mod tests {
         }
 
         #[test]
+        fn content_search_toggle_omitted_when_disabled() {
+            let mut shell = empty_shell();
+            shell.content_search = false;
+            let html = base(shell).unwrap();
+
+            assert!(html.contains("id=\"ghrm-path-search-input\""));
+            assert!(html.contains("id=\"ghrm-path-search-toggle\""));
+            assert!(!html.contains("id=\"ghrm-search-mode\""));
+        }
+
+        #[test]
         fn theme_toggle() {
             let html = base(empty_shell()).unwrap();
             assert!(
@@ -868,6 +886,22 @@ mod tests {
                 html.contains("data-ghrm-archive-url"),
                 "missing data-ghrm-archive-url on archive buttons"
             );
+        }
+
+        #[test]
+        fn archive_controls_omitted_when_disabled() {
+            let fix = ExplorerFixture::new();
+            let ctx = ExplorerCtx {
+                archive: false,
+                ..fix.ctx()
+            };
+            let html = explorer(ctx).unwrap();
+
+            assert!(!html.contains("id=\"ghrm-archive-menu-toggle\""));
+            assert!(!html.contains("id=\"ghrm-archive-menu\""));
+            assert!(!html.contains("data-ghrm-archive-url"));
+            assert!(!html.contains("<ghrm-archive-progress>"));
+            assert!(html.contains("id=\"ghrm-view-menu-toggle\""));
         }
 
         #[test]
@@ -1309,6 +1343,7 @@ mod tests {
             );
         }
 
+        #[cfg(feature = "content-search")]
         #[test]
         fn content_search_row_structure() {
             let ctx = ContentSearchCtx {
@@ -1344,6 +1379,7 @@ mod tests {
             );
         }
 
+        #[cfg(feature = "content-search")]
         #[test]
         fn content_search_timestamp() {
             let ctx = ContentSearchCtx {
@@ -1367,6 +1403,7 @@ mod tests {
             );
         }
 
+        #[cfg(feature = "content-search")]
         #[test]
         fn content_search_empty_state() {
             let ctx = ContentSearchCtx {
@@ -1384,6 +1421,7 @@ mod tests {
             );
         }
 
+        #[cfg(feature = "content-search")]
         #[test]
         fn content_search_truncated_state() {
             let ctx = ContentSearchCtx {
@@ -1407,6 +1445,7 @@ mod tests {
             );
         }
 
+        #[cfg(feature = "content-search")]
         #[test]
         fn content_search_summary() {
             let ctx = ContentSearchCtx {
