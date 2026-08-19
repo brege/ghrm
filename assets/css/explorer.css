@@ -225,26 +225,12 @@ hr.ghrm-menu-separator {
 }
 
 .ghrm-archive-progress {
-  padding: 8px 12px;
   border-top: 1px solid var(--borderColor-muted, #d0d7deb3);
   border-bottom: 1px solid var(--borderColor-muted, #d0d7deb3);
-  background: var(--bgColor-default, #ffffff);
 }
 
 .ghrm-archive-progress[hidden] {
   display: none;
-}
-
-.ghrm-archive-progress-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-  margin-bottom: 6px;
-  color: var(--fgColor-muted, #636c76);
-  font-size: 12px;
-  line-height: 16px;
 }
 
 .ghrm-archive-progress-label,
@@ -261,6 +247,7 @@ hr.ghrm-menu-separator {
 
 .ghrm-archive-progress-count {
   flex: 0 1 auto;
+  color: var(--fgColor-muted, #636c76);
   text-align: right;
 }
 

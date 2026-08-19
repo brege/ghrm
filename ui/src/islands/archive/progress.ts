@@ -224,11 +224,11 @@ export class GhrmArchiveProgress extends LitElement {
 
     return html`
       <div
-        class="ghrm-archive-progress"
+        class="ghrm-progress ghrm-archive-progress"
         data-state=${this.status?.state || 'running'}
         aria-live="polite"
       >
-        <div class="ghrm-archive-progress-row">
+        <div class="ghrm-progress-row">
           <span class="ghrm-archive-progress-label">${this.label}</span>
           <span class="ghrm-archive-progress-count">${this.count}</span>
           ${
@@ -250,7 +250,7 @@ export class GhrmArchiveProgress extends LitElement {
         </div>
         <div class="ghrm-progress-track">
           <div
-            class="ghrm-progress-fill"
+            class="ghrm-progress-fill is-determinate"
             style="width: ${this.percent}%"
           ></div>
         </div>

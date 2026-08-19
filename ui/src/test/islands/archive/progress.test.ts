@@ -173,6 +173,7 @@ describe('ghrm-archive-progress', () => {
         '.ghrm-progress-fill',
       ) as HTMLElement;
       expect(fillEl?.style.width).toBe('65%');
+      expect(fillEl?.classList.contains('is-determinate')).toBe(true);
     });
   });
 

@@ -520,6 +520,8 @@ mod tests {
             assert!(html.contains("name=\"base\""));
             assert!(html.contains("name=\"head\""));
             assert!(html.contains("data-ghrm-compare-time"));
+            assert!(html.contains("class=\"ghrm-progress ghrm-compare-progress\""));
+            assert!(html.contains("class=\"ghrm-progress-fill is-periodic\""));
             assert!(!html.contains("ghrm-compare-apply"));
             assert!(!html.contains("ghrm-compare-close"));
         }

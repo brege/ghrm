@@ -203,7 +203,7 @@ function setupFileView(container: FileViewContainer): void {
   actions.append(rawLink, copy, download);
   tools.append(toggles, actions);
   host.prepend(tools);
-  setupCompare(container, tools);
+  setupCompare(container, toggles);
   syncFileView(container, kind === 'source');
 }
 

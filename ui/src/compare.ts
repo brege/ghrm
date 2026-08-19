@@ -348,7 +348,7 @@ async function loadForm(
   }
 }
 
-export function setupCompare(container: HTMLElement, tools: HTMLElement): void {
+export function setupCompare(container: HTMLElement, group: HTMLElement): void {
   const url = container.dataset.ghrmCompareUrl;
   if (!url) return;
 
@@ -388,5 +388,5 @@ export function setupCompare(container: HTMLElement, tools: HTMLElement): void {
     }
   });
 
-  tools.prepend(button);
+  group.prepend(button);
 }

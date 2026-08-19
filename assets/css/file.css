@@ -53,6 +53,14 @@ body.ghrm-print .ghrm-file-tools {
   color: var(--fgColor-default, #1f2328);
 }
 
+/* Raw and download are anchors; the vendor markdown-body rule paints anchors
+   transparent, revealing the muted header behind them. Reassert an opaque fill
+   above that rule but below the hover rule that follows. */
+.markdown-body .ghrm-file-link,
+.markdown-body .ghrm-file-action {
+  background: var(--bgColor-default, #ffffff);
+}
+
 .ghrm-file-toggle {
   width: 32px;
   padding: 0;
@@ -66,10 +74,6 @@ body.ghrm-print .ghrm-file-tools {
 .ghrm-file-action:hover:not(:disabled),
 .ghrm-file-link:hover {
   background: var(--bgColor-neutral-muted, #afb8c133);
-}
-
-.ghrm-file-toggle.is-active {
-  background: var(--bgColor-muted, #f6f8fa);
 }
 
 .ghrm-file-toggle:disabled,
@@ -180,14 +184,22 @@ body.ghrm-print .ghrm-file-tools {
   flex: 0 0 auto;
 }
 
-.ghrm-compare-toggle[aria-expanded="true"] {
+.ghrm-file-toggle.is-active {
   color: var(--fgColor-accent, #0969da);
-  border-color: var(--borderColor-accent-emphasis, #0969da);
-  background: var(--bgColor-neutral-muted, #afb8c133);
+  background: var(--bgColor-accent-muted, #ddf4ff);
+}
+
+.ghrm-file-toggle.is-active:hover:not(:disabled) {
+  background: var(--bgColor-accent-muted, #ddf4ff);
 }
 
 .ghrm-page-shell > .ghrm-explorer-header {
   flex-wrap: wrap;
+}
+
+.ghrm-page-shell > .ghrm-explorer-header:has(.ghrm-compare.is-loading) {
+  padding-bottom: 0;
+  border-bottom-color: var(--borderColor-muted, #d0d7deb3);
 }
 
 .ghrm-compare {
@@ -205,6 +217,11 @@ body.ghrm-print .ghrm-file-tools {
 .ghrm-compare.is-collapsed {
   grid-template-rows: 0fr;
   opacity: 0;
+}
+
+.ghrm-compare.is-loading {
+  flex-basis: calc(100% + 32px);
+  margin-inline: -16px;
 }
 
 .ghrm-compare[hidden],
@@ -239,6 +256,10 @@ body.ghrm-print .ghrm-compare {
   border-color: transparent;
   opacity: 0;
   transform: translateY(-4px);
+}
+
+.ghrm-compare.is-loading .ghrm-compare-inner {
+  padding-top: 0;
 }
 
 .ghrm-compare-side {
@@ -467,18 +488,6 @@ body.ghrm-print .ghrm-compare {
   font-size: 12px;
   line-height: 16px;
   white-space: nowrap;
-}
-
-.ghrm-compare-progress {
-  min-height: 50px;
-  padding: 8px 4px 0;
-}
-
-.ghrm-compare-progress-row {
-  margin-bottom: 8px;
-  color: var(--fgColor-default, #1f2328);
-  font-size: 12px;
-  line-height: 16px;
 }
 
 @media (prefers-reduced-motion: reduce) {

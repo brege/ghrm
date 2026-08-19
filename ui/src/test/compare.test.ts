@@ -47,7 +47,7 @@ const FORM_HTML = `
       </div>
       <div data-ghrm-compare-progress hidden>
         <span data-ghrm-compare-progress-label>Loading diff</span>
-        <div class="ghrm-progress-track"><div class="ghrm-progress-fill is-indeterminate"></div></div>
+        <div class="ghrm-progress-track"><div class="ghrm-progress-fill is-periodic"></div></div>
       </div>
     </div>
   </form>
@@ -90,15 +90,18 @@ function containerHtml(attrs: string, compare = ''): string {
 function setup(
   attrs: string,
   compare = '',
-): { container: HTMLElement; tools: HTMLElement } {
+): { container: HTMLElement; tools: HTMLElement; toggles: HTMLElement } {
   document.body.innerHTML = containerHtml(attrs, compare);
   const container = document.querySelector('.ghrm-page-shell') as HTMLElement;
   const host = container.querySelector('.ghrm-header-actions') as HTMLElement;
   const tools = document.createElement('div');
   tools.className = 'ghrm-file-tools';
   host.prepend(tools);
-  setupCompare(container, tools);
-  return { container, tools };
+  const toggles = document.createElement('div');
+  toggles.className = 'ghrm-file-toggles';
+  tools.append(toggles);
+  setupCompare(container, toggles);
+  return { container, tools, toggles };
 }
 
 function toggleButton(tools: HTMLElement): HTMLButtonElement | null {
@@ -137,12 +140,14 @@ describe('compare controls', () => {
   });
 
   it('adds a collapsed toggle before the view toggles', () => {
-    const { tools } = setup('data-ghrm-compare-url="/_ghrm/compare?path=a.md"');
+    const { tools, toggles } = setup(
+      'data-ghrm-compare-url="/_ghrm/compare?path=a.md"',
+    );
 
     const button = toggleButton(tools);
     expect(button?.getAttribute('aria-expanded')).toBe('false');
     expect(button?.classList.contains('is-active')).toBe(false);
-    expect(tools.firstElementChild).toBe(button);
+    expect(toggles.firstElementChild).toBe(button);
     expect(button?.querySelector('use')?.getAttribute('href')).toContain(
       'ghrm-icon-compare',
     );

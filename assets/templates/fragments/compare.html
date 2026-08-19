@@ -202,12 +202,12 @@
       <span class="ghrm-compare-dots" aria-hidden="true">..</span>
       {{- picker("head", "head", head, head_label, head_extra, branches, tags, commits, head_timestamp) -}}
     </div>
-    <div class="ghrm-compare-progress" data-ghrm-compare-progress hidden aria-live="polite">
-      <div class="ghrm-compare-progress-row">
+    <div class="ghrm-progress ghrm-compare-progress" data-ghrm-compare-progress hidden aria-live="polite">
+      <div class="ghrm-progress-row">
         <span data-ghrm-compare-progress-label>Loading diff</span>
       </div>
       <div class="ghrm-progress-track">
-        <div class="ghrm-progress-fill is-indeterminate"></div>
+        <div class="ghrm-progress-fill is-periodic"></div>
       </div>
     </div>
   </div>
