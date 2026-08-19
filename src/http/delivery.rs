@@ -244,13 +244,27 @@ fn internal_file_href(kind: &str, rel: &str) -> String {
     format!("/_ghrm/{kind}/{}", rel.trim_matches('/'))
 }
 
-pub(crate) fn resolve_internal_file(s: &AppState, rel: &str) -> Option<PathBuf> {
-    let base = if s.mode == Mode::File {
+pub(crate) fn served_base(s: &AppState) -> &Path {
+    if s.mode == Mode::File {
         s.target.parent().unwrap_or(s.target.as_path())
     } else {
         s.target.as_path()
-    };
-    paths::resolve_file(base, rel)
+    }
+}
+
+pub(crate) fn resolve_internal_file(s: &AppState, rel: &str) -> Option<PathBuf> {
+    paths::resolve_file(served_base(s), rel)
+}
+
+/// True when `path` resolves inside `base` after following symlinks. Both the
+/// edit handler and the editability decision use this so the UI never offers an
+/// edit the write path would reject.
+#[cfg(feature = "edit")]
+pub(crate) fn confined(path: &Path, base: &Path) -> bool {
+    match (path.canonicalize(), base.canonicalize()) {
+        (Ok(path), Ok(base)) => path.starts_with(base),
+        _ => false,
+    }
 }
 
 fn content_disposition(path: &Path) -> String {

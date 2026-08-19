@@ -1,0 +1,62 @@
+/* Shared code-editor overlay: a transparent textarea sits on top of the
+   syntax-highlighted `.ghrm-blob`. Used by the gist editor and the file view's
+   inline editor. */
+
+.ghrm-editor {
+  position: relative;
+  overflow: hidden;
+  min-height: min(66vh, 720px);
+  border: 2px solid var(--fgColor-accent, #0969da);
+  border-radius: 6px;
+  background: var(--bgColor-default, #ffffff);
+}
+
+.ghrm-editor .ghrm-blob {
+  min-height: min(66vh, 720px);
+  margin: 0;
+}
+
+.ghrm-editor-input {
+  display: block;
+  box-sizing: border-box;
+  position: absolute;
+  top: 0;
+  left: calc(4ch + 24px);
+  width: calc(100% - 4ch - 24px);
+  min-height: 100%;
+  resize: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 16px 0 14px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  caret-color: var(--fgColor-default, #1f2328);
+  color: transparent;
+  font:
+    400 12px / 20px
+    var(
+      --fontStack-monospace,
+      ui-monospace,
+      SFMono-Regular,
+      SF Mono,
+      Menlo,
+      Consolas,
+      Liberation Mono,
+      monospace
+    );
+  tab-size: 2;
+  white-space: pre;
+}
+
+.ghrm-editor:focus-within {
+  box-shadow: 0 0 0 1px var(--fgColor-accent, #0969da);
+}
+
+body.ghrm-wrap .ghrm-editor-input {
+  overflow-x: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

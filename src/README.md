@@ -109,12 +109,13 @@ The default Cargo build enables every optional feature below.
 | HTTP server | | Core |
 | Directory archive generation and downloads | ✓ | `archive` |
 | File-content search | ✓ | `content-search` |
+| In-browser editing of text files, subject to runtime configuration | ✓ | `edit` |
 | Local paste and stash support, subject to runtime configuration | ✓ | `gist` |
 | Repository discovery, commit metadata, remotes, and file comparison | ✓ | `repo` |
 | Repository statistics; enables `repo` | ✓ | `stats` |
 | Filesystem watching and automatic browser updates | ✓ | `watch` |
 
-**Example.** The following release build includes repository support, content search, source watching, and archives without statistics or gist support:
+**Example.** The following release build includes repository support, content search, source watching, and archives without statistics, gist, or edit support:
 
 ```bash
 cargo build --locked --release --no-default-features \

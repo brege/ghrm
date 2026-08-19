@@ -193,6 +193,36 @@ body.ghrm-print .ghrm-file-tools {
   background: var(--bgColor-accent-muted, #ddf4ff);
 }
 
+/* Mutating actions (edit, save, and later rename/delete) form their own swatch,
+   separate from the read-only Raw/copy/download group. */
+.ghrm-file-edit {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.ghrm-file-edit > :first-child {
+  border-left-width: 1px;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.ghrm-file-edit > :last-child,
+.ghrm-file-edit:not(.is-editing) .ghrm-file-edit-toggle {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.ghrm-file-edit .ghrm-file-action.is-active {
+  color: var(--fgColor-accent, #0969da);
+  background: var(--bgColor-accent-muted, #ddf4ff);
+}
+
+.ghrm-file-edit .ghrm-file-action.is-active:hover:not(:disabled) {
+  background: var(--bgColor-accent-muted, #ddf4ff);
+}
+
 .ghrm-page-shell > .ghrm-explorer-header {
   flex-wrap: wrap;
 }

@@ -581,6 +581,8 @@ mod tests {
             auth: None,
             #[cfg(feature = "gist")]
             gist: None,
+            #[cfg(feature = "edit")]
+            edit: false,
         }
     }
 

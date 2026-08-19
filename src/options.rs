@@ -28,6 +28,8 @@ pub struct Resolved {
     pub stats: crate::stat::Config,
     #[cfg(feature = "gist")]
     pub gist: bool,
+    #[cfg(feature = "edit")]
+    pub edit: bool,
 }
 
 pub struct Input<'a> {
@@ -44,6 +46,8 @@ pub struct Input<'a> {
     pub max_rows: Option<usize>,
     #[cfg(feature = "gist")]
     pub gist: bool,
+    #[cfg(feature = "edit")]
+    pub edit: bool,
     pub ghrm_open: Option<String>,
 }
 
@@ -129,6 +133,12 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
     if cfg.gist.enabled.is_some() {
         bail!("the shared paste space requires building ghrm with the gist feature");
     }
+    #[cfg(feature = "edit")]
+    let edit = cli.edit || cfg.edit.enabled.unwrap_or(false);
+    #[cfg(not(feature = "edit"))]
+    if cfg.edit.enabled.is_some() {
+        bail!("editing files requires building ghrm with the edit feature");
+    }
 
     Ok(Resolved {
         target,
@@ -152,6 +162,8 @@ pub fn resolve(cli: Input<'_>, cfg: &Config) -> Result<Resolved> {
         stats: cfg.stats.clone().resolve(),
         #[cfg(feature = "gist")]
         gist,
+        #[cfg(feature = "edit")]
+        edit,
     })
 }
 
@@ -264,6 +276,8 @@ pub fn dump(resolved: &Resolved) -> String {
     writeln!(out, "stats.enabled = {}", resolved.stats.enabled).unwrap();
     #[cfg(feature = "gist")]
     writeln!(out, "gist.enabled = {}", resolved.gist).unwrap();
+    #[cfg(feature = "edit")]
+    writeln!(out, "edit.enabled = {}", resolved.edit).unwrap();
 
     out
 }
@@ -288,6 +302,8 @@ mod tests {
             max_rows: None,
             #[cfg(feature = "gist")]
             gist: false,
+            #[cfg(feature = "edit")]
+            edit: false,
             ghrm_open: None,
         }
     }
@@ -482,6 +498,20 @@ mod tests {
         assert!(err.contains("shared paste space"));
     }
 
+    #[cfg(not(feature = "edit"))]
+    #[test]
+    fn rejects_edit_config_without_edit() {
+        let cfg: Config = toml::from_str(
+            r#"
+            [edit]
+            enabled = true
+            "#,
+        )
+        .unwrap();
+        let err = resolve_err(default_input(), &cfg);
+        assert!(err.contains("editing files"));
+    }
+
     #[cfg(not(feature = "watch"))]
     #[test]
     fn rejects_watch_config_without_watch() {
@@ -562,6 +592,8 @@ mod tests {
         assert!(output.contains("stats.enabled = true"));
         #[cfg(feature = "gist")]
         assert!(output.contains("gist.enabled = false"));
+        #[cfg(feature = "edit")]
+        assert!(output.contains("edit.enabled = false"));
     }
 
     #[cfg(feature = "gist")]
@@ -597,6 +629,41 @@ mod tests {
         let resolved = resolve(default_input(), &cfg).unwrap();
 
         assert!(resolved.gist);
+    }
+
+    #[cfg(feature = "edit")]
+    #[test]
+    fn edit_disabled_by_default() {
+        let resolved = resolve(default_input(), &Config::default()).unwrap();
+
+        assert!(!resolved.edit);
+    }
+
+    #[cfg(feature = "edit")]
+    #[test]
+    fn cli_edit_enables_edit() {
+        let input = Input {
+            edit: true,
+            ..default_input()
+        };
+        let resolved = resolve(input, &Config::default()).unwrap();
+
+        assert!(resolved.edit);
+    }
+
+    #[cfg(feature = "edit")]
+    #[test]
+    fn config_edit_enables_edit() {
+        let cfg: Config = toml::from_str(
+            r#"
+            [edit]
+            enabled = true
+            "#,
+        )
+        .unwrap();
+        let resolved = resolve(default_input(), &cfg).unwrap();
+
+        assert!(resolved.edit);
     }
 
     #[cfg(feature = "watch")]

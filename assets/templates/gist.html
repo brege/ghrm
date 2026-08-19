@@ -148,14 +148,14 @@
       </div>
       <div class="ghrm-page-content">
         <form class="ghrm-gist-form" data-ghrm-gist-form hx-boost="false">
-          <div class="ghrm-gist-editor ghrm-file-pane ghrm-raw-pane" data-ghrm-gist-editor>
+          <div class="ghrm-editor ghrm-file-pane ghrm-raw-pane" data-ghrm-gist-editor>
             {{- raw_html|safe -}}
             {# HTML parsing drops one newline right after the textarea open
                tag, so a sentinel newline precedes the body; without it a
                paste body that starts with a newline loses its first line and
                desyncs from the blob overlay. The body stays at column 0. #}
             <textarea
-              class="ghrm-gist-input"
+              class="ghrm-editor-input"
               name="paste"
               rows="24"
               autocomplete="off"

@@ -54,7 +54,9 @@ I made Ghrm because when I lose internet/power, I often turn toward documentatio
 > On first run, ghrm locally downloads the browser libraries from CDNs and (outside of sources or maps you may already have embedded in your Markdown file) never touches the internet again. It renders Markdown and file trees the way GitHub does.
 
 > [!NOTE]
-> Ghrm is non-mutating. It's not meant to be a general git repo manager.
+> Ghrm is non-mutating by default and is not a general git repo manager.
+> Editing files is an optional feature (`edit`, off unless enabled) and is the
+> only operation that writes to the files you browse.
 
 You can use `--bind 0.0.0.0` to connect to a ghrm instance from other devices in your network. It's automatically password protected, set via [`config.toml`](config.example.toml).
 

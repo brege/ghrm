@@ -89,6 +89,10 @@ struct Cli {
     #[cfg(feature = "gist")]
     #[arg(short = 'g', long, help = "Enable the shared paste space")]
     gist: bool,
+
+    #[cfg(feature = "edit")]
+    #[arg(long, help = "Enable editing files")]
+    edit: bool,
 }
 
 fn main() -> Result<()> {
@@ -125,6 +129,8 @@ fn main() -> Result<()> {
             max_rows: cli.max_rows,
             #[cfg(feature = "gist")]
             gist: cli.gist,
+            #[cfg(feature = "edit")]
+            edit: cli.edit,
             ghrm_open: std::env::var("GHRM_OPEN").ok(),
         },
         &cfg,
@@ -168,5 +174,7 @@ fn main() -> Result<()> {
         auth: resolved.auth,
         #[cfg(feature = "gist")]
         gist: resolved.gist,
+        #[cfg(feature = "edit")]
+        edit: resolved.edit,
     }))
 }

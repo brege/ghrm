@@ -27,6 +27,8 @@ pub struct Config {
     pub stats: StatsConfig,
     #[serde(default)]
     pub gist: GistConfig,
+    #[serde(default)]
+    pub edit: EditConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -110,6 +112,12 @@ pub struct AuthConfig {
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GistConfig {
+    pub enabled: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EditConfig {
     pub enabled: Option<bool>,
 }
 
@@ -439,6 +447,19 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.gist.enabled, Some(true));
+    }
+
+    #[test]
+    fn parses_edit_config() {
+        let config: Config = toml::from_str(
+            r#"
+                [edit]
+                enabled = true
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.edit.enabled, Some(true));
     }
 
     #[test]

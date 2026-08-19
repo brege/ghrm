@@ -46,9 +46,10 @@ name = "ghrm"
 path = "src/main.rs"
 
 [features]
-default = ["archive", "content-search", "gist", "repo", "stats", "watch"]
+default = ["archive", "content-search", "edit", "gist", "repo", "stats", "watch"]
 archive = ["dep:zip"]
 content-search = ["dep:grep-matcher", "dep:grep-regex", "dep:grep-searcher"]
+edit = []
 gist = ["dep:filetime"]
 repo = ["dep:gix"]
 stats = ["repo", "dep:askalono", "dep:onefetch-manifest", "dep:tokei"]

@@ -37,6 +37,9 @@ max_rows = 1000
 [gist]
 enabled = false
 
+[edit]
+enabled = false
+
 [watch]
 silent = [".git"]
 

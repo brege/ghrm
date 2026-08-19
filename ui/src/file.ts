@@ -4,19 +4,66 @@ import {
   showCopied,
   writeClipboard,
 } from './adapters/copy';
-import { setupCompare } from './compare';
+import { exitDiff, setupCompare } from './compare';
 import { icon, isHtmlFile } from './dom';
+import { FileEditor } from './file-edit';
 import { applyWrapState, getWrapPref, isPrintMode, setWrapPref } from './prefs';
 import { buildToc } from './toc';
 
 interface FileViewContainer extends HTMLElement {
   dataset: DOMStringMap & {
     ghrmViewKind?: string;
+    currentPath?: string;
     ghrmRawUrl?: string;
     ghrmDownloadUrl?: string;
     ghrmCompareUrl?: string;
     ghrmDiff?: string;
+    ghrmEdit?: string;
   };
+}
+
+const fileEditors = new WeakMap<Element, FileEditor>();
+
+// Survives the htmx swap that leaves diff mode, so edit resumes on the plain
+// file view in a single click from a diff.
+const EDIT_PENDING_KEY = 'ghrm-edit-pending';
+
+function isRawVisible(container: FileViewContainer): boolean {
+  const rawPane = container.querySelector(
+    '[data-ghrm-raw-pane]',
+  ) as HTMLElement | null;
+  return !!rawPane && !rawPane.hidden;
+}
+
+function currentPath(container: FileViewContainer): string {
+  return container.dataset.currentPath ?? '';
+}
+
+function showCodePane(container: FileViewContainer, kind: string): void {
+  if ((kind === 'markdown' || kind === 'dual') && !isRawVisible(container)) {
+    syncFileView(container, true);
+    buildToc();
+  }
+}
+
+// Enter editing from any view in one click: leave diff first (resuming after
+// the swap), switch a preview to its code pane, then open the editor.
+function enterOrExit(
+  container: FileViewContainer,
+  editor: FileEditor,
+  kind: string,
+): void {
+  if (editor.editing) {
+    editor.toggle();
+    return;
+  }
+  if (container.dataset.ghrmDiff) {
+    sessionStorage.setItem(EDIT_PENDING_KEY, currentPath(container));
+    exitDiff(container);
+    return;
+  }
+  showCodePane(container, kind);
+  editor.enter();
 }
 
 function rawText(container: FileViewContainer): string {
@@ -146,6 +193,7 @@ function setupFileView(container: FileViewContainer): void {
   wrapToggle.addEventListener('click', () => {
     setWrapPref(!getWrapPref());
     syncWrapToggle(container);
+    fileEditors.get(container)?.onWrap();
   });
 
   toggles.append(toggle, wrapToggle);
@@ -201,10 +249,63 @@ function setupFileView(container: FileViewContainer): void {
   download.innerHTML = icon('download');
 
   actions.append(rawLink, copy, download);
-  tools.append(toggles, actions);
+
+  let editor: FileEditor | null = null;
+  if (container.dataset.ghrmEdit === '1') {
+    const editGroup = document.createElement('div');
+    editGroup.className = 'ghrm-file-edit';
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'ghrm-file-action ghrm-file-edit-toggle';
+    editBtn.innerHTML = icon('edit');
+    editBtn.setAttribute('aria-pressed', 'false');
+    editBtn.setAttribute('aria-label', 'Edit file');
+    editBtn.title = 'Edit file';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'ghrm-file-action ghrm-file-edit-save';
+    saveBtn.hidden = true;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = icon('save');
+    saveBtn.setAttribute('aria-label', 'No changes to save');
+    saveBtn.title = 'No changes to save';
+
+    const editUrl = rawUrl.replace('/_ghrm/raw/', '/_ghrm/edit/');
+    const instance = new FileEditor(
+      container,
+      editUrl,
+      editBtn,
+      saveBtn,
+      toggle,
+    );
+    editBtn.addEventListener('click', () =>
+      enterOrExit(container, instance, kind),
+    );
+    saveBtn.addEventListener('click', () => {
+      instance.save();
+    });
+    fileEditors.set(container, instance);
+    editGroup.append(editBtn, saveBtn);
+    tools.append(toggles, editGroup, actions);
+    editor = instance;
+  } else {
+    tools.append(toggles, actions);
+  }
+
   host.prepend(tools);
   setupCompare(container, toggles);
   syncFileView(container, kind === 'source');
+
+  if (
+    editor &&
+    sessionStorage.getItem(EDIT_PENDING_KEY) === currentPath(container)
+  ) {
+    sessionStorage.removeItem(EDIT_PENDING_KEY);
+    showCodePane(container, kind);
+    editor.enter();
+  }
 }
 
 export function setupFileViews(): void {

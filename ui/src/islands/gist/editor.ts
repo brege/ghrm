@@ -1,8 +1,13 @@
 import { LitElement } from 'lit';
 import { renderBlobs } from '../../adapters/code';
 import { showCopied, writeClipboard } from '../../adapters/copy';
+import {
+  applyIndentKey,
+  fitEditorHeight,
+  repaintBlob,
+  syncOverlayScroll,
+} from '../../editor';
 import { populateDates } from '../../explorer';
-import { indentEdit } from '../../indent';
 import { applyWrapState, getWrapPref, setWrapPref } from '../../prefs';
 
 interface GistNameInput extends HTMLInputElement {
@@ -165,14 +170,7 @@ export class GhrmGistEditor extends LitElement {
     const blob = this.querySelector<HTMLElement>('.ghrm-blob');
     if (!editor || !input || !blob) return;
 
-    input.style.height = 'auto';
-    const height = Math.max(
-      input.scrollHeight,
-      blob.offsetHeight,
-      editor.clientHeight,
-    );
-    input.style.height = `${height}px`;
-    blob.scrollLeft = input.scrollLeft;
+    fitEditorHeight(editor, input, blob);
   }
 
   private syncEditorSoon(): void {
@@ -183,20 +181,9 @@ export class GhrmGistEditor extends LitElement {
 
   private syncBlob(): void {
     const input = this.getTextarea();
-    const source = this.querySelector<HTMLElement>('.ghrm-blob-source code');
-    const data = this.querySelector<HTMLTemplateElement>('template.ghrm-data');
-    if (!input || !source) return;
+    if (!input) return;
 
-    const text = input.value;
-    if (source.textContent !== text) {
-      source.textContent = text;
-      delete source.dataset.ghrmHighlighted;
-    }
-    if (data?.content) {
-      data.content.textContent = text;
-    }
-
-    renderBlobs();
+    repaintBlob(this, input);
     this.syncSaveAction();
     this.syncEditorSoon();
   }
@@ -205,31 +192,14 @@ export class GhrmGistEditor extends LitElement {
     const input = this.getTextarea();
     const blob = this.querySelector<HTMLElement>('.ghrm-blob');
     if (!input || !blob) return;
-    blob.scrollLeft = input.scrollLeft;
+    syncOverlayScroll(input, blob);
   }
 
   private handleIndentKey(event: KeyboardEvent): void {
-    if (
-      event.key !== 'Tab' ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.isComposing
-    ) {
-      return;
-    }
-
-    event.preventDefault();
     const input = event.currentTarget as GistTextarea;
-    const edit = indentEdit(
-      input.value,
-      input.selectionStart,
-      input.selectionEnd,
-      event.shiftKey,
-    );
-    input.setRangeText(edit.text, edit.start, edit.end, 'preserve');
-    input.setSelectionRange(edit.selectionStart, edit.selectionEnd);
-    this.syncBlob();
+    if (applyIndentKey(event, input)) {
+      this.syncBlob();
+    }
   }
 
   private syncWrapToggle(): void {

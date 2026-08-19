@@ -1,4 +1,5 @@
 import { qsel } from './dom';
+import { readEditVersion } from './file-edit';
 import { refreshActiveSearch } from './search';
 import { setConnected } from './status';
 
@@ -21,15 +22,13 @@ export function setupLiveReload(): void {
     ws.onopen = () => {
       setConnected(true);
       if (connectedOnce) {
-        if (currentContentPath()) {
-          location.reload();
-        }
+        void reloadAfterReconnect();
         return;
       }
       connectedOnce = true;
     };
     ws.onmessage = (ev) => {
-      handleLiveEvent(ev.data);
+      void handleLiveEvent(ev.data);
     };
     ws.onerror = () => {
       setConnected(false);
@@ -84,6 +83,13 @@ export function shouldNavigateToParent(
   );
 }
 
+// The shell of an in-progress file edit, or null when nothing is being edited.
+function editingShell(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(
+    '.ghrm-page-shell[data-ghrm-view-kind][data-ghrm-editing]',
+  );
+}
+
 function currentContentPath(): ContentPath | null {
   const explorer = qsel('article[data-explorer]');
   if (explorer) {
@@ -112,13 +118,56 @@ function dispatchLiveEvent(event: LiveEvent): void {
   );
 }
 
-function handleLiveEvent(message: string): void {
+export async function preserveEditedFile(shell: HTMLElement): Promise<boolean> {
+  try {
+    const current = await readEditVersion(shell);
+    if (current === shell.dataset.ghrmEditVersion) {
+      return true;
+    }
+    if (shell.dataset.ghrmEditDirty === '1') {
+      shell.dataset.ghrmEditConflict = '1';
+      shell.dataset.ghrmEditConflictVersion = current;
+      return true;
+    }
+    return false;
+  } catch {
+    if (shell.dataset.ghrmEditDirty === '1') {
+      shell.dataset.ghrmEditConflict = '1';
+      delete shell.dataset.ghrmEditConflictVersion;
+      return true;
+    }
+    return false;
+  }
+}
+
+async function reloadAfterReconnect(): Promise<void> {
+  const current = currentContentPath();
+  if (!current) return;
+  const shell = editingShell();
+  if (current.kind === 'file' && shell && (await preserveEditedFile(shell))) {
+    return;
+  }
+  location.reload();
+}
+
+async function handleLiveEvent(message: string): Promise<void> {
   const event = parseLiveMessage(message);
   const current = currentContentPath();
+  const shell = editingShell();
+  const reloadsCurrent =
+    event.name === 'reload' && shouldReloadForChange(current, event.path);
   if (
     event.name === 'reload' &&
-    !shouldReloadForChange(current, event.path) &&
+    !reloadsCurrent &&
     !shouldNavigateToParent(current, event.path)
+  ) {
+    return;
+  }
+  if (
+    reloadsCurrent &&
+    current?.kind === 'file' &&
+    shell &&
+    (await preserveEditedFile(shell))
   ) {
     return;
   }

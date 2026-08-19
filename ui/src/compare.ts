@@ -294,6 +294,15 @@ function leaveDiff(form: HTMLFormElement): void {
   form.requestSubmit();
 }
 
+// Leave diff mode and re-render the plain file when a diff is applied. Used by
+// the file editor so editing is reachable in one step from a diff view.
+export function exitDiff(container: HTMLElement): void {
+  const form = formOf(container);
+  if (form && container.dataset.ghrmDiff) {
+    leaveDiff(form);
+  }
+}
+
 function wireForm(form: HTMLFormElement): void {
   if (form.dataset.ghrmCompareWired === '1') return;
   form.dataset.ghrmCompareWired = '1';

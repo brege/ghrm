@@ -61,6 +61,8 @@ pub struct AppState {
     pub auth: Option<Arc<auth::AuthState>>,
     #[cfg(feature = "gist")]
     pub gist: Option<gist::Store>,
+    #[cfg(feature = "edit")]
+    pub edit: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -131,6 +133,8 @@ pub struct Options {
     pub auth: Option<auth::AuthConfig>,
     #[cfg(feature = "gist")]
     pub gist: bool,
+    #[cfg(feature = "edit")]
+    pub edit: bool,
 }
 
 pub async fn run(options: Options) -> Result<()> {
@@ -157,6 +161,8 @@ pub async fn run(options: Options) -> Result<()> {
         auth,
         #[cfg(feature = "gist")]
         gist,
+        #[cfg(feature = "edit")]
+        edit,
     } = options;
 
     let meta = std::fs::metadata(&target)?;
@@ -289,6 +295,8 @@ pub async fn run(options: Options) -> Result<()> {
         auth,
         #[cfg(feature = "gist")]
         gist: gist_store,
+        #[cfg(feature = "edit")]
+        edit,
     };
     #[cfg(feature = "gist")]
     if let Some(gist) = &state.gist {
@@ -308,6 +316,19 @@ pub async fn run(options: Options) -> Result<()> {
                 "/_ghrm/gist/p/{id}",
                 get(http_gist::show_id).delete(http_gist::delete_id),
             )
+    } else {
+        protected
+    };
+    #[cfg(feature = "edit")]
+    let protected = if state.edit {
+        protected.route(
+            "/_ghrm/edit/{*path}",
+            axum::routing::put(crate::http::edit::save)
+                .head(crate::http::edit::current)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    crate::http::edit::MAX_EDIT_BYTES,
+                )),
+        )
     } else {
         protected
     };
@@ -678,6 +699,25 @@ async fn render_target(
     }
 }
 
+#[cfg(feature = "edit")]
+fn editable_view_attrs(s: &AppState, path: &Path, text: &str, attrs: String) -> String {
+    if s.edit
+        && delivery::confined(path, delivery::served_base(s))
+        && delivery::is_text_content(text.as_bytes())
+    {
+        let version = crate::http::edit::version(text.as_bytes());
+        let eol = crate::http::edit::line_ending_attr(text);
+        format!("{attrs} data-ghrm-edit=\"1\" data-ghrm-edit-version=\"{version}\"{eol}")
+    } else {
+        attrs
+    }
+}
+
+#[cfg(not(feature = "edit"))]
+fn editable_view_attrs(_: &AppState, _: &Path, _: &str, attrs: String) -> String {
+    attrs
+}
+
 async fn render_file(
     s: &AppState,
     path: &Path,
@@ -703,7 +743,12 @@ async fn render_file(
     let crumbs = page_crumbs(s, path, root, &rel, &view);
     let raw_html = delivery::raw_blob_html(&md, Some("markdown"), None);
     let file_view = delivery::FileView::markdown();
-    let view_attrs = diff::file_view_attrs(s, path, &rel, file_view, &view);
+    let view_attrs = editable_view_attrs(
+        s,
+        path,
+        &md,
+        diff::file_view_attrs(s, path, &rel, file_view, &view),
+    );
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
@@ -796,7 +841,12 @@ async fn render_source_file(
     let crumbs = page_crumbs(s, path, root, rel, &view);
     let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref(), None);
     let file_view = delivery::FileView::source();
-    let view_attrs = diff::file_view_attrs(s, path, rel, file_view, &view);
+    let view_attrs = editable_view_attrs(
+        s,
+        path,
+        &text,
+        diff::file_view_attrs(s, path, rel, file_view, &view),
+    );
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
@@ -869,7 +919,12 @@ async fn render_dual_file(
     let crumbs = page_crumbs(s, path, root, rel, &view);
     let raw_html = delivery::raw_blob_html(&text, rendered.lang.as_deref(), None);
     let file_view = delivery::FileView::dual();
-    let view_attrs = diff::file_view_attrs(s, path, rel, file_view, &view);
+    let view_attrs = editable_view_attrs(
+        s,
+        path,
+        &text,
+        diff::file_view_attrs(s, path, rel, file_view, &view),
+    );
     let body = match tmpl::page(tmpl::PageCtx {
         features: &features,
         crumbs: &crumbs,
