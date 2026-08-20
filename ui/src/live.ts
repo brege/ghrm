@@ -1,7 +1,7 @@
 import { qsel } from './dom';
-import { readEditVersion } from './file-edit';
-import { refreshActiveSearch } from './search';
-import { setConnected } from './status';
+import { readEditVersion } from './file/file-edit';
+import { refreshActiveSearch } from './search/search';
+import { setConnected } from './shell/status';
 
 export interface LiveEvent {
   name: string;

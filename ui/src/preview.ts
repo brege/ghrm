@@ -3,7 +3,7 @@ import { addCopyButtons } from './adapters/copy';
 import { renderMaps } from './adapters/map';
 import { renderMath } from './adapters/math';
 import { renderMermaid } from './adapters/mermaid';
-import { syncPrintMode } from './prefs';
+import { syncPrintMode } from './shell/prefs';
 import { loadAssets } from './vendor';
 
 async function runAll(): Promise<void> {

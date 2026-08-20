@@ -3,21 +3,21 @@ import {
   populateDates,
   setupNavExternalLinks,
   syncColumnControls,
-} from './explorer';
-import { setupFileViews } from './file';
+} from './explorer/explorer';
+import { setupPathCopy } from './explorer/path-copy';
+import { setupFileViews } from './file/file';
+import { buildToc, setupToc } from './file/toc';
 import { setupLiveReload } from './live';
-import { setupHtmxNav } from './nav';
-import { setupPathCopy } from './path-copy';
+import { type FeatureEntry, registerFeatures } from './runtime';
+import { setSearchCloseHandler } from './search/search';
+import { setupHtmxNav } from './shell/nav';
 import {
   applyDocChromePref,
   setupDocChromeToggle,
   setupThemeToggle,
   syncPrintMode,
-} from './prefs';
-import { type FeatureEntry, registerFeatures } from './runtime';
-import { setSearchCloseHandler } from './search';
-import { setupStatusPeek, syncServerStatus } from './status';
-import { buildToc, setupToc } from './toc';
+} from './shell/prefs';
+import { setupStatusPeek, syncServerStatus } from './shell/status';
 
 function setupSearchClose(): void {
   setSearchCloseHandler(() => {

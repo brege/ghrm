@@ -19,45 +19,40 @@ The UI workspace owns maintained browser source, icon declarations, and the vali
 
 | Path | Purpose |
 | --- | --- |
-| src/main.ts | full document entry for browser features and islands |
+| src/main.ts | full document entry for browser features and custom elements |
 | src/preview.ts | preview-only entry |
 | src/gist.ts | gist page entry |
 
 ## Runtime
 
+Root modules coordinate across features; feature behavior lives under the folder that owns it.
+
 | Path | Purpose |
 | --- | --- |
 | src/features.ts | ordered browser feature registry |
 | src/runtime.ts | initial and refresh lifecycle runner used by htmx refreshes and tests |
-| src/compare.ts | file compare bar controls |
 | src/dom.ts | shared DOM helpers |
-| src/explorer.ts | explorer page setup and controls |
-| src/file.ts | rendered file view setup |
 | src/live.ts | live reload behavior |
-| src/nav.ts | boosted navigation integration |
-| src/path-copy.ts | explorer path copy behavior |
-| src/prefs.ts | theme, print, and chrome preference sync |
-| src/search.ts | search panel coordination |
-| src/status.ts | server status and peek behavior |
-| src/toc.ts | document table of contents behavior |
+| src/vendor.ts | vendor asset loading plan |
 | src/adapters/* | page-specific adapters for copy, math, mermaid, and map behavior |
 
-## Islands
+## Feature Boundaries
 
 | Path | Purpose |
 | --- | --- |
-| src/islands/define.ts | registers all custom elements |
-| src/islands/archive/progress.ts | archive download progress island |
-| src/islands/menu.ts | shared floating-menu island for TOC, explorer, and compare panels |
-| src/islands/search/panel.ts | search panel island |
-| src/islands/gist/editor.ts | gist editor island |
-| src/islands/gist/stash.ts | gist stash island |
+| src/editor/ | shared editing surface and tab indentation |
+| src/explorer/ | explorer page setup, controls, and path copy |
+| src/file/ | rendered file view, inline file editing, compare bar, and table of contents |
+| src/gist/ | gist editor and stash islands |
+| src/search/ | search coordination and the search panel island |
+| src/shell/ | boosted navigation, server status, preferences, and the shared menu island |
+| src/archive/ | archive download progress island |
 
 The global `ghrm-menus` island controls elements that declare `data-ghrm-menu-toggle`, `data-ghrm-menu-panel`, and optional nested `data-ghrm-menu-disclosure` attributes. It owns open state, dismissal, focus restoration, and floating-panel positioning. About and statistics expansions retain their dedicated behavior.
 
 ## Tests
 
-`src/test/` mirrors the runtime and island layout. Vitest runs `src/**/*.test.ts` in Happy DOM and covers the runtime registry, document setup, and Lit island contracts.
+`src/test/` mirrors the runtime layout. Vitest runs `src/**/*.test.ts` in Happy DOM and covers the runtime registry, document setup, and Lit island contracts.
 
 ## Authored Source And Generated Runtime
 

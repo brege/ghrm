@@ -1,2 +1,2 @@
-import './islands/gist/editor';
-import './islands/gist/stash';
+import './gist/editor';
+import './gist/stash';
