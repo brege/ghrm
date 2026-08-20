@@ -1,9 +1,4 @@
-import {
-  applyIndentKey,
-  fitEditorHeight,
-  repaintBlob,
-  syncOverlayScroll,
-} from './editor';
+import { EditorSession } from './editor';
 import { getWrapPref } from './prefs';
 
 function rawSeed(pane: HTMLElement): string {
@@ -44,16 +39,15 @@ export async function readEditVersion(container: HTMLElement): Promise<string> {
   return version;
 }
 
-// Inline editor for the file view's raw/code pane. It overlays a transparent
-// textarea on the server-rendered `.ghrm-blob`, driving the shared editor
-// mechanics, and persists through PUT /_ghrm/edit/{path}. The textarea is
+// Inline editor for the file view's raw/code pane. It drives the shared
+// EditorSession over the server-rendered `.ghrm-blob` and persists through
+// PUT /_ghrm/edit/{path} with If-Match optimistic concurrency. The textarea is
 // created only when editing starts, so read-only file views ship no extra
 // markup.
 export class FileEditor {
+  private session: EditorSession | null = null;
   private textarea: HTMLTextAreaElement | null = null;
-  private baseline = '';
   private saved = false;
-  private controller: AbortController | null = null;
   private entryUrl = '';
   private entryState: unknown = null;
 
@@ -78,7 +72,7 @@ export class FileEditor {
   }
 
   get editing(): boolean {
-    return this.textarea !== null;
+    return this.session !== null;
   }
 
   toggle(): void {
@@ -92,41 +86,32 @@ export class FileEditor {
   enter(): void {
     const pane = this.pane();
     const blob = this.blob();
-    if (!pane || !blob || this.textarea) return;
+    if (!pane || !blob || this.session) return;
 
     const textarea = document.createElement('textarea');
     textarea.className = 'ghrm-editor-input';
     textarea.value = rawSeed(pane);
-    textarea.setAttribute('wrap', getWrapPref() ? 'soft' : 'off');
     textarea.autocomplete = 'off';
     textarea.spellcheck = false;
     textarea.setAttribute('aria-label', 'Edit file');
     pane.classList.add('ghrm-editor');
     pane.appendChild(textarea);
     this.textarea = textarea;
-    this.baseline = textarea.value;
     this.saved = false;
     this.entryUrl = location.href;
     this.entryState = history.state;
 
-    this.controller = new AbortController();
-    const { signal } = this.controller;
-    textarea.addEventListener('input', () => this.onChange(), { signal });
-    textarea.addEventListener(
-      'keydown',
-      (event) => {
-        if (applyIndentKey(event, textarea)) {
-          this.onChange();
-        }
-      },
-      { signal },
-    );
-    textarea.addEventListener(
-      'scroll',
-      () => syncOverlayScroll(textarea, blob),
-      { signal },
-    );
-    window.addEventListener('resize', () => this.resizeSoon(), { signal });
+    const session = new EditorSession({
+      root: pane,
+      textarea,
+      blob,
+      sizeHost: pane,
+      onChange: () => this.syncSave(),
+    });
+    this.session = session;
+    session.applyWrap(getWrapPref());
+
+    const { signal } = session;
     window.addEventListener('popstate', (event) => this.onHistory(event), {
       capture: true,
       signal,
@@ -153,7 +138,7 @@ export class FileEditor {
     }
     this.syncButtons();
     this.syncSave();
-    this.resize();
+    session.refresh();
     textarea.focus();
   }
 
@@ -174,19 +159,15 @@ export class FileEditor {
   // already been confirmed, so listeners never outlive the swapped-out view.
   private destroy(): void {
     const pane = this.pane();
-    const textarea = this.textarea;
-    if (textarea) {
+    if (this.session) {
       // Restore the read-only blob to the on-disk content, dropping unsaved
-      // edits that were mirrored into the overlay.
-      if (pane && textarea.value !== this.baseline) {
-        textarea.value = this.baseline;
-        repaintBlob(pane, textarea);
-      }
-      textarea.remove();
-      this.textarea = null;
+      // edits mirrored into the overlay, then release listeners.
+      this.session.restore();
+      this.session.destroy();
+      this.session = null;
     }
-    this.controller?.abort();
-    this.controller = null;
+    this.textarea?.remove();
+    this.textarea = null;
     pane?.classList.remove('ghrm-editor');
     delete this.container.dataset.ghrmEditing;
     delete this.container.dataset.ghrmEditDirty;
@@ -225,8 +206,8 @@ export class FileEditor {
   }
 
   async save(): Promise<void> {
-    const textarea = this.textarea;
-    if (!textarea || !this.dirty()) return;
+    const session = this.session;
+    if (!session || !session.dirty) return;
     const conflict = this.container.dataset.ghrmEditConflict === '1';
     if (
       conflict &&
@@ -237,7 +218,7 @@ export class FileEditor {
       return;
     }
 
-    const text = textarea.value;
+    const text = session.value;
     const body =
       this.container.dataset.ghrmEol === 'crlf'
         ? text.replace(/\n/g, '\r\n')
@@ -276,7 +257,7 @@ export class FileEditor {
       }
       const version = parseVersion(response.headers.get('ETag'));
       if (!version) throw new Error('edit save response omitted ETag');
-      this.baseline = text;
+      session.markSaved(text);
       this.saved = true;
       this.container.dataset.ghrmEditVersion = version;
       delete this.container.dataset.ghrmEditConflict;
@@ -291,22 +272,11 @@ export class FileEditor {
 
   // Reflect the current wrap preference on the overlay and re-measure.
   onWrap(): void {
-    if (!this.textarea) return;
-    this.textarea.setAttribute('wrap', getWrapPref() ? 'soft' : 'off');
-    this.resizeSoon();
-  }
-
-  private onChange(): void {
-    const pane = this.pane();
-    if (pane && this.textarea) {
-      repaintBlob(pane, this.textarea);
-    }
-    this.syncSave();
-    this.resizeSoon();
+    this.session?.applyWrap(getWrapPref());
   }
 
   private dirty(): boolean {
-    return !!this.textarea && this.textarea.value !== this.baseline;
+    return this.session !== null && this.session.dirty;
   }
 
   private syncButtons(): void {
@@ -335,17 +305,5 @@ export class FileEditor {
     } else {
       delete this.container.dataset.ghrmEditDirty;
     }
-  }
-
-  private resize(): void {
-    const pane = this.pane();
-    const blob = this.blob();
-    if (pane && this.textarea && blob) {
-      fitEditorHeight(pane, this.textarea, blob);
-    }
-  }
-
-  private resizeSoon(): void {
-    requestAnimationFrame(() => this.resize());
   }
 }

@@ -1,22 +1,10 @@
 import { LitElement } from 'lit';
-import { renderBlobs } from '../../adapters/code';
 import { showCopied, writeClipboard } from '../../adapters/copy';
-import {
-  applyIndentKey,
-  fitEditorHeight,
-  repaintBlob,
-  syncOverlayScroll,
-} from '../../editor';
+import { EditorSession } from '../../editor';
 import { populateDates } from '../../explorer';
 import { applyWrapState, getWrapPref, setWrapPref } from '../../prefs';
 
 interface GistNameInput extends HTMLInputElement {
-  dataset: DOMStringMap & {
-    ghrmGistSaved?: string;
-  };
-}
-
-interface GistTextarea extends HTMLTextAreaElement {
   dataset: DOMStringMap & {
     ghrmGistSaved?: string;
   };
@@ -60,8 +48,8 @@ function validName(name: string): boolean {
 }
 
 export class GhrmGistEditor extends LitElement {
+  private session: EditorSession | null = null;
   private boundLiveHandler: (() => void) | null = null;
-  private boundResizeHandler: (() => void) | null = null;
   private connectedOnce = false;
   private pendingRefresh = false;
 
@@ -71,7 +59,8 @@ export class GhrmGistEditor extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
-    this.setupEditor();
+    this.setupControls();
+    this.ensureSession();
     if (!this.connectedOnce) {
       this.connectedOnce = true;
       this.addGlobalListeners();
@@ -80,6 +69,8 @@ export class GhrmGistEditor extends LitElement {
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    this.session?.destroy();
+    this.session = null;
     this.removeGlobalListeners();
     this.connectedOnce = false;
   }
@@ -96,8 +87,10 @@ export class GhrmGistEditor extends LitElement {
     return this.getArticle()?.dataset.ghrmGistPage || gistPath;
   }
 
-  private getTextarea(): GistTextarea | null {
-    return this.querySelector<GistTextarea>('[data-ghrm-gist-form] textarea');
+  private getTextarea(): HTMLTextAreaElement | null {
+    return this.querySelector<HTMLTextAreaElement>(
+      '[data-ghrm-gist-form] textarea',
+    );
   }
 
   private getNameInput(): GistNameInput | null {
@@ -111,18 +104,16 @@ export class GhrmGistEditor extends LitElement {
   }
 
   private currentText(): string {
-    return this.getTextarea()?.value || '';
+    return this.session?.value ?? this.getTextarea()?.value ?? '';
+  }
+
+  private nameChanged(): boolean {
+    const name = this.getNameInput();
+    return !!(name && normalizeName(name.value) !== name.dataset.ghrmGistSaved);
   }
 
   private hasUnsavedChanges(): boolean {
-    const input = this.getTextarea();
-    if (!input) return false;
-    const name = this.getNameInput();
-    const normalized = name ? normalizeName(name.value) : '';
-    return (
-      input.value !== input.dataset.ghrmGistSaved ||
-      !!(name && normalized !== name.dataset.ghrmGistSaved)
-    );
+    return (this.session?.dirty ?? false) || this.nameChanged();
   }
 
   private setStatus(message: string): void {
@@ -133,19 +124,16 @@ export class GhrmGistEditor extends LitElement {
   }
 
   private syncSaveAction(saving = false): void {
-    const input = this.getTextarea();
+    const buttons = this.getSaveButtons();
+    if (buttons.length === 0) return;
     const name = this.getNameInput();
     const controls = this.querySelectorAll<HTMLElement>(
       '[data-ghrm-gist-save-control]',
     );
-    const buttons = this.getSaveButtons();
-    if (!input || buttons.length === 0) return;
 
     const normalized = name ? normalizeName(name.value) : '';
     const valid = !name || validName(normalized);
-    const changed =
-      input.value !== input.dataset.ghrmGistSaved ||
-      !!(name && normalized !== name.dataset.ghrmGistSaved);
+    const changed = (this.session?.dirty ?? false) || this.nameChanged();
     const label = saving
       ? 'Saving'
       : !valid
@@ -164,48 +152,9 @@ export class GhrmGistEditor extends LitElement {
     }
   }
 
-  private syncEditor(): void {
-    const editor = this.querySelector<HTMLElement>('[data-ghrm-gist-editor]');
-    const input = this.getTextarea();
-    const blob = this.querySelector<HTMLElement>('.ghrm-blob');
-    if (!editor || !input || !blob) return;
-
-    fitEditorHeight(editor, input, blob);
-  }
-
-  private syncEditorSoon(): void {
-    requestAnimationFrame(() => {
-      this.syncEditor();
-    });
-  }
-
-  private syncBlob(): void {
-    const input = this.getTextarea();
-    if (!input) return;
-
-    repaintBlob(this, input);
-    this.syncSaveAction();
-    this.syncEditorSoon();
-  }
-
-  private syncBlobScroll(): void {
-    const input = this.getTextarea();
-    const blob = this.querySelector<HTMLElement>('.ghrm-blob');
-    if (!input || !blob) return;
-    syncOverlayScroll(input, blob);
-  }
-
-  private handleIndentKey(event: KeyboardEvent): void {
-    const input = event.currentTarget as GistTextarea;
-    if (applyIndentKey(event, input)) {
-      this.syncBlob();
-    }
-  }
-
   private syncWrapToggle(): void {
     const toggle = this.querySelector<HTMLElement>('[data-ghrm-gist-wrap]');
-    const input = this.getTextarea();
-    if (!toggle || !input) return;
+    if (!toggle) return;
 
     const wrap = getWrapPref();
     toggle.classList.toggle('is-active', wrap);
@@ -213,9 +162,8 @@ export class GhrmGistEditor extends LitElement {
     const label = wrap ? 'Disable line wrap' : 'Wrap lines';
     toggle.setAttribute('aria-label', label);
     toggle.title = label;
-    input.setAttribute('wrap', wrap ? 'soft' : 'off');
     applyWrapState(wrap);
-    this.syncEditorSoon();
+    this.session?.applyWrap(wrap);
   }
 
   private replaceGistUrl(): void {
@@ -225,18 +173,13 @@ export class GhrmGistEditor extends LitElement {
   }
 
   private async save(): Promise<void> {
-    const input = this.getTextarea();
-    if (!input) return;
     const name = this.getNameInput();
     const normalized = name ? normalizeName(name.value) : '';
     if (name && !validName(normalized)) {
       this.syncSaveAction();
       return;
     }
-    if (
-      input.value === input.dataset.ghrmGistSaved &&
-      (!name || normalized === name.dataset.ghrmGistSaved)
-    ) {
+    if (!this.hasUnsavedChanges()) {
       this.syncSaveAction();
       return;
     }
@@ -257,7 +200,7 @@ export class GhrmGistEditor extends LitElement {
       const response = await fetch(gistPath, {
         method: 'POST',
         headers,
-        body: input.value,
+        body: this.currentText(),
       });
       if (!response.ok) {
         throw new Error(`gist save failed: ${response.status}`);
@@ -359,7 +302,9 @@ export class GhrmGistEditor extends LitElement {
     this.refresh();
   }
 
-  private setupEditor(): void {
+  // One-time control wiring for the paste article. Guarded so a reconnecting
+  // element does not double-bind these listeners.
+  private setupControls(): void {
     const article = this.getArticle();
     if (!article || article.dataset.ghrmGistReady === '1') return;
     article.dataset.ghrmGistReady = '1';
@@ -376,10 +321,6 @@ export class GhrmGistEditor extends LitElement {
       });
     }
 
-    const input = this.getTextarea();
-    if (input) {
-      input.dataset.ghrmGistSaved = input.value;
-    }
     const name = this.getNameInput();
     if (name) {
       if (!name.value) {
@@ -392,16 +333,6 @@ export class GhrmGistEditor extends LitElement {
         this.refreshPending();
       });
     }
-    input?.addEventListener('input', () => {
-      this.syncBlob();
-      this.refreshPending();
-    });
-    input?.addEventListener('keydown', (event) => {
-      this.handleIndentKey(event);
-    });
-    input?.addEventListener('scroll', () => {
-      this.syncBlobScroll();
-    });
 
     const copy = this.querySelector<GistCopyButton>('[data-ghrm-gist-copy]');
     copy?.addEventListener('click', async () => {
@@ -429,31 +360,45 @@ export class GhrmGistEditor extends LitElement {
       this.deletePaste();
     });
 
+    this.syncSaveAction();
+  }
+
+  // The editing session owns the textarea overlay listeners, which are released
+  // on disconnect. Create a fresh session whenever the element connects without
+  // one so reconnection restores live editing.
+  private ensureSession(): void {
+    if (this.session) return;
+    const input = this.getTextarea();
+    const blob = this.querySelector<HTMLElement>('.ghrm-blob');
+    const host = this.querySelector<HTMLElement>('[data-ghrm-gist-editor]');
+    if (!input || !blob || !host) return;
+
+    this.session = new EditorSession({
+      root: this,
+      textarea: input,
+      blob,
+      sizeHost: host,
+      onChange: () => {
+        this.syncSaveAction();
+        this.refreshPending();
+      },
+    });
     this.syncWrapToggle();
     this.syncSaveAction();
-    renderBlobs();
-    this.syncEditorSoon();
+    this.session.refresh();
   }
 
   private addGlobalListeners(): void {
     this.boundLiveHandler = () => {
       this.requestRefresh();
     };
-    this.boundResizeHandler = () => {
-      this.syncEditorSoon();
-    };
     document.addEventListener('ghrm:live:gist', this.boundLiveHandler);
-    window.addEventListener('resize', this.boundResizeHandler);
   }
 
   private removeGlobalListeners(): void {
     if (this.boundLiveHandler) {
       document.removeEventListener('ghrm:live:gist', this.boundLiveHandler);
       this.boundLiveHandler = null;
-    }
-    if (this.boundResizeHandler) {
-      window.removeEventListener('resize', this.boundResizeHandler);
-      this.boundResizeHandler = null;
     }
   }
 }

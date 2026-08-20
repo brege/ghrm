@@ -388,5 +388,21 @@ describe('ghrm-gist-editor', () => {
 
       expect(fetchSpy).not.toHaveBeenCalled();
     });
+
+    it('recreates the editing session after reconnection', async () => {
+      const article = document.querySelector('article[data-ghrm-gist]')!;
+      element.remove();
+      article.appendChild(element);
+      await element.updateComplete;
+
+      const textarea = element.querySelector('textarea')!;
+      textarea.value = 'edited after reconnect';
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+      const saveButton = element.querySelector<HTMLButtonElement>(
+        '[data-ghrm-gist-save]',
+      )!;
+      expect(saveButton.disabled).toBe(false);
+    });
   });
 });
