@@ -3,12 +3,12 @@
   "algorithm": "sha256",
   "archive": {
     "path": "js.tar.zst",
-    "sha256": "455439243f1ffc27fe66eb8c7a01f99bef6c3d61743f70f9cdc389e547878949"
+    "sha256": "d44439768cfbb8f96637e114d0b93aef3428bfe35e73b356fdcfea1b438ce665"
   },
   "files": {
     "js/chunks/adapters.js": "c80c504f674010ef20c5b7994c4f77fb98d502f8c0c9afe5a5b8d672c8c074de",
     "js/chunks/explorer.js": "09dceec3fc8f7a8d12a96efcc879a74888baa44fd08490b91452923f947ce767",
-    "js/chunks/gist.js": "dfa20725fad56b4a5aefde312881670c5b8435cf5699293c07102bc8cbc6ef99",
+    "js/chunks/gist.js": "38b1d47efeb7150268cf3fa423f625bba7f17a708e34dbfb176102efd038d245",
     "js/chunks/shared.js": "e4c43e9247d8c684c11e1013fbf0411cd7e524e4d2be119aefa03b769238a61b",
     "js/gist.js": "8b832d0ae5b7b3460d3465cc8db496e5a6e9c8e61c3f29c9e709a1507b510c5e",
     "js/icons.svg": "5d1cce6811275dea775c6142f5298606e780b6761e7c0bce0a378070413c4327",

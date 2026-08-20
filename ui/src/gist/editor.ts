@@ -1,8 +1,9 @@
 import { LitElement } from 'lit';
 import { showCopied, writeClipboard } from '../adapters/copy';
 import { EditorSession } from '../editor/editor';
-import { populateDates } from '../explorer/explorer';
 import { applyWrapState, getWrapPref, setWrapPref } from '../shell/prefs';
+import { swapArticle } from './fragment';
+import { normalizeName, validName } from './name';
 
 interface GistNameInput extends HTMLInputElement {
   dataset: DOMStringMap & {
@@ -15,7 +16,6 @@ interface GistCopyButton extends HTMLButtonElement {
 }
 
 const gistPath = '/_ghrm/gist';
-const nameMax = 80;
 
 function deleteUrl(id: string): string {
   return `/_ghrm/gist/p/${encodeURIComponent(id)}`;
@@ -28,23 +28,6 @@ function pad(value: number, width: number): string {
 function defaultGistName(): string {
   const now = new Date();
   return `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1, 2)}${pad(now.getUTCDate(), 2)}T${pad(now.getUTCHours(), 2)}${pad(now.getUTCMinutes(), 2)}${pad(now.getUTCSeconds(), 2)}.${pad(now.getUTCMilliseconds(), 3)}000000Z`;
-}
-
-function normalizeName(value: string): string {
-  const name = value.trim();
-  return name.endsWith('.txt') ? name.slice(0, -4) : name;
-}
-
-function validName(name: string): boolean {
-  return (
-    name.length <= nameMax &&
-    (name === '' ||
-      (name !== '.' &&
-        name !== '..' &&
-        !name.startsWith('.') &&
-        !name.endsWith('.') &&
-        /^[A-Za-z0-9._-]+$/.test(name)))
-  );
 }
 
 export class GhrmGistEditor extends LitElement {
@@ -255,37 +238,25 @@ export class GhrmGistEditor extends LitElement {
     const article = this.getArticle();
     if (!article) return false;
 
-    const response = await fetch(path, {
-      headers: {
-        Accept: 'text/html',
-        'HX-Request': 'true',
+    const next = await swapArticle(
+      article,
+      path,
+      'article[data-ghrm-gist]',
+      (fragment) => {
+        if (!status) return;
+        const nextStatus = fragment.querySelector<HTMLElement>(
+          '[data-ghrm-gist-status]',
+        );
+        if (nextStatus) {
+          nextStatus.textContent = status;
+        }
       },
-    });
-    if (!response.ok) {
-      this.setStatus('Refresh failed');
-      return false;
-    }
-
-    const html = await response.text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const next = doc.querySelector('article[data-ghrm-gist]');
+    );
     if (!next) {
       this.setStatus('Refresh failed');
       return false;
     }
-
-    if (status) {
-      const nextStatus = next.querySelector<HTMLElement>(
-        '[data-ghrm-gist-status]',
-      );
-      if (nextStatus) {
-        nextStatus.textContent = status;
-      }
-    }
-    article.replaceWith(next);
     this.pendingRefresh = false;
-    populateDates();
-    document.dispatchEvent(new CustomEvent('ghrm:contentready'));
     return true;
   }
 

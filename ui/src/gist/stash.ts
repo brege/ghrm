@@ -1,5 +1,6 @@
 import { LitElement } from 'lit';
-import { populateDates } from '../explorer/explorer';
+import { swapArticle } from './fragment';
+import { normalizeName, validName } from './name';
 
 interface GistRow extends HTMLElement {
   dataset: DOMStringMap & {
@@ -24,7 +25,6 @@ type SortColumn = 'name' | 'date' | 'size' | 'lines';
 type SortDirection = 'asc' | 'desc';
 
 const stashPath = '/_ghrm/gist/stash';
-const nameMax = 80;
 const defaultSortColumn: SortColumn = 'date';
 const defaultSortDirection: SortDirection = 'desc';
 const sortIconAsc = '/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-up';
@@ -32,23 +32,6 @@ const sortIconDesc = '/_ghrm/assets/js/icons.svg#ghrm-icon-chevron-down';
 
 function deleteUrl(id: string): string {
   return `/_ghrm/gist/p/${encodeURIComponent(id)}`;
-}
-
-function normalizeName(value: string): string {
-  const name = value.trim();
-  return name.endsWith('.txt') ? name.slice(0, -4) : name;
-}
-
-function validName(name: string): boolean {
-  return (
-    name.length <= nameMax &&
-    (name === '' ||
-      (name !== '.' &&
-        name !== '..' &&
-        !name.startsWith('.') &&
-        !name.endsWith('.') &&
-        /^[A-Za-z0-9._-]+$/.test(name)))
-  );
 }
 
 function rowRenameUrl(row: GistRow): string {
@@ -361,22 +344,7 @@ export class GhrmGistStash extends LitElement {
     const article = this.getArticle();
     if (!article) return;
 
-    const response = await fetch(stashPath, {
-      headers: {
-        Accept: 'text/html',
-        'HX-Request': 'true',
-      },
-    });
-    if (!response.ok) return;
-
-    const html = await response.text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const next = doc.querySelector('article[data-ghrm-gist-stash]');
-    if (!next) return;
-
-    article.replaceWith(next);
-    populateDates();
-    document.dispatchEvent(new CustomEvent('ghrm:contentready'));
+    await swapArticle(article, stashPath, 'article[data-ghrm-gist-stash]');
   }
 
   private addGlobalListeners(): void {
