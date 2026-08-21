@@ -25,16 +25,16 @@ function createSearchFixture(withExplorer = true, withMode = true): void {
     `
         : ''
     }
-    <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
-      <div class="ghrm-search-field">
+    <div id="ghrm-path-search" class="ghrm-expand ghrm-path-search" role="search" hidden>
+      <div class="ghrm-expand-field">
         ${
           withMode
             ? '<button id="ghrm-search-mode" type="button" title="Switch search mode" aria-label="Switch search mode"></button>'
             : ''
         }
-        <input id="ghrm-path-search-input" type="search" placeholder="Search paths" aria-label="Search paths">
+        <input id="ghrm-path-search-input" class="ghrm-expand-input" data-ghrm-expand-input type="search" placeholder="Search paths" aria-label="Search paths" tabindex="-1">
       </div>
-      <button id="ghrm-path-search-toggle" type="button" aria-expanded="false" aria-label="Search paths"></button>
+      <button id="ghrm-path-search-toggle" class="ghrm-expand-toggle" data-ghrm-expand-toggle type="button" aria-expanded="false" aria-label="Search paths"></button>
       <span id="ghrm-path-search-status" aria-live="polite"></span>
       <ghrm-search-panel></ghrm-search-panel>
     </div>

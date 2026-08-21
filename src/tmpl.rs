@@ -168,6 +168,7 @@ pub struct ExplorerCtx<'a> {
     pub empty_cells: &'a [column::Cell],
     pub entries: &'a [ExplorerEntry],
     pub readme: Option<ExplorerReadme<'a>>,
+    pub edit: bool,
 }
 
 pub struct FilterControl {
@@ -213,7 +214,9 @@ pub struct ColumnControl {
 pub struct ExplorerEntry {
     pub name: String,
     pub href: String,
+    pub rel: String,
     pub is_dir: bool,
+    pub editable: bool,
     pub cells: Vec<column::Cell>,
 }
 
@@ -421,6 +424,7 @@ mod tests {
                 empty_cells: EMPTY_CELLS,
                 entries: &[],
                 readme: None,
+                edit: false,
             }
         }
     }
@@ -734,6 +738,20 @@ mod tests {
                 html.contains("<ghrm-search-panel>"),
                 "missing search panel island host"
             );
+            // Search shares the expanding-field contract with the explorer
+            // new-file control.
+            assert!(
+                html.contains("class=\"ghrm-expand ghrm-path-search\""),
+                "search root missing the shared expanding-field class"
+            );
+            assert!(
+                html.contains("data-ghrm-expand-input"),
+                "missing expanding-field input marker"
+            );
+            assert!(
+                html.contains("data-ghrm-expand-toggle"),
+                "missing expanding-field toggle marker"
+            );
         }
 
         #[test]
@@ -1025,7 +1043,9 @@ mod tests {
             let entries = [ExplorerEntry {
                 name: "test.txt".to_string(),
                 href: "/test.txt".to_string(),
+                rel: "test.txt".to_string(),
                 is_dir: false,
+                editable: false,
                 cells,
             }];
             let ctx = ExplorerCtx {
@@ -1037,6 +1057,64 @@ mod tests {
                 html.contains("data-ts=\"1700000000\""),
                 "timestamp cell missing data-ts"
             );
+        }
+
+        #[test]
+        fn edit_renders_row_controls_and_new_file_button() {
+            let fix = ExplorerFixture::new();
+            let entries = [
+                ExplorerEntry {
+                    name: "notes.md".to_string(),
+                    href: "/docs/notes.md".to_string(),
+                    rel: "docs/notes.md".to_string(),
+                    is_dir: false,
+                    editable: true,
+                    cells: Vec::new(),
+                },
+                ExplorerEntry {
+                    name: "sub".to_string(),
+                    href: "/docs/sub/".to_string(),
+                    rel: "docs/sub".to_string(),
+                    is_dir: true,
+                    editable: false,
+                    cells: Vec::new(),
+                },
+                ExplorerEntry {
+                    name: "outside.md".to_string(),
+                    href: "/docs/outside.md".to_string(),
+                    rel: "docs/outside.md".to_string(),
+                    is_dir: false,
+                    editable: false,
+                    cells: Vec::new(),
+                },
+            ];
+
+            let hidden = explorer(ExplorerCtx {
+                entries: &entries,
+                ..fix.ctx()
+            })
+            .unwrap();
+            assert!(!hidden.contains("data-ghrm-row-path"));
+            assert!(!hidden.contains("data-ghrm-new-file"));
+
+            let shown = explorer(ExplorerCtx {
+                entries: &entries,
+                edit: true,
+                ..fix.ctx()
+            })
+            .unwrap();
+            assert!(shown.contains("data-ghrm-new-file"));
+            // The new-file control is the shared expanding field, not a bare button.
+            assert!(shown.contains("class=\"ghrm-expand ghrm-new-file\""));
+            assert!(shown.contains("data-ghrm-expand-input"));
+            assert!(shown.contains("data-ghrm-expand-toggle"));
+            assert!(shown.contains("data-ghrm-row-path=\"docs/notes.md\""));
+            assert!(shown.contains("data-ghrm-row-rename"));
+            assert!(shown.contains("data-ghrm-row-delete"));
+            assert!(shown.contains("ghrm-icon-rename"));
+            // Directory rows carry no mutation controls.
+            assert!(!shown.contains("data-ghrm-row-path=\"docs/sub\""));
+            assert!(!shown.contains("data-ghrm-row-path=\"docs/outside.md\""));
         }
     }
 

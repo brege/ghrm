@@ -1,4 +1,4 @@
-import { qsel } from './dom';
+import { encodePath, qsel } from './dom';
 import { readEditVersion } from './file/file-edit';
 import { refreshActiveSearch } from './search/search';
 import { setConnected } from './shell/status';
@@ -206,6 +206,6 @@ function parentPath(path: string): string {
 
 function parentHref(path: string): string {
   const parent = parentPath(path);
-  const href = parent === '' ? '/' : `/${parent}/`;
+  const href = parent === '' ? '/' : `/${encodePath(parent)}/`;
   return `${href}${location.search}${location.hash}`;
 }

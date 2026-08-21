@@ -5,6 +5,7 @@ import {
   setupNavExternalLinks,
   syncColumnControls,
 } from '../explorer/explorer';
+import { ExpandField } from '../shell/expand';
 import { beginActivity, endActivity } from '../shell/status';
 
 interface SearchFragmentResponse {
@@ -130,6 +131,7 @@ export class GhrmSearchPanel extends LitElement {
   private search: HTMLElement | null = null;
   private input: HTMLInputElement | null = null;
   private button: HTMLElement | null = null;
+  private field: ExpandField | null = null;
   private modeBtn: HTMLElement | null = null;
   private status: HTMLElement | null = null;
   private table: HTMLTableElement | null = null;
@@ -166,11 +168,8 @@ export class GhrmSearchPanel extends LitElement {
   }
 
   private clearHandlers(): void {
-    if (this.input) {
-      this.input.oninput = null;
-      this.input.onkeydown = null;
-    }
-    if (this.button) this.button.onclick = null;
+    this.field?.release();
+    this.field = null;
     if (this.modeBtn) this.modeBtn.onclick = null;
   }
 
@@ -189,14 +188,22 @@ export class GhrmSearchPanel extends LitElement {
 
     const restoredOpen = searchOpen && Boolean(article);
     this.search.hidden = !article;
-    this.search.classList.toggle('is-open', restoredOpen);
     this.search.dataset.mode = searchMode;
     this.input.value = restoredOpen ? searchQuery : '';
     this.input.placeholder =
       searchMode === 'content' ? 'Search content' : 'Search paths';
-    this.input.tabIndex = restoredOpen ? 0 : -1;
     this.clearHandlers();
-    this.button.setAttribute('aria-expanded', restoredOpen ? 'true' : 'false');
+    this.field = new ExpandField({
+      root: this.search,
+      input: this.input,
+      toggle: this.button,
+      onOpen: () => {
+        searchOpen = true;
+      },
+      onClose: () => this.closeSearch(),
+      onInput: () => this.doSearch(),
+    });
+    this.field.apply(restoredOpen);
     this.status.textContent = '';
     refreshSearch = null;
 
@@ -226,15 +233,6 @@ export class GhrmSearchPanel extends LitElement {
     if (this.modeBtn) {
       this.modeBtn.onclick = () => this.handleModeSwitch();
     }
-
-    if (this.button) {
-      this.button.onclick = () => this.handleToggle();
-    }
-
-    if (this.input) {
-      this.input.oninput = () => this.doSearch();
-      this.input.onkeydown = (e) => this.handleKeydown(e);
-    }
   }
 
   private handleModeSwitch(): void {
@@ -250,26 +248,6 @@ export class GhrmSearchPanel extends LitElement {
       this.doSearch();
     }
     this.input.focus();
-  }
-
-  private handleToggle(): void {
-    if (!this.search || !this.input || !this.button) return;
-    const open = !this.search.classList.contains('is-open');
-    searchOpen = open;
-    this.search.classList.toggle('is-open', open);
-    this.button.setAttribute('aria-expanded', open ? 'true' : 'false');
-    this.input.tabIndex = open ? 0 : -1;
-    if (open) {
-      this.input.focus();
-    } else {
-      this.closeSearch();
-    }
-  }
-
-  private handleKeydown(e: KeyboardEvent): void {
-    if (e.key !== 'Escape') return;
-    this.closeSearch();
-    this.button?.focus();
   }
 
   private updateMode(): void {
@@ -298,12 +276,11 @@ export class GhrmSearchPanel extends LitElement {
     setupNavExternalLinks();
   }
 
+  // Runs from the expanding field's close callback, which has already reset the
+  // open state, focus reachability, and aria-expanded.
   private closeSearch(): void {
-    if (!this.search || !this.input || !this.button) return;
-    this.search.classList.remove('is-open');
+    if (!this.input) return;
     searchOpen = false;
-    this.button.setAttribute('aria-expanded', 'false');
-    this.input.tabIndex = -1;
     this.input.value = '';
     searchQuery = '';
     this.searchSeq += 1;

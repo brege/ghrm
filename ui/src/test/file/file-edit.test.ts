@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FileEditor } from '../../file/file-edit';
+import {
+  bindCrumbRename,
+  deleteFile,
+  FileEditor,
+  renameFile,
+} from '../../file/file-edit';
 
 interface Harness {
   container: HTMLElement;
@@ -13,6 +18,7 @@ function setup(kind = 'source', body = 'seed body'): Harness {
   document.body.innerHTML = `
     <article class="markdown-body">
     <section class="ghrm-page-shell" data-ghrm-view-kind="${kind}" data-current-path="notes.txt" data-ghrm-raw-url="/_ghrm/raw/notes.txt" data-ghrm-edit-version="seed-version">
+      <nav class="ghrm-breadcrumbs"><strong class="ghrm-crumb ghrm-crumb-current">notes.txt</strong></nav>
       <div class="ghrm-page-content">
         <div class="ghrm-file-pane" data-ghrm-preview-pane hidden></div>
         <div class="ghrm-file-pane ghrm-raw-pane" data-ghrm-raw-pane>
@@ -295,5 +301,200 @@ describe('FileEditor', () => {
     expect(pushSpy).toHaveBeenCalled();
     expect(h.editor.editing).toBe(true);
     window.onpopstate = null;
+  });
+});
+
+describe('file mutation actions', () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = setup();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('deletes the file with the rendered version and leaves for the parent', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const navigate = vi.fn();
+
+    await deleteFile(h.container, h.editor, navigate);
+
+    const [url, options] = fetchSpy.mock.calls[0];
+    expect(url).toBe('/_ghrm/edit/notes.txt');
+    expect(options?.method).toBe('DELETE');
+    expect((options?.headers as Record<string, string>)['If-Match']).toBe(
+      '"seed-version"',
+    );
+    expect(navigate).toHaveBeenCalledWith(`/${location.search}`);
+  });
+
+  it('declining the delete confirmation sends nothing', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const navigate = vi.fn();
+
+    await deleteFile(h.container, h.editor, navigate);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('encodes the parent directory after deletion', async () => {
+    h.container.dataset.currentPath = 'docs #1/notes.txt';
+    h.container.dataset.ghrmRawUrl = '/_ghrm/raw/docs%20%231/notes.txt';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const navigate = vi.fn();
+
+    await deleteFile(h.container, h.editor, navigate);
+
+    expect(navigate).toHaveBeenCalledWith(`/docs%20%231/${location.search}`);
+  });
+
+  it('delete tears down an active edit session before navigating', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const navigate = vi.fn();
+    h.editor.toggle();
+
+    await deleteFile(h.container, h.editor, navigate);
+
+    expect(h.editor.editing).toBe(false);
+    expect(navigate).toHaveBeenCalled();
+  });
+
+  it('renames through the breadcrumb and navigates to the new path', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          path: 'letters.txt',
+          name: 'letters.txt',
+          href: '/letters.txt',
+        }),
+        { status: 200 },
+      ),
+    );
+    const navigate = vi.fn();
+
+    renameFile(h.container, h.editor, navigate);
+    const input = h.container.querySelector<HTMLInputElement>(
+      '[data-ghrm-rename-input]',
+    )!;
+    expect(input.value).toBe('notes.txt');
+    input.value = 'letters.txt';
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+
+    await vi.waitUntil(() => navigate.mock.calls.length > 0);
+    const [url, options] = fetchSpy.mock.calls[0];
+    expect(url).toBe('/_ghrm/edit/notes.txt');
+    expect(options?.method).toBe('PATCH');
+    expect(options?.body).toBe('letters.txt');
+    expect(navigate).toHaveBeenCalledWith(`/letters.txt${location.search}`);
+  });
+
+  it('rename reports a name collision and keeps the input open', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('', { status: 409 }),
+    );
+    const navigate = vi.fn();
+
+    renameFile(h.container, h.editor, navigate);
+    const input = h.container.querySelector<HTMLInputElement>(
+      '[data-ghrm-rename-input]',
+    )!;
+    input.value = 'taken.txt';
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+
+    await vi.waitUntil(() => input.getAttribute('aria-invalid') === 'true');
+    expect(input.title).toBe('Name already exists');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('rename discards a dirty edit session only with confirmation', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    h.editor.toggle();
+    const textarea = h.container.querySelector('textarea')!;
+    textarea.value = 'edited body';
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+    renameFile(h.container, h.editor, vi.fn());
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(h.editor.editing).toBe(true);
+    expect(h.container.querySelector('[data-ghrm-rename-input]')).toBeNull();
+
+    confirmSpy.mockReturnValue(true);
+    renameFile(h.container, h.editor, vi.fn());
+    expect(h.editor.editing).toBe(false);
+    expect(h.container.querySelector('[data-ghrm-rename-input]')).toBeTruthy();
+  });
+});
+
+describe('breadcrumb rename control', () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = setup();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('seats the rename button after the current crumb exactly once', () => {
+    bindCrumbRename(h.container, h.editor);
+    bindCrumbRename(h.container, h.editor);
+
+    const seats = h.container.querySelectorAll('.ghrm-crumb-seat');
+    expect(seats).toHaveLength(1);
+    expect(seats[0].previousElementSibling).toBe(
+      h.container.querySelector('.ghrm-crumb-current'),
+    );
+    const button = seats[0].querySelector('button')!;
+    expect(button.getAttribute('aria-label')).toBe('Rename file');
+    expect(button.className).toBe('ghrm-row-action');
+  });
+
+  it('starts the inline rename from the seated button', () => {
+    bindCrumbRename(h.container, h.editor, vi.fn());
+
+    h.container
+      .querySelector<HTMLButtonElement>('.ghrm-crumb-seat button')!
+      .click();
+
+    const input = h.container.querySelector<HTMLInputElement>(
+      '[data-ghrm-rename-input]',
+    )!;
+    expect(input.value).toBe('notes.txt');
+  });
+
+  it('hides the seat while the rename input is open', () => {
+    bindCrumbRename(h.container, h.editor, vi.fn());
+    const seat = h.container.querySelector<HTMLElement>('.ghrm-crumb-seat')!;
+
+    seat.querySelector<HTMLButtonElement>('button')!.click();
+    expect(seat.hidden).toBe(true);
+
+    h.container
+      .querySelector<HTMLInputElement>('[data-ghrm-rename-input]')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+    expect(seat.hidden).toBe(false);
   });
 });

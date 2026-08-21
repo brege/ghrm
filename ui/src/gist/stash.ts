@@ -1,17 +1,11 @@
 import { LitElement } from 'lit';
-import { swapArticle } from './fragment';
+import { beginInlineRename } from '../editor/rename';
+import { swapArticle } from '../shell/nav';
 import { normalizeName, validName } from './name';
 
 interface GistRow extends HTMLElement {
   dataset: DOMStringMap & {
     ghrmGistId: string;
-  };
-}
-
-interface GistRowInput extends HTMLInputElement {
-  dataset: DOMStringMap & {
-    ghrmGistRowInput?: string;
-    ghrmSaving?: string;
   };
 }
 
@@ -234,68 +228,6 @@ export class GhrmGistStash extends LitElement {
     await this.refresh();
   }
 
-  private restoreRowRename(cell: Element, input: GistRowInput): void {
-    const link = cell.querySelector<HTMLElement>('[data-ghrm-gist-row-link]');
-    const button = cell.querySelector<HTMLElement>(
-      '[data-ghrm-gist-rename-start]',
-    );
-    input.remove();
-    if (link) {
-      link.hidden = false;
-    }
-    if (button) {
-      button.hidden = false;
-    }
-  }
-
-  private async saveRowRename(
-    row: GistRow,
-    cell: Element,
-    input: GistRowInput,
-  ): Promise<void> {
-    if (input.dataset.ghrmSaving === '1') return;
-    const link = cell.querySelector<HTMLAnchorElement>(
-      '[data-ghrm-gist-row-link]',
-    );
-    const next = normalizeName(input.value);
-    const current = normalizeName(link?.textContent || '');
-    if (!validName(next)) {
-      input.setAttribute('aria-invalid', 'true');
-      input.title = 'Use letters, numbers, dots, dashes, or underscores';
-      input.focus();
-      return;
-    }
-    if (next === current) {
-      this.restoreRowRename(cell, input);
-      return;
-    }
-
-    input.dataset.ghrmSaving = '1';
-    const response = await fetch(rowRenameUrl(row), {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'text/plain; charset=utf-8',
-      },
-      body: next,
-    });
-    if (!response.ok) {
-      input.dataset.ghrmSaving = '0';
-      input.setAttribute('aria-invalid', 'true');
-      input.title = 'Name already exists or is invalid';
-      input.focus();
-      return;
-    }
-
-    const renamed = renameResponse(await response.json());
-    row.dataset.ghrmGistId = renamed.id;
-    if (link) {
-      link.href = renamed.href;
-      link.textContent = renamed.name;
-    }
-    this.restoreRowRename(cell, input);
-  }
-
   private beginRowRename(row: GistRow): void {
     const cell = row.querySelector('.ghrm-gist-name-cell');
     const link = cell?.querySelector<HTMLAnchorElement>(
@@ -304,40 +236,37 @@ export class GhrmGistStash extends LitElement {
     const button = cell?.querySelector<HTMLElement>(
       '[data-ghrm-gist-rename-start]',
     );
-    if (!cell || !link || cell.querySelector('[data-ghrm-gist-row-input]'))
-      return;
+    if (!cell || !link) return;
 
-    const input = document.createElement('input') as GistRowInput;
-    input.type = 'text';
-    input.className = 'ghrm-gist-row-input';
-    input.dataset.ghrmGistRowInput = '1';
-    input.value = link.textContent || '';
-    input.setAttribute('aria-label', 'Paste filename');
-    input.autocomplete = 'off';
-    input.spellcheck = false;
-
-    link.hidden = true;
-    if (button) {
-      button.hidden = true;
-    }
-    cell.insertBefore(input, link);
-    input.focus();
-    input.select();
-
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        this.saveRowRename(row, cell, input);
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        this.restoreRowRename(cell, input);
-      }
+    const input = beginInlineRename({
+      anchor: link,
+      value: link.textContent || '',
+      label: 'Paste filename',
+      hide: button ? [link, button] : [link],
+      invalidTitle: 'Use letters, numbers, dots, dashes, or underscores',
+      errorTitle: 'Rename failed',
+      normalize: normalizeName,
+      validate: validName,
+      submit: async (next) => {
+        const response = await fetch(rowRenameUrl(row), {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'text/plain; charset=utf-8',
+          },
+          body: next,
+        });
+        if (!response.ok) {
+          return { ok: false, message: 'Name already exists or is invalid' };
+        }
+        const renamed = renameResponse(await response.json());
+        row.dataset.ghrmGistId = renamed.id;
+        link.href = renamed.href;
+        link.textContent = renamed.name;
+        return { ok: true };
+      },
     });
-    input.addEventListener('blur', () => {
-      if (input.isConnected) {
-        this.saveRowRename(row, cell, input);
-      }
-    });
+    input?.setAttribute('data-ghrm-gist-row-input', '1');
   }
 
   async refresh(): Promise<void> {

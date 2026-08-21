@@ -208,8 +208,7 @@ body.ghrm-print .ghrm-file-tools {
   border-bottom-left-radius: 6px;
 }
 
-.ghrm-file-edit > :last-child,
-.ghrm-file-edit:not(.is-editing) .ghrm-file-edit-toggle {
+.ghrm-file-edit > :last-child {
   border-top-right-radius: 6px;
   border-bottom-right-radius: 6px;
 }

@@ -1,4 +1,5 @@
 use crate::explorer::view::{self, ViewConfig, ViewState};
+use crate::paths;
 
 use std::path::{Component, Path};
 
@@ -63,7 +64,7 @@ pub(crate) fn html(
             "/".to_string()
         } else {
             let depth = idx - root_idx;
-            format!("/{}/", rel_parts[..depth].join("/"))
+            format!("{}/", paths::url_path(&rel_parts[..depth].join("/")))
         };
         out.push_str(r#"<a class="ghrm-crumb ghrm-crumb-link" href=""#);
         out.push_str(&html_escape::encode_double_quoted_attribute(

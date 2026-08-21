@@ -1,8 +1,8 @@
 import { LitElement } from 'lit';
 import { showCopied, writeClipboard } from '../adapters/copy';
 import { EditorSession } from '../editor/editor';
+import { swapArticle } from '../shell/nav';
 import { applyWrapState, getWrapPref, setWrapPref } from '../shell/prefs';
-import { swapArticle } from './fragment';
 import { normalizeName, validName } from './name';
 
 interface GistNameInput extends HTMLInputElement {

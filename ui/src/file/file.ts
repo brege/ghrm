@@ -12,7 +12,7 @@ import {
   setWrapPref,
 } from '../shell/prefs';
 import { exitDiff, setupCompare } from './compare';
-import { FileEditor } from './file-edit';
+import { bindCrumbRename, deleteFile, FileEditor } from './file-edit';
 import { buildToc } from './toc';
 
 interface FileViewContainer extends HTMLElement {
@@ -29,9 +29,9 @@ interface FileViewContainer extends HTMLElement {
 
 const fileEditors = new WeakMap<Element, FileEditor>();
 
-// Survives the htmx swap that leaves diff mode, so edit resumes on the plain
-// file view in a single click from a diff.
-const EDIT_PENDING_KEY = 'ghrm-edit-pending';
+// Survives the htmx swap that leaves diff mode and the navigation that follows
+// creating a file, so edit resumes on the plain file view in a single step.
+export const EDIT_PENDING_KEY = 'ghrm-edit-pending';
 
 function isRawVisible(container: FileViewContainer): boolean {
   const rawPane = container.querySelector(
@@ -277,6 +277,13 @@ function setupFileView(container: FileViewContainer): void {
     saveBtn.setAttribute('aria-label', 'No changes to save');
     saveBtn.title = 'No changes to save';
 
+    const trashBtn = document.createElement('button');
+    trashBtn.type = 'button';
+    trashBtn.className = 'ghrm-file-action';
+    trashBtn.innerHTML = icon('trash');
+    trashBtn.setAttribute('aria-label', 'Delete file');
+    trashBtn.title = 'Delete file';
+
     const editUrl = rawUrl.replace('/_ghrm/raw/', '/_ghrm/edit/');
     const instance = new FileEditor(
       container,
@@ -291,8 +298,12 @@ function setupFileView(container: FileViewContainer): void {
     saveBtn.addEventListener('click', () => {
       instance.save();
     });
+    trashBtn.addEventListener('click', () => {
+      void deleteFile(container, instance);
+    });
     fileEditors.set(container, instance);
-    editGroup.append(editBtn, saveBtn);
+    bindCrumbRename(container, instance);
+    editGroup.append(editBtn, saveBtn, trashBtn);
     tools.append(toggles, editGroup, actions);
     editor = instance;
   } else {

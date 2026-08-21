@@ -1,0 +1,97 @@
+/* Field that expands leftward out of a trailing toggle button, shared by the
+   topbar path search and the explorer new-file control. This file owns the
+   collapse and expand mechanics only; each consumer keeps its own toggle button
+   skin and sets --ghrm-expand-width and --ghrm-expand-radius to match it. The
+   defaults live in the var() fallbacks rather than in a rule on .ghrm-expand,
+   so a consumer override wins regardless of stylesheet order. */
+
+.ghrm-expand {
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 32px;
+}
+
+.ghrm-expand[hidden] {
+  display: none;
+}
+
+.ghrm-expand-field {
+  width: 0;
+  height: 32px;
+  min-width: 0;
+  border: 0;
+  border-radius: var(--ghrm-expand-radius, 6px) 0 0
+    var(--ghrm-expand-radius, 6px);
+  opacity: 0;
+  overflow: hidden;
+  background: var(--bgColor-default, #ffffff);
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  transition:
+    width 0.16s ease,
+    opacity 0.12s ease,
+    border-width 0.16s ease;
+}
+
+.ghrm-expand.is-open .ghrm-expand-field {
+  width: var(--ghrm-expand-width, min(42vw, 452px));
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-right: 0;
+  opacity: 1;
+}
+
+.ghrm-expand-field:focus-within {
+  outline: 2px solid var(--focus-outlineColor, #0969da);
+  outline-offset: -1px;
+  z-index: 1;
+}
+
+.ghrm-expand.is-open:has(.ghrm-expand-input[aria-invalid="true"])
+  .ghrm-expand-field:focus-within {
+  outline-color: var(--fgColor-danger, #d1242f);
+}
+
+.ghrm-expand-input {
+  flex: 1 1 auto;
+  width: 0;
+  height: 100%;
+  min-width: 0;
+  margin-right: 0;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 0;
+  opacity: 1;
+  background: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+  font: inherit;
+  font-size: 14px;
+}
+
+/* The explorer header sits inside .markdown-body, whose vendor rule
+   `.markdown-body input { font-size: inherit }` outranks the class above and
+   would render this field a step larger than the identical topbar field. */
+.markdown-body .ghrm-expand-input {
+  font: inherit;
+  font-size: 14px;
+}
+
+.ghrm-expand-input:focus {
+  outline: none;
+}
+
+.ghrm-expand-input[aria-invalid="true"] {
+  color: var(--fgColor-danger, #d1242f);
+}
+
+.ghrm-expand-toggle {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.ghrm-expand.is-open .ghrm-expand-toggle {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}

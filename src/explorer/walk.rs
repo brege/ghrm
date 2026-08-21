@@ -233,6 +233,31 @@ pub struct NavTree {
     pub dirs: BTreeMap<String, NavDir>,
 }
 
+/// Orders navigation snapshot installs. Ticket issuance and installation use
+/// one lock so a newer rebuild cannot start between the generation check and
+/// the cache assignment.
+#[cfg(any(feature = "edit", feature = "watch"))]
+#[derive(Debug, Default)]
+pub struct NavGeneration(Mutex<u64>);
+
+#[cfg(any(feature = "edit", feature = "watch"))]
+impl NavGeneration {
+    pub(crate) fn ticket(&self) -> u64 {
+        let mut current = self.0.lock().unwrap();
+        *current += 1;
+        *current
+    }
+
+    pub(crate) fn install<T>(&self, ticket: u64, install: impl FnOnce() -> T) -> Option<T> {
+        let current = self.0.lock().unwrap();
+        if *current == ticket {
+            Some(install())
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct NavSet {
     trees: Arc<Mutex<BTreeMap<usize, Arc<NavTree>>>>,
@@ -713,7 +738,7 @@ fn file_name(path: &Path) -> String {
 }
 
 pub(crate) fn file_href(path: &Path) -> String {
-    format!("/{}", path_key(path))
+    paths::url_path(&path_key(path))
 }
 
 pub(crate) fn dir_href(path: &Path) -> String {
@@ -721,7 +746,7 @@ pub(crate) fn dir_href(path: &Path) -> String {
     if key.is_empty() {
         "/".to_string()
     } else {
-        format!("/{key}/")
+        format!("{}/", paths::url_path(&key))
     }
 }
 

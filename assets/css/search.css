@@ -1,64 +1,8 @@
+/* Expand and collapse mechanics come from expand.css; this file keeps the
+   topbar-specific skin, the mode switch, and the result row styling. */
+
 .ghrm-path-search {
-  flex: 0 1 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-width: 32px;
-}
-
-.ghrm-path-search[hidden] {
-  display: none;
-}
-
-.ghrm-search-field {
-  width: 0;
-  height: 32px;
-  min-width: 0;
-  border: 0;
-  border-radius: 4px 0 0 4px;
-  opacity: 0;
-  overflow: hidden;
-  background: var(--bgColor-default, #ffffff);
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  transition:
-    width 0.16s ease,
-    opacity 0.12s ease,
-    border-width 0.16s ease;
-}
-
-.ghrm-path-search.is-open .ghrm-search-field {
-  width: min(42vw, 452px);
-  border: 1px solid var(--borderColor-default, #d0d7de);
-  border-right: 0;
-  opacity: 1;
-}
-
-.ghrm-search-field:focus-within {
-  outline: 2px solid var(--focus-outlineColor, #0969da);
-  outline-offset: -1px;
-  z-index: 1;
-}
-
-.ghrm-path-search-input {
-  flex: 1 1 auto;
-  width: 0;
-  height: 100%;
-  min-width: 0;
-  margin-right: 0;
-  padding: 5px 10px;
-  border: 0;
-  border-radius: 0;
-  opacity: 1;
-  background: var(--bgColor-default, #ffffff);
-  color: var(--fgColor-default, #1f2328);
-  font: inherit;
-  font-size: 14px;
-}
-
-.ghrm-path-search-input:focus {
-  outline: none;
+  --ghrm-expand-radius: 4px;
 }
 
 .ghrm-path-search-status {
@@ -72,7 +16,6 @@
 #ghrm-path-search-toggle {
   width: 32px;
   height: 32px;
-  align-self: center;
   appearance: none;
   -webkit-appearance: none;
   border: 1px solid var(--borderColor-default, #d0d7de);
@@ -85,11 +28,6 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-}
-
-.ghrm-path-search.is-open #ghrm-path-search-toggle {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
 }
 
 #ghrm-path-search-toggle svg {
@@ -258,7 +196,7 @@
     justify-content: flex-start;
   }
 
-  .ghrm-path-search.is-open .ghrm-path-search-input {
+  .ghrm-path-search.is-open .ghrm-expand-input {
     width: calc(100% - 64px);
     max-width: none;
   }

@@ -92,7 +92,35 @@
         {% for e in entries %}
         <tr>
           {{- nav::icon_cell(e.is_dir) -}}
-          <td class="ghrm-nav-name"><a href="{{ e.href }}">{{ e.name }}</a></td>
+          <td class="ghrm-nav-name{% if edit && e.editable %} ghrm-row-host{% endif %}">
+            <a href="{{ e.href }}">{{ e.name }}</a>
+            {%- if edit && e.editable %}
+            <span class="ghrm-row-seat" data-ghrm-row-path="{{ e.rel }}">
+              <button
+                type="button"
+                class="ghrm-row-action"
+                data-ghrm-row-rename
+                aria-label="Rename file"
+                title="Rename file"
+              >
+                <svg aria-hidden="true" focusable="false">
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-rename"></use>
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="ghrm-row-action"
+                data-ghrm-row-delete
+                aria-label="Delete file"
+                title="Delete file"
+              >
+                <svg aria-hidden="true" focusable="false">
+                  <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-trash"></use>
+                </svg>
+              </button>
+            </span>
+            {%- endif %}
+          </td>
           {%- for cell in e.cells %}
           {{- nav::data_cell(cell) -}}
           {%- endfor %}

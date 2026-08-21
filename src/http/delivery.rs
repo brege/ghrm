@@ -64,6 +64,11 @@ pub(crate) fn file_mode(path: &Path, bytes: &[u8]) -> FileMode {
     if ext.eq_ignore_ascii_case("svg") && is_text_content(bytes) {
         return FileMode::Dual;
     }
+    // An empty file is vacuously text; without this a just-created file would
+    // classify as a download and never reach the source view or the editor.
+    if bytes.is_empty() {
+        return FileMode::Source;
+    }
     if let Some(kind) = infer::get(bytes) {
         if is_pdf(kind.mime_type()) {
             return FileMode::Native;
@@ -97,6 +102,29 @@ pub(crate) async fn file_mode_async(path: &Path) -> FileMode {
 
 pub(crate) fn is_text_content(bytes: &[u8]) -> bool {
     content_inspector::inspect(bytes).is_text()
+}
+
+/// The UTF-8 text of a text/plain request body, or None when the content type
+/// or the encoding disqualifies it. The gist and edit handlers share this as
+/// their body entry-point validation.
+#[cfg(any(feature = "edit", feature = "gist", test))]
+pub(crate) fn text_plain_body<'a>(
+    headers: &axum::http::HeaderMap,
+    body: &'a [u8],
+) -> Option<&'a str> {
+    if !is_text_plain(headers) {
+        return None;
+    }
+    std::str::from_utf8(body).ok()
+}
+
+#[cfg(any(feature = "edit", feature = "gist", test))]
+fn is_text_plain(headers: &axum::http::HeaderMap) -> bool {
+    headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.split(';').next().unwrap_or("").trim())
+        .is_some_and(|value| value.eq_ignore_ascii_case("text/plain"))
 }
 
 fn is_pdf(mime: &str) -> bool {
@@ -241,7 +269,7 @@ pub(crate) fn file_view_attrs(rel: &str, view: FileView) -> String {
 }
 
 fn internal_file_href(kind: &str, rel: &str) -> String {
-    format!("/_ghrm/{kind}/{}", rel.trim_matches('/'))
+    format!("/_ghrm/{kind}{}", paths::url_path(rel))
 }
 
 pub(crate) fn served_base(s: &AppState) -> &Path {
@@ -288,6 +316,9 @@ fn not_found() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(all(unix, feature = "edit"))]
+    use crate::testutil::TempDir;
+    use axum::http::HeaderMap;
 
     #[test]
     fn content_disposition_escapes_quotes() {
@@ -315,6 +346,39 @@ mod tests {
         let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>";
         assert_eq!(file_mode(Path::new("icon.svg"), svg), FileMode::Dual);
         assert_eq!(file_mode(Path::new("LOGO.SVG"), svg), FileMode::Dual);
+    }
+
+    #[test]
+    fn file_mode_empty_is_source() {
+        assert_eq!(file_mode(Path::new("fresh.txt"), b""), FileMode::Source);
+        assert_eq!(file_mode(Path::new("fresh.md"), b""), FileMode::Markdown);
+    }
+
+    #[test]
+    fn text_plain_body_accepts_charset_and_case() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CONTENT_TYPE,
+            "text/plain; charset=utf-8".parse().unwrap(),
+        );
+        assert_eq!(text_plain_body(&headers, b"hi"), Some("hi"));
+
+        let mut upper = HeaderMap::new();
+        upper.insert(header::CONTENT_TYPE, "TEXT/PLAIN".parse().unwrap());
+        assert_eq!(text_plain_body(&upper, b"hi"), Some("hi"));
+    }
+
+    #[test]
+    fn text_plain_body_rejects_other_types_and_invalid_utf8() {
+        assert!(text_plain_body(&HeaderMap::new(), b"hi").is_none());
+
+        let mut json = HeaderMap::new();
+        json.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        assert!(text_plain_body(&json, b"{}").is_none());
+
+        let mut plain = HeaderMap::new();
+        plain.insert(header::CONTENT_TYPE, "text/plain".parse().unwrap());
+        assert!(text_plain_body(&plain, &[0xff]).is_none());
     }
 
     #[test]
@@ -374,14 +438,40 @@ mod tests {
     }
 
     #[test]
+    fn internal_file_href_encodes_reserved_characters() {
+        assert_eq!(
+            internal_file_href("raw", "docs/notes #1?.md"),
+            "/_ghrm/raw/docs/notes%20%231%3F.md"
+        );
+    }
+
+    #[cfg(all(unix, feature = "edit"))]
+    #[test]
+    fn confined_rejects_symlink_targets_outside_the_served_root() {
+        use std::os::unix::fs::symlink;
+
+        let td = TempDir::new("ghrm-delivery-confined");
+        let base = td.path().join("root");
+        let inside = base.join("inside.md");
+        let outside = td.path().join("outside.md");
+        std::fs::create_dir(&base).unwrap();
+        std::fs::write(&inside, "inside\n").unwrap();
+        std::fs::write(&outside, "outside\n").unwrap();
+        symlink(&inside, base.join("inside-link.md")).unwrap();
+        symlink(&outside, base.join("outside-link.md")).unwrap();
+
+        assert!(confined(&inside, &base));
+        assert!(confined(&base.join("inside-link.md"), &base));
+        assert!(!confined(&base.join("outside-link.md"), &base));
+    }
+
+    #[test]
     fn file_view_attrs_escapes_current_and_urls() {
         let attrs = file_view_attrs("docs/odd\"name.md", FileView::source());
 
         assert!(attrs.contains(r#"data-current-path="docs/odd&quot;name.md""#));
-        assert!(attrs.contains(r#"data-ghrm-raw-url="/_ghrm/raw/docs/odd&quot;name.md""#));
-        assert!(
-            attrs.contains(r#"data-ghrm-download-url="/_ghrm/download/docs/odd&quot;name.md""#)
-        );
+        assert!(attrs.contains(r#"data-ghrm-raw-url="/_ghrm/raw/docs/odd%22name.md""#));
+        assert!(attrs.contains(r#"data-ghrm-download-url="/_ghrm/download/docs/odd%22name.md""#));
     }
 
     #[test]

@@ -10,6 +10,8 @@ use crate::http::server::{HtmxContext, page_crumbs};
 #[cfg(feature = "repo")]
 use crate::http::{shell, vendor};
 #[cfg(feature = "repo")]
+use crate::paths;
+#[cfg(feature = "repo")]
 use crate::query;
 #[cfg(feature = "repo")]
 use crate::render::Rendered;
@@ -31,7 +33,7 @@ use axum::{
     response::Response,
 };
 #[cfg(feature = "repo")]
-use percent_encoding::{AsciiSet, CONTROLS, NON_ALPHANUMERIC, utf8_percent_encode};
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 #[cfg(feature = "repo")]
 use serde::Deserialize;
 #[cfg(feature = "repo")]
@@ -131,32 +133,9 @@ fn compare_view_attrs(
     attrs
 }
 
-// The HTTP path keeps slash separators while each decoded filesystem
-// segment is encoded with the WHATWG special-path segment set.
-#[cfg(feature = "repo")]
-const FILE_SEGMENT: &AsciiSet = &CONTROLS
-    .add(b' ')
-    .add(b'"')
-    .add(b'#')
-    .add(b'%')
-    .add(b'/')
-    .add(b'<')
-    .add(b'>')
-    .add(b'?')
-    .add(b'`')
-    .add(b'{')
-    .add(b'\\')
-    .add(b'}');
-
 #[cfg(feature = "repo")]
 fn file_action(rel: &str) -> String {
-    let encoded = rel
-        .trim_matches('/')
-        .split('/')
-        .map(|segment| utf8_percent_encode(segment, FILE_SEGMENT).to_string())
-        .collect::<Vec<_>>()
-        .join("/");
-    format!("/{encoded}")
+    paths::url_path(rel)
 }
 
 #[cfg(feature = "repo")]
@@ -563,6 +542,8 @@ mod tests {
             mode: Mode::Dir,
             nav: Arc::new(RwLock::new(NavSet::default())),
             alternate_nav: Arc::new(RwLock::new(None)),
+            #[cfg(feature = "edit")]
+            nav_generation: Arc::new(crate::explorer::walk::NavGeneration::default()),
             repos: RepoSet::discover(target, &[]),
             reload: broadcast::channel(4).0,
             use_ignore: true,

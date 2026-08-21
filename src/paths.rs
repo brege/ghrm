@@ -1,4 +1,21 @@
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use std::path::{Component, Path, PathBuf};
+
+// Encode characters that the WHATWG URL parser treats specially inside one
+// path segment while retaining slash separators between filesystem entries.
+const URL_SEGMENT: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'#')
+    .add(b'%')
+    .add(b'/')
+    .add(b'<')
+    .add(b'>')
+    .add(b'?')
+    .add(b'`')
+    .add(b'{')
+    .add(b'\\')
+    .add(b'}');
 
 pub fn safe_rel(raw: &str) -> Option<PathBuf> {
     let clean = raw.trim_matches('/');
@@ -14,6 +31,16 @@ pub fn safe_rel(raw: &str) -> Option<PathBuf> {
     } else {
         None
     }
+}
+
+pub(crate) fn url_path(raw: &str) -> String {
+    let encoded = raw
+        .trim_matches('/')
+        .split('/')
+        .map(|segment| utf8_percent_encode(segment, URL_SEGMENT).to_string())
+        .collect::<Vec<_>>()
+        .join("/");
+    format!("/{encoded}")
 }
 
 pub fn allowed_name(name: &str, exclude_names: &[String]) -> bool {
@@ -47,6 +74,13 @@ mod tests {
         assert!(safe_rel("../secret.txt").is_none());
         assert!(safe_rel("docs/../secret.txt").is_none());
         assert!(safe_rel("/absolute").is_some());
+    }
+
+    #[test]
+    fn url_path_encodes_reserved_characters_by_segment() {
+        assert_eq!(url_path("docs/notes #1?.md"), "/docs/notes%20%231%3F.md");
+        assert_eq!(url_path("docs/100%.md"), "/docs/100%25.md");
+        assert_eq!(url_path("/docs/readme.md/"), "/docs/readme.md");
     }
 
     #[test]

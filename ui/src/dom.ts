@@ -57,6 +57,10 @@ export function isHtmlFile(url: string): boolean {
   return path.endsWith('.html') || path.endsWith('.htm');
 }
 
+export function encodePath(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/');
+}
+
 export function scrollOffset(): number {
   return 16;
 }

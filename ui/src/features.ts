@@ -1,4 +1,5 @@
 import { scrollToHash } from './dom';
+import { setupExplorerEdit } from './explorer/edit';
 import {
   populateDates,
   setupNavExternalLinks,
@@ -62,6 +63,12 @@ export const browserFeatures: readonly FeatureEntry[] = [
     setup: setupPathCopy,
   },
   {
+    name: 'explorer-edit',
+    phase: 'initial',
+    order: 166,
+    setup: setupExplorerEdit,
+  },
+  {
     name: 'theme-toggle',
     phase: 'initial',
     order: 200,
@@ -100,6 +107,12 @@ export const browserFeatures: readonly FeatureEntry[] = [
     phase: 'refresh',
     order: 135,
     setup: setupPathCopy,
+  },
+  {
+    name: 'explorer-edit',
+    phase: 'refresh',
+    order: 137,
+    setup: setupExplorerEdit,
   },
   {
     name: 'column-controls',

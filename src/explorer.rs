@@ -6,8 +6,11 @@ pub(crate) mod walk;
 #[cfg(feature = "watch")]
 pub(crate) mod watch;
 
+#[cfg(feature = "edit")]
+use crate::http::delivery;
 use crate::http::server::{AppState, HtmxContext};
 use crate::http::{shell, vendor};
+use crate::paths;
 use crate::render::{self, Rendered};
 use crate::tmpl::{
     self, ColumnControl, ColumnSortHeader, ExplorerCtx, ExplorerEntry, ExplorerReadme,
@@ -63,6 +66,7 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
             None => return not_found(),
         },
     };
+    let edit = edit_enabled(s, rel);
 
     let parent_href = if rel.is_empty() {
         String::new()
@@ -71,7 +75,7 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
         if ps.is_empty() {
             "/".to_string()
         } else {
-            format!("/{}/", ps)
+            format!("{}/", paths::url_path(&ps))
         }
     } else {
         "/".to_string()
@@ -141,7 +145,13 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
             ExplorerEntry {
                 name: e.name.clone(),
                 href: view::with_view(&e.href, &view, &s.view_cfg),
+                rel: if rel.is_empty() {
+                    e.name.clone()
+                } else {
+                    format!("{}/{}", rel.trim_matches('/'), e.name)
+                },
                 is_dir: e.is_dir,
+                editable: entry_editable(s, rel, &e.name, e.is_dir, edit),
                 cells: meta.cells(&view.columns),
             }
         })
@@ -186,7 +196,7 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
     let current_href = if rel.is_empty() {
         "/".to_string()
     } else {
-        format!("/{rel}/")
+        format!("{}/", paths::url_path(rel))
     };
     let archive_zip_href = archive_href("zip", rel, &view, &s.view_cfg);
     let archive_tar_zst_href = archive_href("tar.zst", rel, &view, &s.view_cfg);
@@ -226,6 +236,7 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
         empty_cells: &empty_cells,
         entries: &entries,
         readme: readme_tmpl,
+        edit,
     }) {
         Ok(b) => b,
         Err(e) => {
@@ -261,11 +272,39 @@ pub(crate) async fn render(s: &AppState, rel: &str, view: ViewState, hx: HtmxCon
     )
 }
 
+#[cfg(feature = "edit")]
+fn edit_enabled(s: &AppState, rel: &str) -> bool {
+    s.edit
+        && delivery::confined(
+            &s.target.join(rel.trim_matches('/')),
+            delivery::served_base(s),
+        )
+}
+
+#[cfg(not(feature = "edit"))]
+fn edit_enabled(_: &AppState, _: &str) -> bool {
+    false
+}
+
+#[cfg(feature = "edit")]
+fn entry_editable(s: &AppState, rel: &str, name: &str, is_dir: bool, edit: bool) -> bool {
+    edit && !is_dir
+        && delivery::confined(
+            &s.target.join(rel.trim_matches('/')).join(name),
+            delivery::served_base(s),
+        )
+}
+
+#[cfg(not(feature = "edit"))]
+fn entry_editable(_: &AppState, _: &str, _: &str, _: bool, _: bool) -> bool {
+    false
+}
+
 fn archive_href(format: &str, rel: &str, view: &ViewState, cfg: &ViewConfig) -> String {
     let href = if rel.is_empty() {
         format!("/_ghrm/archive/{format}")
     } else {
-        format!("/_ghrm/archive/{format}/{rel}")
+        format!("/_ghrm/archive/{format}{}", paths::url_path(rel))
     };
     view::with_view(&href, view, cfg)
 }

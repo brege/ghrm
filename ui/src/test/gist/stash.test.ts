@@ -257,7 +257,7 @@ describe('ghrm-gist-stash', () => {
         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
       );
 
-      await vi.waitFor(() => input.getAttribute('aria-invalid') === 'true');
+      await vi.waitUntil(() => input.getAttribute('aria-invalid') === 'true');
 
       expect(element.querySelector('[data-ghrm-gist-row-input]')).toBeTruthy();
       expect(input.title).toBe('Name already exists or is invalid');
@@ -297,7 +297,7 @@ describe('ghrm-gist-stash', () => {
         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
       );
 
-      await vi.waitFor(() => input.getAttribute('aria-invalid') === 'true');
+      await vi.waitUntil(() => input.getAttribute('aria-invalid') === 'true');
 
       input.value = 'retry-name';
       input.dispatchEvent(

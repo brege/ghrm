@@ -109,7 +109,7 @@ The default Cargo build enables every optional feature below.
 | HTTP server | | Core |
 | Directory archive generation and downloads | ✓ | `archive` |
 | File-content search | ✓ | `content-search` |
-| In-browser editing of text files, subject to runtime configuration | ✓ | `edit` |
+| In-browser editing, creation, renaming, and deletion of files, subject to runtime configuration | ✓ | `edit` |
 | Local paste and stash support, subject to runtime configuration | ✓ | `gist` |
 | Repository discovery, commit metadata, remotes, and file comparison | ✓ | `repo` |
 | Repository statistics; enables `repo` | ✓ | `stats` |

@@ -2,6 +2,34 @@
 <div class="ghrm-explorer-header">
   <nav class="ghrm-breadcrumbs" aria-label="Path">{{ crumbs|safe }}</nav>
   <div class="ghrm-header-actions">
+    {% if edit %}
+    <div class="ghrm-expand ghrm-new-file" data-ghrm-new-file>
+      <div class="ghrm-expand-field">
+        <input
+          class="ghrm-expand-input"
+          data-ghrm-expand-input
+          type="text"
+          placeholder="New file name"
+          aria-label="New file name"
+          autocomplete="off"
+          spellcheck="false"
+          tabindex="-1"
+        >
+      </div>
+      <button
+        type="button"
+        class="ghrm-view-menu-toggle ghrm-expand-toggle"
+        data-ghrm-expand-toggle
+        aria-expanded="false"
+        aria-label="New file"
+        title="New file"
+      >
+        <svg aria-hidden="true" focusable="false">
+          <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-plus"></use>
+        </svg>
+      </button>
+    </div>
+    {% endif %}
     <div class="ghrm-menu-shell">
       <button
         id="ghrm-view-menu-toggle"

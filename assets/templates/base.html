@@ -31,6 +31,8 @@
   <link rel="stylesheet" href="/_ghrm/assets/css/file.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/blob.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/editor.css">
+  <link rel="stylesheet" href="/_ghrm/assets/css/rows.css">
+  <link rel="stylesheet" href="/_ghrm/assets/css/expand.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/chrome.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/status.css">
   <link rel="stylesheet" href="/_ghrm/assets/css/search.css">
@@ -49,8 +51,8 @@
   <header class="ghrm-topbar{% if !layout_class.is_empty() %} {{ layout_class }}{% endif %}">
     <div class="ghrm-topbar-inner">
       {{- source|safe -}}
-      <div id="ghrm-path-search" class="ghrm-path-search" role="search" hidden>
-        <div class="ghrm-search-field">
+      <div id="ghrm-path-search" class="ghrm-expand ghrm-path-search" role="search" hidden>
+        <div class="ghrm-expand-field">
           {% if content_search %}
           <button
             id="ghrm-search-mode"
@@ -67,9 +69,25 @@
             </svg>
           </button>
           {% endif %}
-          <input id="ghrm-path-search-input" class="ghrm-path-search-input" type="search" placeholder="Search paths" aria-label="Search paths">
+          <input
+            id="ghrm-path-search-input"
+            class="ghrm-expand-input"
+            data-ghrm-expand-input
+            type="search"
+            placeholder="Search paths"
+            aria-label="Search paths"
+            tabindex="-1"
+          >
         </div>
-        <button id="ghrm-path-search-toggle" type="button" aria-expanded="false" aria-label="Search paths" title="Search paths">
+        <button
+          id="ghrm-path-search-toggle"
+          class="ghrm-expand-toggle"
+          data-ghrm-expand-toggle
+          type="button"
+          aria-expanded="false"
+          aria-label="Search paths"
+          title="Search paths"
+        >
           <svg aria-hidden="true" focusable="false">
             <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-search"></use>
           </svg>

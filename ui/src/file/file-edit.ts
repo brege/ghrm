@@ -1,4 +1,6 @@
+import { encodePath, icon } from '../dom';
 import { EditorSession } from '../editor/editor';
+import { beginInlineRename, validFileName } from '../editor/rename';
 import { getWrapPref } from '../shell/prefs';
 
 function rawSeed(pane: HTMLElement): string {
@@ -37,6 +39,124 @@ export async function readEditVersion(container: HTMLElement): Promise<string> {
     throw new Error(`edit version failed: ${response.status}`);
   }
   return version;
+}
+
+type Navigate = (href: string) => void;
+
+const defaultNavigate: Navigate = (href) => location.assign(href);
+
+function parentHref(rel: string): string {
+  const clean = rel.replace(/^\/+|\/+$/g, '');
+  const slash = clean.lastIndexOf('/');
+  const parent = slash === -1 ? '' : clean.slice(0, slash);
+  return `${parent ? `/${encodePath(parent)}/` : '/'}${location.search}`;
+}
+
+// Delete the viewed file after confirmation, sending the rendered version as
+// If-Match when present, then leave for the parent directory. An active edit
+// session is torn down first so its unload guard cannot fire on navigation.
+export async function deleteFile(
+  container: HTMLElement,
+  editor: FileEditor | null,
+  navigate: Navigate = defaultNavigate,
+): Promise<void> {
+  const rel = container.dataset.currentPath ?? '';
+  const name = rel.split('/').pop() || rel;
+  if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+
+  const headers: Record<string, string> = {};
+  const version = container.dataset.ghrmEditVersion;
+  if (version) {
+    headers['If-Match'] = versionTag(version);
+  }
+  const response = await fetch(editUrl(container), {
+    method: 'DELETE',
+    headers,
+  });
+  if (!response.ok) return;
+  editor?.discard();
+  navigate(parentHref(rel));
+}
+
+// Rename the viewed file through an inline input over the breadcrumb's
+// current segment, then navigate to the new path. A dirty edit session must
+// be discarded first, with confirmation.
+export function renameFile(
+  container: HTMLElement,
+  editor: FileEditor | null,
+  navigate: Navigate = defaultNavigate,
+): void {
+  if (editor?.editing) {
+    if (editor.unsaved && !window.confirm('Discard unsaved changes?')) {
+      return;
+    }
+    editor.discard();
+  }
+  const crumb = container.querySelector<HTMLElement>(
+    '.ghrm-breadcrumbs .ghrm-crumb-current',
+  );
+  if (!crumb) return;
+  const seat = container.querySelector<HTMLElement>('.ghrm-crumb-seat');
+
+  beginInlineRename({
+    anchor: crumb,
+    value: crumb.textContent ?? '',
+    label: 'File name',
+    hide: seat ? [crumb, seat] : [crumb],
+    invalidTitle: 'Use a file name without path separators',
+    errorTitle: 'Rename failed',
+    validate: validFileName,
+    submit: async (name) => {
+      const response = await fetch(editUrl(container), {
+        method: 'PATCH',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'text/plain; charset=utf-8',
+        },
+        body: name,
+      });
+      if (!response.ok) {
+        return {
+          ok: false,
+          message:
+            response.status === 409 ? 'Name already exists' : 'Rename failed',
+        };
+      }
+      const renamed = (await response.json()) as { href: string };
+      navigate(`${renamed.href}${location.search}`);
+      return { ok: true };
+    },
+  });
+}
+
+// Place the rename control beside the breadcrumb's current segment instead of
+// in the file toolbar, so the trigger sits on the name it renames. The button
+// stays transparent until the header is hovered or it takes focus.
+export function bindCrumbRename(
+  container: HTMLElement,
+  editor: FileEditor | null,
+  navigate: Navigate = defaultNavigate,
+): void {
+  const crumb = container.querySelector<HTMLElement>(
+    '.ghrm-breadcrumbs .ghrm-crumb-current',
+  );
+  if (!crumb || container.querySelector('.ghrm-crumb-seat')) return;
+
+  const seat = document.createElement('span');
+  seat.className = 'ghrm-crumb-seat';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ghrm-row-action';
+  button.innerHTML = icon('rename');
+  button.setAttribute('aria-label', 'Rename file');
+  button.title = 'Rename file';
+  button.addEventListener('click', () => {
+    renameFile(container, editor, navigate);
+  });
+
+  seat.append(button);
+  crumb.after(seat);
 }
 
 // Inline editor for the file view's raw/code pane. It drives the shared
@@ -140,6 +260,16 @@ export class FileEditor {
     this.syncSave();
     session.refresh();
     textarea.focus();
+  }
+
+  get unsaved(): boolean {
+    return this.dirty();
+  }
+
+  // Tear the session down without prompting or reloading; the caller has
+  // already resolved what happens to unsaved text.
+  discard(): void {
+    this.destroy();
   }
 
   exit(): void {
@@ -276,7 +406,7 @@ export class FileEditor {
   }
 
   private dirty(): boolean {
-    return this.session !== null && this.session.dirty;
+    return this.session?.dirty ?? false;
   }
 
   private syncButtons(): void {
@@ -285,7 +415,6 @@ export class FileEditor {
     const label = this.editing ? 'Stop editing' : 'Edit file';
     this.editBtn.setAttribute('aria-label', label);
     this.editBtn.title = label;
-    this.editBtn.parentElement?.classList.toggle('is-editing', this.editing);
     this.saveBtn.hidden = !this.editing;
   }
 

@@ -13,6 +13,7 @@ use tracing::{info, warn};
 pub struct NavCache {
     pub current: Arc<RwLock<NavSet>>,
     pub alternate: Arc<RwLock<Option<NavSet>>>,
+    pub generation: Arc<walk::NavGeneration>,
 }
 
 pub struct DirWatchOptions {
@@ -75,9 +76,7 @@ pub fn spawn_dir(
                 )
             });
             if nav_dirty {
-                if let Ok(mut guard) = nav.alternate.write() {
-                    *guard = None;
-                }
+                let ticket = nav.generation.ticket();
                 let fresh = walk::build_all(
                     &root,
                     opts.use_ignore,
@@ -85,8 +84,22 @@ pub fn spawn_dir(
                     &opts.extensions,
                     opts.show_excludes,
                 );
-                if let Ok(mut guard) = nav.current.write() {
-                    *guard = fresh;
+                let became_ready = nav
+                    .generation
+                    .install(ticket, || {
+                        if let Ok(mut guard) = nav.alternate.write() {
+                            *guard = None;
+                        }
+                        if let Ok(mut guard) = nav.current.write() {
+                            let became_ready = !guard.is_ready();
+                            *guard = fresh;
+                            return became_ready;
+                        }
+                        false
+                    })
+                    .unwrap_or(false);
+                if became_ready {
+                    let _ = reload_tx.send("nav-ready".to_string());
                 }
             }
             for p in changed {

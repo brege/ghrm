@@ -49,7 +49,7 @@
                 </svg>
               </a>
             </div>
-            <div class="ghrm-file-actions">
+            <div class="ghrm-file-edit">
               <button
                 type="button"
                 class="ghrm-file-action"
@@ -103,6 +103,10 @@
                   <use href="/_ghrm/assets/js/icons.svg#ghrm-icon-trash"></use>
                 </svg>
               </button>
+              {% endif %}
+            </div>
+            <div class="ghrm-file-actions">
+              {% if has_paste %}
               <a
                 class="ghrm-file-link"
                 href="{{ raw_href }}"
@@ -192,7 +196,7 @@
             </span>
             <label class="ghrm-gist-name-control" title="Save name">
               <input
-                class="ghrm-gist-name-input"
+                class="ghrm-gist-name-input ghrm-row-input"
                 data-ghrm-gist-name
                 type="text"
                 value="{{ paste_id }}"

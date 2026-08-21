@@ -314,7 +314,7 @@ fn create_inner(
     headers: &HeaderMap,
     body: Bytes,
 ) -> Response {
-    let Some(text) = paste_text(headers, &body) else {
+    let Some(text) = delivery::text_plain_body(headers, &body) else {
         return bad_request("expected text/plain UTF-8 paste body");
     };
     if body.len() > MAX_PASTE_BYTES {
@@ -340,7 +340,7 @@ fn rename_inner(
     headers: &HeaderMap,
     body: &Bytes,
 ) -> Response {
-    let Some(name) = paste_text(headers, body) else {
+    let Some(name) = delivery::text_plain_body(headers, body) else {
         return bad_request("expected text/plain UTF-8 gist name");
     };
     let paste = match store.rename(id, name) {
@@ -354,23 +354,8 @@ fn rename_inner(
     Json(rename_summary(&paste)).into_response()
 }
 
-fn paste_text<'a>(headers: &HeaderMap, body: &'a Bytes) -> Option<&'a str> {
-    if !is_text_plain(headers) {
-        return None;
-    }
-    std::str::from_utf8(body).ok()
-}
-
 fn gist_header<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers.get(name).and_then(|value| value.to_str().ok())
-}
-
-fn is_text_plain(headers: &HeaderMap) -> bool {
-    headers
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .map(|value| value.split(';').next().unwrap_or("").trim())
-        .is_some_and(|value| value.eq_ignore_ascii_case("text/plain"))
 }
 
 fn summary(paste: &crate::gist::Paste) -> PasteSummary {
@@ -438,25 +423,6 @@ mod tests {
         let mut headers = headers("text/plain; charset=utf-8");
         headers.insert(GIST_NAME_HEADER, name.parse().unwrap());
         headers
-    }
-
-    #[test]
-    fn text_plain_accepts_charset() {
-        assert!(is_text_plain(&headers("text/plain; charset=utf-8")));
-        assert!(is_text_plain(&headers("TEXT/PLAIN")));
-    }
-
-    #[test]
-    fn text_plain_rejects_other_content_types() {
-        assert!(!is_text_plain(&HeaderMap::new()));
-        assert!(!is_text_plain(&headers("application/json")));
-    }
-
-    #[test]
-    fn paste_text_rejects_invalid_utf8() {
-        let body = Bytes::from_static(&[0xff]);
-
-        assert!(paste_text(&headers("text/plain"), &body).is_none());
     }
 
     #[test]

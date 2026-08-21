@@ -40,8 +40,8 @@ Root modules coordinate across features; feature behavior lives under the folder
 
 | Path | Purpose |
 | --- | --- |
-| src/editor/ | shared editing surface and tab indentation |
-| src/explorer/ | explorer page setup, controls, and path copy |
+| src/editor/ | shared editing surface, inline rename lifecycle, and tab indentation |
+| src/explorer/ | explorer page setup, controls, path copy, and edit controls |
 | src/file/ | rendered file view, inline file editing, compare bar, and table of contents |
 | src/gist/ | gist editor and stash islands |
 | src/search/ | search coordination and the search panel island |

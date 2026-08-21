@@ -66,6 +66,31 @@ function afterContentSwap(xhr: XMLHttpRequest): void {
   refreshContent({ resetScroll: true });
 }
 
+export async function swapArticle(
+  article: Element,
+  path: string,
+  selector: string,
+  prepare?: (next: HTMLElement) => void,
+): Promise<HTMLElement | null> {
+  const response = await fetch(path, {
+    headers: {
+      Accept: 'text/html',
+      'HX-Request': 'true',
+    },
+  });
+  if (!response.ok) return null;
+
+  const html = await response.text();
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const next = doc.querySelector<HTMLElement>(selector);
+  if (!next) return null;
+
+  prepare?.(next);
+  article.replaceWith(next);
+  refreshContent({ resetScroll: false });
+  return next;
+}
+
 function shouldBoostLink(a: HTMLAnchorElement): boolean {
   if (!a.href) return false;
   if (a.dataset.ghrmNative === '1') return false;

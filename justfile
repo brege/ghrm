@@ -17,7 +17,7 @@ dev-ui target=".":
         npm --prefix ui run build:watch & \
         VITE_PID=$!; \
         trap "kill $VITE_PID 2>/dev/null" EXIT; \
-        cargo run --locked -- --no-browser "{{target}}"; \
+        cargo run --locked -- --no-browser --edit "{{target}}"; \
     }
 
 # install ghrm from this checkout

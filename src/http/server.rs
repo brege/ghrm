@@ -43,6 +43,8 @@ pub struct AppState {
     pub mode: Mode,
     pub nav: Arc<RwLock<NavSet>>,
     pub alternate_nav: Arc<RwLock<Option<NavSet>>>,
+    #[cfg(feature = "edit")]
+    pub nav_generation: Arc<walk::NavGeneration>,
     pub repos: RepoSet,
     pub reload: broadcast::Sender<String>,
     pub use_ignore: bool,
@@ -174,6 +176,8 @@ pub async fn run(options: Options) -> Result<()> {
     }
     let nav = Arc::new(RwLock::new(NavSet::default()));
     let alternate_nav = Arc::new(RwLock::new(None));
+    #[cfg(any(feature = "edit", feature = "watch"))]
+    let nav_generation = Arc::new(walk::NavGeneration::default());
     let auth = auth
         .map(|auth| auth::AuthState::new(auth, port))
         .transpose()?
@@ -220,7 +224,11 @@ pub async fn run(options: Options) -> Result<()> {
             let walk_excludes = exclude_names.clone();
             let walk_extensions = extensions.clone();
             let nav_ready_tx = reload_tx.clone();
+            #[cfg(any(feature = "edit", feature = "watch"))]
+            let nav_generation_bg = nav_generation.clone();
             tokio::task::spawn_blocking(move || {
+                #[cfg(any(feature = "edit", feature = "watch"))]
+                let ticket = nav_generation_bg.ticket();
                 let fresh = walk::build_all(
                     &target_bg,
                     use_ignore,
@@ -228,8 +236,19 @@ pub async fn run(options: Options) -> Result<()> {
                     &walk_extensions,
                     show_excludes,
                 );
-                if let Ok(mut guard) = nav_bg.write() {
-                    *guard = fresh;
+                let install = || {
+                    if let Ok(mut guard) = nav_bg.write() {
+                        let became_ready = !guard.is_ready();
+                        *guard = fresh;
+                        return became_ready;
+                    }
+                    false
+                };
+                #[cfg(any(feature = "edit", feature = "watch"))]
+                let became_ready = nav_generation_bg.install(ticket, install).unwrap_or(false);
+                #[cfg(not(any(feature = "edit", feature = "watch")))]
+                let became_ready = install();
+                if became_ready {
                     let _ = nav_ready_tx.send("nav-ready".to_string());
                 }
             });
@@ -241,6 +260,7 @@ pub async fn run(options: Options) -> Result<()> {
                 watch::NavCache {
                     current: nav.clone(),
                     alternate: alternate_nav.clone(),
+                    generation: nav_generation.clone(),
                 },
                 reload_tx.clone(),
                 watch::DirWatchOptions {
@@ -277,6 +297,8 @@ pub async fn run(options: Options) -> Result<()> {
         mode,
         nav,
         alternate_nav,
+        #[cfg(feature = "edit")]
+        nav_generation,
         repos,
         reload: reload_tx,
         use_ignore,
@@ -325,6 +347,8 @@ pub async fn run(options: Options) -> Result<()> {
             "/_ghrm/edit/{*path}",
             axum::routing::put(crate::http::edit::save)
                 .head(crate::http::edit::current)
+                .delete(crate::http::edit::remove)
+                .patch(crate::http::edit::rename)
                 .layer(axum::extract::DefaultBodyLimit::max(
                     crate::http::edit::MAX_EDIT_BYTES,
                 )),
@@ -402,6 +426,43 @@ fn protected_routes() -> Router<AppState> {
 }
 
 impl AppState {
+    #[cfg(feature = "edit")]
+    pub(crate) async fn refresh_nav(&self) {
+        if self.mode != Mode::Dir {
+            return;
+        }
+        let target = self.target.clone();
+        let use_ignore = self.use_ignore;
+        let exclude_names = self.exclude_names.clone();
+        let filter_exts = self.filter_exts.clone();
+        let show_excludes = self.show_excludes;
+        let ticket = self.nav_generation.ticket();
+        let fresh = tokio::task::spawn_blocking(move || {
+            walk::build_all(
+                &target,
+                use_ignore,
+                &exclude_names,
+                &filter_exts,
+                show_excludes,
+            )
+        })
+        .await
+        .expect("navigation refresh task completes");
+        let became_ready = self
+            .nav_generation
+            .install(ticket, || {
+                *self.alternate_nav.write().unwrap() = None;
+                let mut nav = self.nav.write().unwrap();
+                let became_ready = !nav.is_ready();
+                *nav = fresh;
+                became_ready
+            })
+            .unwrap_or(false);
+        if became_ready {
+            let _ = self.reload.send("nav-ready".to_string());
+        }
+    }
+
     pub(crate) fn cached_nav_tree(
         &self,
         view: &ViewState,
