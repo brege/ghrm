@@ -149,7 +149,7 @@
       "path": "github-markdown.css"
     },
     {
-      "url": "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.js",
+      "url": "https://cdn.jsdelivr.net/npm/mermaid@11.17.0/dist/mermaid.js",
       "path": "mermaid.js"
     },
     {
@@ -257,7 +257,7 @@
       "path": "leaflet/leaflet.js"
     },
     {
-      "url": "https://unpkg.com/topojson-client@3/dist/topojson-client.min.js",
+      "url": "https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js",
       "path": "topojson-client.min.js"
     },
     {

@@ -278,6 +278,7 @@ impl Manifest {
         let mut paths = BTreeSet::new();
         for item in &self.files {
             validate_rel(&item.path)?;
+            validate_vendor_url(&item.url)?;
             paths.insert(item.path.as_str());
         }
         for feature in self.features.values() {
@@ -298,6 +299,28 @@ impl Manifest {
         }
         Ok(())
     }
+}
+
+fn validate_vendor_url(url: &str) -> Result<()> {
+    let (_, version_and_path) = url
+        .rsplit_once('@')
+        .ok_or_else(|| anyhow::anyhow!("vendor URL has no version: {url}"))?;
+    let version = version_and_path
+        .split_once('/')
+        .map(|(version, _)| version)
+        .ok_or_else(|| anyhow::anyhow!("vendor URL has no asset path: {url}"))?;
+
+    // Accept exact semantic versions, including prerelease/build suffixes.
+    let core = version.split(['-', '+']).next().unwrap_or(version);
+    let segments = core.split('.').collect::<Vec<_>>();
+    if segments.len() != 3
+        || segments
+            .iter()
+            .any(|segment| segment.is_empty() || !segment.bytes().all(|byte| byte.is_ascii_digit()))
+    {
+        bail!("vendor URL must pin an exact semantic version: {url}");
+    }
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -500,6 +523,23 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn validation_rejects_mutable_vendor_version() {
+        let config =
+            include_str!("../../assets/config.json").replace("htmx.org@2.0.4", "htmx.org@2");
+
+        let error = match manifest_from_str(&config, "{}") {
+            Ok(_) => panic!("expected validation to fail"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("vendor URL must pin an exact semantic version"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
